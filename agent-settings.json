@@ -1,0 +1,10 @@
+{
+  "tickers": ["GOOG", "AAPL"],
+  "backtest_days": 7,
+  "generations": null,
+  "max_quantity": 15,
+  "config_filename": "config-recurrent.txt",
+  "checkpoint_prefix": "recurrent-checkpoint-",
+  "trained_filename": null,
+  "training_mode": true
+}
