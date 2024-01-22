@@ -7,8 +7,8 @@ import agent
 
 FINN_KEY = "cmm50ppr01qqjtfnvon0cmm50ppr01qqjtfnvong"
 
-ALPACA_SEC = "uWBUnZaL9SwHZYqp70DGAHKankMua1l238ePtgGQ"
-ALPACA_PUB = "PKQ7AH5OADHDBBE6TSC8"
+ALPACA_PUB = "PKOL6HHL7C5RXQVTGC4M"
+ALPACA_SEC = "hYMDRE8Or3YY8JkOfBS6SnMKSaHEfa81W3dCuO8A"
 ALPACA_BASE_URL = "https://paper-api.alpaca.markets"  # Paper: https://paper-api.alpaca.markets | Live: https://api.alpaca.markets
 
 
@@ -27,4 +27,4 @@ if __name__ == "__main__":
         agent = agent.Trader(settings, finn_client, alpaca_client)
 
     if input("Run agent? (y/n): ") == "y":
-        agent.run(local_dir)
+        agent.run()

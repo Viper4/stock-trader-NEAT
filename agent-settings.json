@@ -1,10 +1,12 @@
 {
-  "tickers": ["GOOG", "AAPL"],
+  "tickers": ["NVDA", "TSLA", "COIN", "BA", "SPCE"],
   "backtest_days": 7,
   "generations": null,
   "max_quantity": 15,
-  "config_filename": "config-recurrent.txt",
-  "checkpoint_prefix": "recurrent-checkpoint-",
-  "trained_filename": null,
+  "config_path": "C:\\Users\\Lucas\\PythonProjects\\stock_trading\\config-recurrent.txt",
+  "save_path": "C:\\Users\\Lucas\\PythonProjects\\stock_trading\\Saves",
+  "checkpoint_prefix": "Paper1-checkpoint-",
+  "checkpoint_filename": "Paper1-checkpoint-9",
+  "genome_filename": "Paper1-best-genome.pkl",
   "training_mode": true
 }
