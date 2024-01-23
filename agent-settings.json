@@ -6,7 +6,7 @@
   "config_path": "C:\\Users\\Lucas\\PythonProjects\\stock_trading\\config-recurrent.txt",
   "save_path": "C:\\Users\\Lucas\\PythonProjects\\stock_trading\\Saves",
   "checkpoint_prefix": "Paper1-checkpoint-",
-  "checkpoint_filename": "Paper1-checkpoint-9",
+  "checkpoint_filename": "Paper1-checkpoint-20",
   "genome_filename": "Paper1-best-genome.pkl",
   "training_mode": true
 }
