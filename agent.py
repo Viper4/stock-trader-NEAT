@@ -7,7 +7,6 @@ import pytz
 import time
 import os
 import multiprocessing as mp
-#from numba import jit, cuda
 
 
 class Agent:
@@ -18,6 +17,7 @@ class Agent:
         self.alpaca_client = alpaca_client
         self.earnings = {}
         self.sentiments = {}
+        self.processes = os.cpu_count() if settings["max_processes"] else int(os.cpu_count() / 2)
         now_date = dt.datetime.now(pytz.timezone("US/Central"))
         start_date = now_date - dt.timedelta(days=settings["backtest_days"])
         for ticker in self.settings["tickers"]:
@@ -122,7 +122,7 @@ class Training(Agent):
 
     def eval_genomes(self, genomes, config):
         async_results = []
-        pool = mp.Pool(processes=os.cpu_count()-1)  # Computer blows up if using all cores
+        pool = mp.Pool(processes=self.processes)
         for genome_id, genome in genomes:
             async_results.append(pool.apply_async(self.eval_genome, (genome_id, genome, config)))
 

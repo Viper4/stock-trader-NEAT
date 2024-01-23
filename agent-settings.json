@@ -5,8 +5,9 @@
   "max_quantity": 15,
   "config_path": "C:\\Users\\Lucas\\PythonProjects\\stock_trading\\config-recurrent.txt",
   "save_path": "C:\\Users\\Lucas\\PythonProjects\\stock_trading\\Saves",
-  "checkpoint_prefix": "Paper1-checkpoint-",
-  "checkpoint_filename": "Paper1-checkpoint-20",
-  "genome_filename": "Paper1-best-genome.pkl",
-  "training_mode": true
+  "checkpoint_prefix": "RNN-mom-checkpoint-",
+  "checkpoint_filename": "RNN-mom-checkpoint-48",
+  "genome_filename": "RNN-mom-best-genome.pkl",
+  "training_mode": true,
+  "max_processes": true
 }
