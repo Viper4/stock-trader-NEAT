@@ -1,16 +1,16 @@
 {
-  "tickers": ["NVDA", "TSLA", "COIN", "BA", "SPCE"],
+  "tickers": ["NVDA"],
   "backtest_days": 7,
   "generations": null,
   "max_quantity": 15,
   "config_path": "C:\\Users\\vpr16\\PythonProjects\\StockTraderNEAT\\config-recurrent.txt",
   "save_path": "C:\\Users\\vpr16\\PythonProjects\\StockTraderNEAT\\Saves",
   "checkpoint_path": "C:\\Users\\vpr16\\PythonProjects\\StockTraderNEAT\\Saves\\Checkpoints",
-  "checkpoint_prefix": "RNN-mom-checkpoint-",
+  "checkpoint_prefix": "NVDA-checkpoint-",
   "checkpoint_filename": null,
-  "genome_filename": "RNN-mom-best-genome.pkl",
+  "genome_filename": "NVDA-best-genome.pkl",
   "training_mode": true,
   "data_interval": 5,
-  "run_interval": 30,
-  "processes": 8
+  "run_interval": 60,
+  "processes": 16
 }
