@@ -193,7 +193,10 @@ class Trader(Agent):
                     cum_vols.clear()
                     prev_data.clear()
                     prev_vwap.clear()
-
+                    for ticker in self.settings["tickers"]:
+                        cum_prices[ticker] = 0
+                        cum_vols[ticker] = 0
+                
                 for ticker in self.settings["tickers"]:
                     ticker_df = yf.download(tickers=ticker, period="1d", interval=str(self.settings["data_interval"]) + "m")
                     current_data = ticker_df.iloc[-1]
