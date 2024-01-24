@@ -163,9 +163,15 @@ class Trader(Agent):
         net = neat.nn.RecurrentNetwork.create(genome, config)
         cum_prices = {}
         cum_vols = {}
+        bought_stocks = {}
+        for ticker in self.settings["tickers"]:
+            cum_prices[ticker] = 0
+            cum_vols[ticker] = 0
+            bought_stocks[ticker] = 0
+
         prev_data = {}
         prev_vwap = {}
-        bought_stocks = {}
+
         previous_date = dt.datetime.now(pytz.timezone("US/Central"))
         displayed_acc = False
         while True:
@@ -189,21 +195,15 @@ class Trader(Agent):
                     prev_vwap.clear()
 
                 for ticker in self.settings["tickers"]:
-                    if ticker not in bought_stocks:
-                        bought_stocks[ticker] = 0
-
                     ticker_df = yf.download(tickers=ticker, period="1d", interval=str(self.settings["data_interval"]) + "m")
                     current_data = ticker_df.iloc[-1]
-                    if ticker not in cum_prices:
-                        cum_prices[ticker] = 0
-                        cum_vols[ticker] = 0
 
                     if ticker not in prev_data:
-                        #prev_data[ticker] = ticker_df.iloc[-2]
-                        #prev_vwap[ticker] = (prev_data["High"] + prev_data["Low"] + prev_data["Close"]) / 3
+                        prev_data[ticker] = ticker_df.iloc[-2]
+                        prev_vwap[ticker] = (prev_data[ticker]["High"] + prev_data[ticker]["Low"] + prev_data[ticker]["Close"]) / 3
 
-                        prev_data[ticker] = current_data
-                        prev_vwap[ticker] = 0
+                        #prev_data[ticker] = current_data
+                        #prev_vwap[ticker] = 0
 
                     cum_prices[ticker] += current_data["Volume"] * ((current_data["High"] + current_data["Low"] + current_data["Close"]) / 3)
                     cum_vols[ticker] += current_data["Volume"]
