@@ -4,11 +4,12 @@ import os
 import json
 import finnhub
 import agent
+import trainer
 
-FINN_KEY = "cmo8j01r01qj3malarpgcmo8j01r01qj3malarq0"
+FINN_KEY = ""
 
-ALPACA_PUB = "PK2JXXYFS6WPQ62MWDAK"
-ALPACA_SEC = "csb66Ud3tenU867Ywhr7ROCNZX41OZw7Uf0hmOgv"
+ALPACA_PUB = ""
+ALPACA_SEC = ""
 ALPACA_BASE_URL = "https://paper-api.alpaca.markets"  # Paper: https://paper-api.alpaca.markets | Live: https://api.alpaca.markets
 
 
@@ -22,9 +23,10 @@ if __name__ == "__main__":
         settings = json.load(file)
 
     if settings["training_mode"]:
-        agent = agent.Training(settings, finn_client, alpaca_client)
+        trainer = trainer.Trainer(settings, finn_client, alpaca_client)
+        if input("Start training? (y/n): ") == "y":
+            trainer.start_training()
     else:
-        agent = agent.Trader(settings, finn_client, alpaca_client)
-
-    if input("Run agent? (y/n): ") == "y":
-        agent.run()
+        trader = agent.Trader(settings, finn_client, alpaca_client)
+        if input("Run trader agent? (y/n): ") == "y":
+            trader.run()
