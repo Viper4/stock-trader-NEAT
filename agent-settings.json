@@ -4,7 +4,7 @@
       "symbol": "NVDA",
       "backtest_days": 7,
       "data_interval": 5,
-      "max_quantity": 15,
+      "max_price": 5000,
       "population_filename": "population-NVDA.gz",
       "genome_filename": "best-genome-NVDA.gz"
     },
@@ -12,7 +12,7 @@
       "symbol": "TSLA",
       "backtest_days": 7,
       "data_interval": 5,
-      "max_quantity": 15,
+      "max_price": 5000,
       "population_filename": "population-TSLA.gz",
       "genome_filename": "best-genome-TSLA.gz"
     },
@@ -20,7 +20,7 @@
       "symbol": "SPCE",
       "backtest_days": 7,
       "data_interval": 5,
-      "max_quantity": 15,
+      "max_price": 5000,
       "population_filename": "population-SPCE.gz",
       "genome_filename": "best-genome-SPCE.gz"
     },
@@ -28,7 +28,7 @@
       "symbol": "BA",
       "backtest_days": 7,
       "data_interval": 5,
-      "max_quantity": 15,
+      "max_price": 5000,
       "population_filename": "population-BA.gz",
       "genome_filename": "best-genome-BA.gz"
     },
@@ -36,7 +36,7 @@
       "symbol": "COIN",
       "backtest_days": 7,
       "data_interval": 5,
-      "max_quantity": 15,
+      "max_price": 5000,
       "population_filename": "population-COIN.gz",
       "genome_filename": "best-genome-COIN.gz"
     },
@@ -44,7 +44,7 @@
       "symbol": "GOOG",
       "backtest_days": 7,
       "data_interval": 5,
-      "max_quantity": 15,
+      "max_price": 5000,
       "population_filename": "population-GOOG.gz",
       "genome_filename": "best-genome-GOOG.gz"
     },
@@ -52,7 +52,7 @@
       "symbol": "AMD",
       "backtest_days": 7,
       "data_interval": 5,
-      "max_quantity": 15,
+      "max_price": 5000,
       "population_filename": "population-AMD.gz",
       "genome_filename": "best-genome-AMD.gz"
     }
@@ -61,9 +61,9 @@
   "config_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/config-recurrent.txt",
   "save_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/Saves",
   "training_mode": true,
-  "gen_stagger": 4,
+  "gen_stagger": 8,
   "run_interval": 60,
   "processes": 12,
-  "print_stats": true,
+  "print_stats": false,
   "visualize": false
 }

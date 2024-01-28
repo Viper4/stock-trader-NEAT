@@ -92,8 +92,8 @@ class Training(Agent):
                       self.rel_change(bar["vw"], previous_bar["vw"])]
             output = net.activate(inputs)
 
-            quantity = ((output[1] * 0.5) + 0.5) * self.ticker_option["max_quantity"]
-            price = bar["c"] * quantity
+            price = ((output[1] + 1) * 0.5) * self.ticker_option["max_price"]
+            quantity = price / bar["c"]
             if price >= 1:  # Alpaca doesn't allow trades under $1
                 if output[0] > 0.5 and price <= current_cash:  # Wants to buy
                     cost += price
@@ -141,7 +141,7 @@ class Training(Agent):
     def run(self):
         self.running = True
         if not self.started:
-            print("Running " + self.ticker_option["symbol"] + " training agent...")
+            print("Starting " + self.ticker_option["symbol"] + " training agent...")
             config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
 
             save_system = saving.SaveSystem(1, self.genome_file_path, self.settings["gen_stagger"], self.population_file_path)
@@ -241,8 +241,8 @@ class Trader(Agent):
                               self.rel_change(vwap, prev_vwap[ticker])]
                     output = nets[ticker].activate(inputs)
 
-                    quantity = ((output[1] * 0.5) + 0.5) * option["max_quantity"]
-                    price = current_data["Close"] * quantity
+                    price = ((output[1] + 1) * 0.5) * option["max_price"]
+                    quantity = price / current_data["Close"]
 
                     if price >= 1:  # Alpaca doesn't allow trades under $1
                         if output[0] > 0.5 and price <= current_cash:  # Wants to buy
@@ -283,7 +283,7 @@ class Trader(Agent):
             time.sleep(self.settings["run_interval"])
 
     def run(self):
-        print("Running trader agent...")
+        print("Starting trader agent...")
         self.running = True
         config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
         for option in self.settings["ticker_options"]:
