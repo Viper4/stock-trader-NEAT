@@ -5,21 +5,21 @@ import datetime as dt
 import pytz
 import time
 import os
-import multiprocessing as mp
+from multiprocessing import Pool
 import threading
 import trainer
 import saving
 import visualize
 
 
-class Agent:
+class Agent(object):
 
     def __init__(self, settings, finn_client, alpaca_client):
         self.running = False
         self.settings = settings
 
         if self.settings["processes"] >= os.cpu_count():
-            print("Using " + str(self.settings["processes"]) + " processes to train but system only has " + str(os.cpu_count()) + " cores.")
+            print("Using " + str(self.settings["processes"]) + " workers to train but system only has " + str(os.cpu_count()) + " cores.")
             if input("Proceed? (y/n): ") != "y":
                 exit(0)
 
@@ -46,17 +46,14 @@ class Training(Agent):
     def __init__(self, settings, finn_client, alpaca_client, option_index):
         super().__init__(settings, finn_client, alpaca_client)
         self.started = False
-        self.best_genome = None
+        self.best_genome = None  # Do this instead of self.p.best_genome since pickling population object adds 10s to each gen
+        self.consecutive_gens = 0
+
         self.start_cash = float(alpaca_client.get_account().cash)
 
         self.ticker_option = settings["ticker_options"][option_index]
         self.genome_file_path = os.path.join(self.genome_path, self.ticker_option["genome_filename"])
         self.population_file_path = os.path.join(self.population_path, self.ticker_option["population_filename"])
-
-        self.gen_stagger = settings["gen_stagger"]
-        self.consecutive_gens = 0
-
-        self.stats = neat.StatisticsReporter()
 
         now_date = dt.datetime.now(pytz.timezone("US/Central"))
 
@@ -75,7 +72,7 @@ class Training(Agent):
 
         print(self.ticker_option["symbol"] + " TRAINING agent created\n")
 
-    def eval_genome(self, genome_id, genome, config):
+    def eval_genome(self, genome, config):
         net = neat.nn.RecurrentNetwork.create(genome, config)
 
         shares = 0.0
@@ -116,31 +113,28 @@ class Training(Agent):
 
         current_cash += self.bars[-1]["c"] * shares  # Add remaining liquid assets to cash
 
-        return [genome_id, current_cash - self.start_cash]  # Fitness equals profit
+        return current_cash - self.start_cash  # Fitness equals profit
 
     def eval_genomes(self, genomes, config):
         while not self.running:
             time.sleep(1)
 
-        pool = mp.Pool(processes=self.settings["processes"])  # Cant do self.pool since it tries pickling the pool object
-        async_jobs = []
+        # There's probably a better way to do this, self.pool doesn't work: cant pickle Pool(), separate class for parallel processing doesn't work: leaks memory
+        pool = Pool(processes=self.settings["processes"])
+        jobs = []
         for genome_id, genome in genomes:
-            async_jobs.append(pool.apply_async(self.eval_genome, (genome_id, genome, config)))
+            jobs.append(pool.apply_async(self.eval_genome, (genome, config)))
 
-        result_dict = {}
-        for job in async_jobs:
-            pair = job.get()
-            result_dict[pair[0]] = pair[1]
-        pool.close()
-        pool.join()
-
-        for genome_id, genome in genomes:
-            genome.fitness = result_dict[genome_id]
+        for job, (genome_id, genome) in zip(jobs, genomes):
+            genome.fitness = job.get()
             if self.best_genome is None or self.best_genome.fitness < genome.fitness:
                 self.best_genome = genome
-
+        pool.close()
+        pool.join()
+        pool.terminate()
+        
         self.consecutive_gens += 1
-        if 0 < self.gen_stagger <= self.consecutive_gens:
+        if 0 < self.settings["gen_stagger"] <= self.consecutive_gens:
             self.consecutive_gens = 0
             self.running = False
 
@@ -150,17 +144,14 @@ class Training(Agent):
             print("Running " + self.ticker_option["symbol"] + " training agent...")
             config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
 
-            save_system = saving.SaveSystem(1, self.genome_file_path, self.gen_stagger, self.population_file_path)
+            save_system = saving.SaveSystem(1, self.genome_file_path, self.settings["gen_stagger"], self.population_file_path)
             if os.path.exists(self.population_file_path):
                 p = save_system.restore_population(self.population_file_path)
             else:
                 p = neat.Population(config)
-            p.add_reporter(neat.StdOutReporter(True))
-            #stats = neat.StatisticsReporter()
-            p.add_reporter(self.stats)
+            if self.settings["print_stats"]:
+                p.add_reporter(neat.StdOutReporter(True))
             p.add_reporter(save_system)
-            #pe = neat.ParallelEvaluator(self.settings["processes"], self.eval_genome)
-            #threading.Thread(target=p.run, args=(pe.evaluate, self.settings["generations"])).start()
             threading.Thread(target=p.run, args=(self.eval_genomes, self.settings["generations"])).start()
         else:
             print("Resuming " + self.ticker_option["symbol"] + " training agent...")
@@ -168,10 +159,8 @@ class Training(Agent):
 
     def plot(self):
         config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
-        node_names = {0: 'plpc', 1: 'open%', 2: 'high%', 3: 'low%', 4: 'close%', 5: 'volume%', 6: 'vwap%'}
+        node_names = {-7: 'plpc', -6: 'open%', -5: 'high%', -4: 'low%', -3: 'close%', -2: 'volume%', -1: 'vwap%', 0: 'buy/sell', 1: 'amount'}
         visualize.draw_net(config, self.best_genome, True, node_names=node_names)
-        #visualize.plot_stats(self.stats, ylog=False, view=True)
-        #visualize.plot_species(self.stats, view=True)
 
 
 class Trader(Agent):

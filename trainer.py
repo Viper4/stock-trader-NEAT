@@ -2,9 +2,11 @@ import agent
 import time
 
 
-class Trainer:
+class Trainer(object):
     def __init__(self, settings, finn_client, alpaca_client):
         self.running = False
+        self.visualize = settings["visualize"]
+        self.print_stats = settings["print_stats"]
         self.agents = []
         self.best_genomes = []
         if len(settings["ticker_options"]) == 1 and settings["gen_stagger"] != 0:
@@ -22,8 +24,11 @@ class Trainer:
                 self.agents[i].run()
                 while self.agents[i].running:
                     time.sleep(1)
-                time.sleep(5)  # Wait for stat reporter to update
-                self.agents[i].plot()
+                if self.visualize:
+                    self.agents[i].plot()
+                if self.print_stats:
+                    time.sleep(5)  # Wait for console printout
+
                 i += 1
                 if i >= len(self.agents):
                     i = 0

@@ -63,5 +63,7 @@
   "training_mode": true,
   "gen_stagger": 4,
   "run_interval": 60,
-  "processes": 12
+  "processes": 12,
+  "print_stats": true,
+  "visualize": false
 }

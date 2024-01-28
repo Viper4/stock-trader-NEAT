@@ -1,7 +1,6 @@
 import gzip
 import pickle
 import random
-
 from neat.population import Population
 from neat.reporting import BaseReporter
 

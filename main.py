@@ -6,10 +6,10 @@ import finnhub
 import agent
 import trainer
 
-FINN_KEY = ""
+FINN_KEY = "cmo8j01r01qj3malarpgcmo8j01r01qj3malarq0"
 
-ALPACA_PUB = ""
-ALPACA_SEC = ""
+ALPACA_PUB = "PKWZO8ZQPJM0M3R0Z717"
+ALPACA_SEC = "CE2dzhnb1oqede9vzaY2M5iiqsF1BNe9bRh1IxaD"
 ALPACA_BASE_URL = "https://paper-api.alpaca.markets"  # Paper: https://paper-api.alpaca.markets | Live: https://api.alpaca.markets
 
 
