@@ -61,13 +61,14 @@ class Training(Agent):
         end_date = now_date - dt.timedelta(minutes=16)  # Cant get recent 15 minute data with free alpaca acc
 
         bars_entity = self.alpaca_client.get_bars(
-            self.ticker_option["symbol"],
+            symbol=self.ticker_option["symbol"],
             timeframe=TimeFrame(self.ticker_option["data_interval"], TimeFrameUnit.Minute),
             start=start_date.isoformat(),
             end=end_date.isoformat(),
             limit=10000,
             sort="asc")
         self.bars = bars_entity._raw  # Array of bars
+
         print(self.ticker_option["symbol"] + ": Saved " + str(len(self.bars)) + " bars from " + start_date.strftime("%Y-%m-%d %H:%M:%S") + " to " + end_date.strftime("%Y-%m-%d %H:%M:%S") + " at " + str(self.ticker_option["data_interval"]) + "m intervals")
 
         print(self.ticker_option["symbol"] + " TRAINING agent created\n")
@@ -92,8 +93,11 @@ class Training(Agent):
                       self.rel_change(bar["vw"], previous_bar["vw"])]
             output = net.activate(inputs)
 
-            price = ((output[1] + 1) * 0.5) * self.ticker_option["max_price"]
-            quantity = price / bar["c"]
+            quantity = current_cash * self.ticker_option["cash_at_risk"] / previous_bar["c"]
+            price = quantity * bar["c"]
+
+            #price = ((output[1] + 1) * 0.5) * self.ticker_option["max_price"]
+            #quantity = price / bar["c"]
             if price >= 1:  # Alpaca doesn't allow trades under $1
                 if output[0] > 0.5 and price <= current_cash:  # Wants to buy
                     cost += price
