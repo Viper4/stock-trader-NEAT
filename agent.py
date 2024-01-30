@@ -13,8 +13,7 @@ import visualize
 
 
 class Agent(object):
-
-    def __init__(self, settings, finn_client, alpaca_client):
+    def __init__(self, settings, alpaca_api, finbert):
         self.running = False
         self.settings = settings
 
@@ -31,8 +30,9 @@ class Agent(object):
         if not os.path.exists(self.genome_path):
             os.mkdir(self.genome_path)
 
-        self.finn_client = finn_client
-        self.alpaca_client = alpaca_client
+        self.alpaca_api = alpaca_api
+
+        self.finbert = finbert
 
     @staticmethod
     def rel_change(a, b):
@@ -42,36 +42,40 @@ class Agent(object):
 
 
 class Training(Agent):
-
-    def __init__(self, settings, finn_client, alpaca_client, option_index):
-        super().__init__(settings, finn_client, alpaca_client)
+    def __init__(self, settings, alpaca_api, finbert, option_index, start_date, end_date):
+        super().__init__(settings, alpaca_api, finbert)
         self.started = False
         self.best_genome = None  # Do this instead of self.p.best_genome since pickling population object adds 10s to each gen
         self.consecutive_gens = 0
 
-        self.start_cash = float(alpaca_client.get_account().cash)
+        self.start_cash = 50000.0
 
         self.ticker_option = settings["ticker_options"][option_index]
         self.genome_file_path = os.path.join(self.genome_path, self.ticker_option["genome_filename"])
         self.population_file_path = os.path.join(self.population_path, self.ticker_option["population_filename"])
 
-        now_date = dt.datetime.now(pytz.timezone("US/Central"))
-
-        start_date = now_date - dt.timedelta(days=self.ticker_option["backtest_days"])
-        end_date = now_date - dt.timedelta(minutes=16)  # Cant get recent 15 minute data with free alpaca acc
-
-        bars_entity = self.alpaca_client.get_bars(
+        bars_entity = self.alpaca_api.get_bars(
             symbol=self.ticker_option["symbol"],
             timeframe=TimeFrame(self.ticker_option["data_interval"], TimeFrameUnit.Minute),
             start=start_date.isoformat(),
             end=end_date.isoformat(),
-            limit=10000,
+            limit=30000,
             sort="asc")
-        self.bars = bars_entity._raw  # Array of bars
+        self.bars = bars_entity.__dict__["_raw"]  # Array of bars
+        print("{0}: Saved {1} bars from {2} to {3} at {4}m intervals".format(self.ticker_option["symbol"], len(self.bars), start_date.strftime("%Y-%m-%d %H:%M:%S"), end_date.strftime("%Y-%m-%d %H:%M:%S"), self.ticker_option["data_interval"]))
 
-        print(self.ticker_option["symbol"] + ": Saved " + str(len(self.bars)) + " bars from " + start_date.strftime("%Y-%m-%d %H:%M:%S") + " to " + end_date.strftime("%Y-%m-%d %H:%M:%S") + " at " + str(self.ticker_option["data_interval"]) + "m intervals")
+        '''
+        # This is way too expensive for CPU or Cuda
+        self.sentiments = [[0, 0, 0]]  # First bar is skipped
+        for i in range(1, len(self.bars)):
+            backtest_date = dt.datetime.strptime(self.bars[i]["t"], "%Y-%m-%dT%H:%M:%SZ")
+            sentiment = self.finbert.get_saved_sentiment(self.ticker_option["symbol"], backtest_date - dt.timedelta(days=2), backtest_date)
+            self.sentiments.append(sentiment)
+            print("{0}: {1}".format(i, sentiment))
+            time.sleep(0.015)
+        print("{0}: Saved {1} sentiments".format(self.ticker_option["symbol"], len(self.sentiments)))'''
 
-        print(self.ticker_option["symbol"] + " TRAINING agent created\n")
+        print("{0} TRAINING agent created\n".format(self.ticker_option["symbol"]))
 
     def eval_genome(self, genome, config):
         net = neat.nn.RecurrentNetwork.create(genome, config)
@@ -80,24 +84,34 @@ class Training(Agent):
         current_cash = self.start_cash
         cost = 0.0
 
+        # Start at 1 to have a previous bar for relative change
         for i in range(1, len(self.bars)):
             bar = self.bars[i]
             previous_bar = self.bars[i-1]
 
+            '''sentiment = self.sentiments[i]
+
+            inputs = [sentiment[0], sentiment[1],  # positive, negative
+                      self.rel_change(bar["c"] * shares, cost),  # plpc
+                      self.rel_change(bar["o"], previous_bar["o"]),
+                      self.rel_change(bar["h"], previous_bar["h"]),
+                      self.rel_change(bar["l"], previous_bar["l"]),
+                      self.rel_change(bar["c"], previous_bar["c"]),
+                      self.rel_change(bar["v"], previous_bar["v"]),
+                      self.rel_change(bar["vw"], previous_bar["vw"])]'''
             inputs = [self.rel_change(bar["c"] * shares, cost),  # plpc
                       self.rel_change(bar["o"], previous_bar["o"]),
                       self.rel_change(bar["h"], previous_bar["h"]),
                       self.rel_change(bar["l"], previous_bar["l"]),
                       self.rel_change(bar["c"], previous_bar["c"]),
                       self.rel_change(bar["v"], previous_bar["v"]),
-                      self.rel_change(bar["vw"], previous_bar["vw"])]
+                      self.rel_change(bar["vw"], previous_bar["vw"]),
+                      ]
             output = net.activate(inputs)
 
             quantity = current_cash * self.ticker_option["cash_at_risk"] / previous_bar["c"]
             price = quantity * bar["c"]
 
-            #price = ((output[1] + 1) * 0.5) * self.ticker_option["max_price"]
-            #quantity = price / bar["c"]
             if price >= 1:  # Alpaca doesn't allow trades under $1
                 if output[0] > 0.5 and price <= current_cash:  # Wants to buy
                     cost += price
@@ -123,7 +137,7 @@ class Training(Agent):
         while not self.running:
             time.sleep(1)
 
-        # There's probably a better way to do this, self.pool doesn't work: cant pickle Pool(), separate class for parallel processing doesn't work: leaks memory
+        # There's probably a better way to do this. self.pool doesn't work: cant pickle Pool(). Separate class doesn't work: leaks memory
         pool = Pool(processes=self.settings["processes"])
         jobs = []
         for genome_id, genome in genomes:
@@ -145,7 +159,7 @@ class Training(Agent):
     def run(self):
         self.running = True
         if not self.started:
-            print("Starting " + self.ticker_option["symbol"] + " training agent...")
+            print("Starting {0} training agent...".format(self.ticker_option["symbol"]))
             config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
 
             save_system = saving.SaveSystem(1, self.genome_file_path, self.settings["gen_stagger"], self.population_file_path)
@@ -158,7 +172,7 @@ class Training(Agent):
             p.add_reporter(save_system)
             threading.Thread(target=p.run, args=(self.eval_genomes, self.settings["generations"])).start()
         else:
-            print("Resuming " + self.ticker_option["symbol"] + " training agent...")
+            print("Resuming {0} training agent...".format(self.ticker_option["symbol"]))
         self.started = True
 
     def plot(self):
@@ -168,32 +182,29 @@ class Training(Agent):
 
 
 class Trader(Agent):
-
-    def __init__(self, settings, finn_client, alpaca_client):
-        super().__init__(settings, finn_client, alpaca_client)
-        self.trainer = trainer.Trainer(settings, finn_client, alpaca_client)
-        print("\nTRADER agent created with settings: " + str(settings) + "\n")
+    def __init__(self, settings, alpaca_api, finbert):
+        super().__init__(settings, alpaca_api, finbert)
+        self.trainer = trainer.Trainer(settings, alpaca_api, finbert)
+        print("\nTRADER agent created with settings: {0}\n".format(settings))
 
     def trading_loop(self, config):
         nets = {}
         cum_prices = {}
         cum_vols = {}
-        costs = {}
         for i in range(len(self.trainer.best_genomes)):
             ticker = self.settings["ticker_options"][i]["symbol"]
             nets[ticker] = neat.nn.RecurrentNetwork.create(self.trainer.best_genomes[i], config)
             cum_prices[ticker] = 0
             cum_vols[ticker] = 0
-            costs[ticker] = 0
 
         prev_data = {}
         prev_vwap = {}
 
-        previous_date = dt.datetime.now(pytz.timezone("US/Central"))
+        previous_date = dt.datetime.now(pytz.UTC)
         displayed_acc = False
         training_thread = None
         while self.running:
-            if self.finn_client.market_status(exchange='US')["isOpen"]:
+            if self.alpaca_api.get_clock().is_open:
                 if self.trainer.running:
                     self.trainer.stop_training()
                     training_thread.join()
@@ -201,14 +212,14 @@ class Trader(Agent):
                         option = self.settings["ticker_options"][i]
                         nets[option["symbol"]] = neat.nn.RecurrentNetwork.create(self.trainer.best_genomes[i], config)
                 displayed_acc = False
-                account = self.alpaca_client.get_account()
+                account = self.alpaca_api.get_account()
                 current_cash = float(account.cash)
                 positions = {}
-                for position in self.alpaca_client.list_positions():
+                for position in self.alpaca_api.list_positions():
                     positions[position.symbol] = {"quantity": float(position.qty), "plpc": float(position.unrealized_plpc)}
 
-                now_date = dt.datetime.now(pytz.timezone("US/Central"))
-                if now_date.strftime('%Y-%m-%d') != previous_date.strftime('%Y-%m-%d'):
+                now_date = dt.datetime.now(pytz.UTC)
+                if now_date.isoformat() != previous_date.isoformat():
                     cum_prices.clear()
                     cum_vols.clear()
                     prev_data.clear()
@@ -235,7 +246,16 @@ class Trader(Agent):
                     cum_vols[ticker] += current_data["Volume"]
                     vwap = cum_prices[option["symbol"]] / cum_vols[ticker] if cum_vols[ticker] > 0 else 0
 
-                    print(str(positions[ticker]["plpc"]) + " " + str(self.rel_change(current_data["Close"], costs[ticker])))
+                    '''sentiment = self.finbert.get_api_sentiment(ticker, now_date - dt.timedelta(days=2), now_date)
+
+                    inputs = [sentiment[0], sentiment[1],  # positive, negative
+                              positions[ticker]["plpc"],
+                              self.rel_change(current_data["Open"], prev_data[ticker]["Open"]),
+                              self.rel_change(current_data["High"], prev_data[ticker]["High"]),
+                              self.rel_change(current_data["Low"], prev_data[ticker]["Low"]),
+                              self.rel_change(current_data["Close"], prev_data[ticker]["Close"]),
+                              self.rel_change(current_data["Volume"], prev_data[ticker]["Volume"]),
+                              self.rel_change(vwap, prev_vwap[ticker])]'''
                     inputs = [positions[ticker]["plpc"],
                               self.rel_change(current_data["Open"], prev_data[ticker]["Open"]),
                               self.rel_change(current_data["High"], prev_data[ticker]["High"]),
@@ -245,30 +265,26 @@ class Trader(Agent):
                               self.rel_change(vwap, prev_vwap[ticker])]
                     output = nets[ticker].activate(inputs)
 
-                    price = ((output[1] + 1) * 0.5) * option["max_price"]
-                    quantity = price / current_data["Close"]
+                    quantity = current_cash * option["cash_at_risk"] / prev_data[ticker]["Close"]
+                    price = quantity * current_data["Close"]
 
                     if price >= 1:  # Alpaca doesn't allow trades under $1
                         if output[0] > 0.5 and price <= current_cash:  # Wants to buy
-                            costs[ticker] += price
                             print(ticker + " BUY (" + str(quantity) + ", $" + str(price) + ") at " + now_date.strftime("%Y-%m-%d %H:%M:%S"))
-                            self.alpaca_client.submit_order(symbol=ticker, qty=quantity, side="buy", type="market", time_in_force="day")
+                            self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="buy", type="market", time_in_force="day")
                         elif output[0] < -0.5 and positions[ticker]["quantity"] > 0:  # Wants to sell
                             print(ticker + " SELL (" + str(quantity) + ", $" + str(price) + ") at " + now_date.strftime("%Y-%m-%d %H:%M:%S"))
-                            cost_per_share = costs[ticker] / positions[ticker]["quantity"]
                             if positions[ticker]["quantity"] - quantity < 0.00001:  # Alpaca doesn't allow selling < 1e-9 qty
-                                self.alpaca_client.submit_order(symbol=ticker, qty=positions[ticker]["quantity"], side="sell", type="market", time_in_force="day")
-                                costs[ticker] = 0
+                                self.alpaca_api.submit_order(symbol=ticker, qty=positions[ticker]["quantity"], side="sell", type="market", time_in_force="day")
                             else:
-                                self.alpaca_client.submit_order(symbol=ticker, qty=quantity, side="sell", type="market", time_in_force="day")
-                                costs[ticker] = cost_per_share * (positions[ticker]["quantity"] - quantity)
+                                self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="sell", type="market", time_in_force="day")
                     prev_data[ticker] = current_data
                     prev_vwap[ticker] = vwap
                 previous_date = now_date
             else:
                 if not displayed_acc:
-                    account = self.alpaca_client.get_account()
-                    open_positions = self.alpaca_client.list_positions()
+                    account = self.alpaca_api.get_account()
+                    open_positions = self.alpaca_api.list_positions()
                     bought_shares = {}
                     for position in open_positions:
                         bought_shares[position.symbol] = float(position.qty)
@@ -284,7 +300,7 @@ class Trader(Agent):
                         training_thread.join()
                     training_thread = threading.Thread(target=self.trainer.start_training)
                     training_thread.start()
-            time.sleep(self.settings["run_interval"])
+            time.sleep(self.settings["trade_delay"])
 
     def run(self):
         print("Starting trader agent...")
@@ -292,7 +308,8 @@ class Trader(Agent):
         config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
         for option in self.settings["ticker_options"]:
             if option["genome_filename"] is None:
-                print("No filename provided for " + option["symbol"])
+                print("No genome filename provided for " + option["symbol"])
+                exit(0)
             else:
                 self.trainer.best_genomes.append(saving.SaveSystem.restore_genome(os.path.join(self.genome_path, option["genome_filename"])))
         self.trading_loop(config)

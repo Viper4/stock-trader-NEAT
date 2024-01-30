@@ -1,7 +1,7 @@
 #--- parameters for stock trader ---#
 
 [NEAT]
-no_fitness_termination = False
+no_fitness_termination = True
 fitness_criterion     = max
 fitness_threshold     = 999999
 pop_size              = 100

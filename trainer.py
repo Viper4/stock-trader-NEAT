@@ -1,20 +1,31 @@
 import agent
 import time
+import datetime as dt
+import pytz
 
 
 class Trainer(object):
-    def __init__(self, settings, finn_client, alpaca_client):
+    def __init__(self, settings, alpaca_api, finbert):
         self.running = False
         self.visualize = settings["visualize"]
         self.print_stats = settings["print_stats"]
+
+        now_date = dt.datetime.now(pytz.UTC)
+
+        start_date = now_date - dt.timedelta(days=settings["backtest_days"])
+        end_date = now_date - dt.timedelta(minutes=16)  # Cant get recent 15 minute data with free alpaca acc
+
+        #symbols = [option["symbol"] for option in settings["ticker_options"]]
+        #finbert.save_news(symbols, start_date, end_date)
+
         self.agents = []
         self.best_genomes = []
         if len(settings["ticker_options"]) == 1 and settings["gen_stagger"] != 0:
             print("Only training 1 agent. Setting gen_stagger to 0.")
             settings["gen_stagger"] = 0
         for i in range(len(settings["ticker_options"])):
-            self.agents.append(agent.Training(settings, finn_client, alpaca_client, i))
-        print("Created trainer with settings: " + str(settings) + "\n")
+            self.agents.append(agent.Training(settings, alpaca_api, finbert, i, start_date, end_date))
+        print("Created trainer with settings: {0}\n".format(settings))
 
     def start_training(self):
         self.running = True
