@@ -3,54 +3,71 @@
     {
       "symbol": "NVDA",
       "data_interval": 5,
-      "cash_at_risk": 0.5,
-      "population_filename": "5m-population-NVDA.gz",
-      "genome_filename": "5m-genome-NVDA.gz"
+      "cash_at_risk": 0.25,
+      "population_filename": "s5m-5pw-population-NVDA.gz",
+      "genome_filename": "s5m-5pw-genome-NVDA.gz",
+      "sentiments_filename": "5m-5pw-sentiments-NVDA.gz"
     },
     {
       "symbol": "TSLA",
       "data_interval": 5,
       "cash_at_risk": 0.25,
-      "population_filename": "5m-population-TSLA.gz",
-      "genome_filename": "5m-genome-TSLA.gz"
+      "population_filename": "s5m-5pw-population-TSLA.gz",
+      "genome_filename": "s5m-5pw-genome-TSLA.gz",
+      "sentiments_filename": "5m-5pw-sentiments-TSLA.gz"
     },
     {
       "symbol": "BA",
       "data_interval": 5,
       "cash_at_risk": 0.25,
-      "population_filename": "5m-population-BA.gz",
-      "genome_filename": "5m-genome-BA.gz"
+      "population_filename": "s5m-5pw-population-BA.gz",
+      "genome_filename": "s5m-5pw-genome-BA.gz",
+      "sentiments_filename": "5m-5pw-sentiments-BA.gz"
     },
     {
       "symbol": "COIN",
       "data_interval": 5,
-      "cash_at_risk": 0.5,
-      "population_filename": "5m-population-COIN.gz",
-      "genome_filename": "5m-genome-COIN.gz"
+      "cash_at_risk": 0.25,
+      "population_filename": "s5m-5pw-population-COIN.gz",
+      "genome_filename": "s5m-5pw-genome-COIN.gz",
+      "sentiments_filename": "5m-5pw-sentiments-COIN.gz"
     },
     {
       "symbol": "GOOG",
       "data_interval": 5,
-      "cash_at_risk": 0.5,
-      "population_filename": "5m-population-GOOG.gz",
-      "genome_filename": "5m-genome-GOOG.gz"
+      "cash_at_risk": 0.25,
+      "population_filename": "s5m-5pw-population-GOOG.gz",
+      "genome_filename": "s5m-5pw-genome-GOOG.gz",
+      "sentiments_filename": "5m-5pw-sentiments-GOOG.gz"
     },
     {
       "symbol": "AMD",
       "data_interval": 5,
-      "cash_at_risk": 0.5,
-      "population_filename": "5m-population-AMD.gz",
-      "genome_filename": "5m-genome-AMD.gz"
+      "cash_at_risk": 0.25,
+      "population_filename": "s5m-5pw-population-AMD.gz",
+      "genome_filename": "s5m-5pw-genome-AMD.gz",
+      "sentiments_filename": "5m-5pw-sentiments-AMD.gz"
+    },
+    {
+      "symbol": "META",
+      "data_interval": 5,
+      "cash_at_risk": 0.25,
+      "population_filename": "s5m-5pw-population-META.gz",
+      "genome_filename": "s5m-5pw-genome-META.gz",
+      "sentiments_filename": "5m-5pw-sentiments-META.gz"
     }
   ],
   "generations": null,
-  "backtest_days": 210,
+  "backtest_days": 200,
+  "profit_window": 5,
   "config_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/config-recurrent.txt",
   "save_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/Saves",
-  "training_mode": false,
+  "trading_mode": false,
+  "extended_hours": false,
+  "train_while_trading": false,
   "gen_stagger": 8,
-  "trade_delay": 60,
+  "trade_delay": 300,
   "processes": 12,
-  "print_stats": false,
+  "print_stats": true,
   "visualize": false
 }
