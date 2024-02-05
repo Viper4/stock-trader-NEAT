@@ -6,7 +6,7 @@
       "cash_at_risk": 0.25,
       "population_filename": "s5m-5pw-population-NVDA.gz",
       "genome_filename": "s5m-5pw-genome-NVDA.gz",
-      "sentiments_filename": "5m-5pw-sentiments-NVDA.gz"
+      "training_filename": "5m-5pw-data-NVDA.gz"
     },
     {
       "symbol": "TSLA",
@@ -14,7 +14,7 @@
       "cash_at_risk": 0.25,
       "population_filename": "s5m-5pw-population-TSLA.gz",
       "genome_filename": "s5m-5pw-genome-TSLA.gz",
-      "sentiments_filename": "5m-5pw-sentiments-TSLA.gz"
+      "training_filename": "5m-5pw-data-TSLA.gz"
     },
     {
       "symbol": "BA",
@@ -22,7 +22,7 @@
       "cash_at_risk": 0.25,
       "population_filename": "s5m-5pw-population-BA.gz",
       "genome_filename": "s5m-5pw-genome-BA.gz",
-      "sentiments_filename": "5m-5pw-sentiments-BA.gz"
+      "training_filename": "5m-5pw-data-BA.gz"
     },
     {
       "symbol": "COIN",
@@ -30,7 +30,7 @@
       "cash_at_risk": 0.25,
       "population_filename": "s5m-5pw-population-COIN.gz",
       "genome_filename": "s5m-5pw-genome-COIN.gz",
-      "sentiments_filename": "5m-5pw-sentiments-COIN.gz"
+      "training_filename": "5m-5pw-data-COIN.gz"
     },
     {
       "symbol": "GOOG",
@@ -38,7 +38,7 @@
       "cash_at_risk": 0.25,
       "population_filename": "s5m-5pw-population-GOOG.gz",
       "genome_filename": "s5m-5pw-genome-GOOG.gz",
-      "sentiments_filename": "5m-5pw-sentiments-GOOG.gz"
+      "training_filename": "5m-5pw-data-GOOG.gz"
     },
     {
       "symbol": "AMD",
@@ -46,7 +46,7 @@
       "cash_at_risk": 0.25,
       "population_filename": "s5m-5pw-population-AMD.gz",
       "genome_filename": "s5m-5pw-genome-AMD.gz",
-      "sentiments_filename": "5m-5pw-sentiments-AMD.gz"
+      "training_filename": "5m-5pw-data-AMD.gz"
     },
     {
       "symbol": "META",
@@ -54,17 +54,16 @@
       "cash_at_risk": 0.25,
       "population_filename": "s5m-5pw-population-META.gz",
       "genome_filename": "s5m-5pw-genome-META.gz",
-      "sentiments_filename": "5m-5pw-sentiments-META.gz"
+      "training_filename": "5m-5pw-data-META.gz"
     }
   ],
-  "generations": null,
   "backtest_days": 200,
   "profit_window": 5,
+  "training_reset": 5,
   "config_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/config-recurrent.txt",
   "save_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/Saves",
-  "trading_mode": false,
+  "trading_mode": true,
   "extended_hours": false,
-  "train_while_trading": false,
   "gen_stagger": 8,
   "trade_delay": 300,
   "processes": 12,

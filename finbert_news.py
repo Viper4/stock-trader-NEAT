@@ -17,6 +17,7 @@ class FinBERTNews(object):
         self.last_sentiment = []
 
     def save_news(self, symbols, start_date, end_date):
+        self.saved_news.clear()
         news_entity = self.alpaca_api.get_news(
             symbol=symbols,
             start=start_date.isoformat(),
@@ -46,7 +47,7 @@ class FinBERTNews(object):
             sentiment = torch.nn.functional.softmax(torch.sum(sentiment, 0), dim=-1)
 
             # Garbage collection on GPU
-            detached_sentiment = sentiment.cpu().detach().tolist()  # python list faster than numpy and tensor
+            detached_sentiment = sentiment.cpu().detach().tolist()  # python list is faster than numpy and tensor
             del tokens, sentiment
             torch.cuda.empty_cache()
 

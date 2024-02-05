@@ -1,5 +1,4 @@
 import yfinance as yf
-from alpaca_trade_api.rest import TimeFrame, TimeFrameUnit
 import neat
 import datetime as dt
 import pytz
@@ -7,8 +6,6 @@ import time
 import os
 from multiprocessing import Pool
 import threading
-import gzip
-import pickle
 import trainer
 import saving
 import visualize
@@ -32,77 +29,38 @@ class Agent(object):
         if not os.path.exists(self.genome_path):
             os.mkdir(self.genome_path)
 
-        self.sentiments_path = self.settings["save_path"] + "/Sentiments"
-        if not os.path.exists(self.sentiments_path):
-            os.mkdir(self.sentiments_path)
-
         self.alpaca_api = alpaca_api
         self.finbert = finbert
 
     @staticmethod
     def rel_change(a, b):
-        if b == 0:
+        if a == 0:
             return 0
-        return (a - b) / b
+        return (b - a) / a
 
 
 class Training(Agent):
-    def __init__(self, settings, alpaca_api, finbert, option, start_date, end_date):
+    def __init__(self, settings, alpaca_api, finbert, option, bars, sentiments):
         super().__init__(settings, alpaca_api, finbert)
         self.started = False
         self.best_genome = None  # Do this instead of self.p.best_genome since pickling population object adds 10s to each gen
         self.consecutive_gens = 0
         self.start_cash = 50000.0
         self.ticker_option = option
+        self.bars = bars
+        self.sentiments = sentiments
         self.genome_file_path = os.path.join(self.genome_path, self.ticker_option["genome_filename"])
         self.population_file_path = os.path.join(self.population_path, self.ticker_option["population_filename"])
-        self.sentiments_file_path = os.path.join(self.sentiments_path, self.ticker_option["sentiments_filename"])
-
-        if self.ticker_option["sentiments_filename"] is None:
-            print("No sentiments filename provided for " + self.ticker_option["symbol"])
-            exit(0)
-
-        self.bars_df = self.alpaca_api.get_bars(
-            symbol=self.ticker_option["symbol"],
-            timeframe=TimeFrame(self.ticker_option["data_interval"], TimeFrameUnit.Minute),
-            start=start_date.isoformat(),
-            end=end_date.isoformat(),
-            limit=30000,
-            sort="asc").df.tz_convert("US/Eastern")
-        if not self.settings["extended_hours"]:
-            self.bars_df = self.bars_df.between_time("9:30", "16:00")
-
-        self.bars = self.bars_df.reset_index().to_dict("records")
-
-        print("{0}: Cached {1} bars from {2} to {3} at {4}m intervals".format(self.ticker_option["symbol"], len(self.bars), start_date.strftime("%Y-%m-%d %H:%M:%S"), end_date.strftime("%Y-%m-%d %H:%M:%S"), self.ticker_option["data_interval"]))
-
-        if os.path.exists(self.sentiments_file_path):
-            with gzip.open(self.sentiments_file_path) as f:
-                self.sentiments = pickle.load(f)
-        else:
-            print("Generating sentiments for " + self.ticker_option["symbol"])
-            self.sentiments = [[0, 0, 0]]  # First bar is skipped
-            for i in range(1, len(self.bars)):
-                backtest_date = self.bars[i]["timestamp"].to_pydatetime()
-                sentiment = self.finbert.get_saved_sentiment(self.ticker_option["symbol"], backtest_date - dt.timedelta(days=2), backtest_date)
-                self.sentiments.append(sentiment)
-                # print("{0}: {1}".format(i, sentiment))
-                # time.sleep(0.015)
-            with gzip.open(self.sentiments_file_path, 'w', compresslevel=5) as f:
-                pickle.dump(self.sentiments, f, protocol=pickle.HIGHEST_PROTOCOL)
-            print("{0}: Saved {1} sentiments to {2}".format(self.ticker_option["symbol"], len(self.sentiments), self.sentiments_file_path))
-
-        print("{0} TRAINING agent created\n".format(self.ticker_option["symbol"]))
 
     def eval_genome(self, genome, config):
         nn = neat.nn.RecurrentNetwork.create(genome, config)
         start_date = self.bars[0]["timestamp"].date()
         current_cash = self.start_cash
         start_equity = self.start_cash
-        profit_sum = 0
+        profit_sum = 0.0
         num_windows = 0
-        shares = 0
-        cost = 0
+        shares = 0.0
+        cost = 0.0
 
         # Start at 1 to have previous bar for relative change
         num_bars = len(self.bars)
@@ -112,13 +70,13 @@ class Training(Agent):
             date = bar["timestamp"].date()
 
             sentiment = self.sentiments[i]
-            inputs = [self.rel_change(bar["close"] * shares, cost),  # plpc
-                      self.rel_change(bar["open"], prev_bar["open"]),
-                      self.rel_change(bar["high"], prev_bar["high"]),
-                      self.rel_change(bar["low"], prev_bar["low"]),
-                      self.rel_change(bar["close"], prev_bar["close"]),
-                      self.rel_change(bar["volume"], prev_bar["volume"]),
-                      self.rel_change(bar["vwap"], prev_bar["vwap"]),
+            inputs = [self.rel_change(cost, bar["close"] * shares),  # plpc
+                      self.rel_change(prev_bar["open"], bar["open"]),
+                      self.rel_change(prev_bar["high"], bar["high"]),
+                      self.rel_change(prev_bar["low"], bar["low"]),
+                      self.rel_change(prev_bar["close"], bar["close"]),
+                      self.rel_change(prev_bar["volume"], bar["volume"]),
+                      self.rel_change(prev_bar["vwap"], bar["vwap"]),
                       sentiment[0], sentiment[1],  # positive, negative from 0 to 1
                       ]
             output = nn.activate(inputs)
@@ -135,7 +93,7 @@ class Training(Agent):
                 quantity = qty_output * shares
                 price = quantity * bar["close"]
                 if price >= 1:
-                    if shares - quantity < 0.00001:  # Alpaca doesn't allow selling < 1e-9 qty
+                    if shares - quantity < 0.0001:  # Alpaca doesn't allow selling < 1e-9 qty
                         current_cash += bar["close"] * shares
                         shares = 0.0
                         cost = 0.0
@@ -191,7 +149,7 @@ class Training(Agent):
             if self.settings["print_stats"]:
                 p.add_reporter(neat.StdOutReporter(True))
             p.add_reporter(save_system)
-            threading.Thread(target=p.run, args=(self.eval_genomes, self.settings["generations"])).start()
+            threading.Thread(target=p.run, args=(self.eval_genomes, None)).start()
         else:
             print("Resuming {0} training agent...".format(self.ticker_option["symbol"]))
         self.started = True
@@ -207,7 +165,7 @@ class Trader(Agent):
         super().__init__(settings, alpaca_api, finbert)
         self.trainer = trainer.Trainer(settings, alpaca_api, finbert)
         self.training_thread = None
-        print("\nTRADER agent created with settings: {0}\n".format(settings))
+        print("TRADER agent created with settings: {0}\n".format(settings))
 
     def start_training(self):
         if self.training_thread is not None:
@@ -239,15 +197,11 @@ class Trader(Agent):
             if self.alpaca_api.get_clock().is_open or extended_trading:
                 if self.trainer.running:
                     self.trainer.stop_training()
-                    if not self.settings["train_while_trading"]:
-                        self.trainer.running = False
-                        self.training_thread.join()
+                    self.trainer.running = False
+                    self.training_thread.join()
                     for symbol in self.trainer.agents:
                         if self.trainer.agents[symbol].best_genome is not None:
                             nets[symbol] = neat.nn.RecurrentNetwork.create(self.trainer.agents[symbol].best_genome, config)
-                elif self.settings["train_while_trading"]:
-                    print("Starting training while trading.")
-                    self.start_training()
 
                 displayed_acc = False
                 account = self.alpaca_api.get_account()
@@ -285,12 +239,12 @@ class Trader(Agent):
 
                     sentiment = self.finbert.get_api_sentiment(ticker, now_date - dt.timedelta(days=2), now_date)
                     inputs = [positions[ticker]["plpc"],
-                              self.rel_change(current_data["Open"], prev_data[ticker]["Open"]),
-                              self.rel_change(current_data["High"], prev_data[ticker]["High"]),
-                              self.rel_change(current_data["Low"], prev_data[ticker]["Low"]),
-                              self.rel_change(current_data["Close"], prev_data[ticker]["Close"]),
-                              self.rel_change(current_data["Volume"], prev_data[ticker]["Volume"]),
-                              self.rel_change(vwap, prev_vwap[ticker]),
+                              self.rel_change(prev_data[ticker]["Open"], current_data["Open"]),
+                              self.rel_change(prev_data[ticker]["High"], current_data["High"]),
+                              self.rel_change(prev_data[ticker]["Low"], current_data["Low"]),
+                              self.rel_change(prev_data[ticker]["Close"], current_data["Close"]),
+                              self.rel_change(prev_data[ticker]["Volume"], current_data["Volume"]),
+                              self.rel_change(prev_vwap[ticker], vwap),
                               sentiment[0], sentiment[1],  # positive, negative from 0 to 1
                               ]
                     output = nets[ticker].activate(inputs)
@@ -310,7 +264,7 @@ class Trader(Agent):
                         price = quantity * current_data["Close"]
                         if price >= 1:
                             print("{0} SELL (qty: {1}, price: ${2}, profit: {3}) at {4} EST".format(ticker, quantity, price, positions[ticker]["pl"], now_date.strftime("%Y-%m-%d %H:%M:%S")))
-                            if positions[ticker]["quantity"] - quantity < 0.00001:  # Alpaca doesn't allow selling < 1e-9 qty
+                            if positions[ticker]["quantity"] - quantity < 0.0001:  # Alpaca doesn't allow selling < 1e-9 qty
                                 if self.alpaca_api.get_clock().is_open:
                                     self.alpaca_api.submit_order(symbol=ticker, qty=positions[ticker]["quantity"], side="sell", type="market", time_in_force="day")
                                 else:
