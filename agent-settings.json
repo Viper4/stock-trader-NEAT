@@ -4,65 +4,65 @@
       "symbol": "NVDA",
       "data_interval": 5,
       "cash_at_risk": 0.25,
-      "population_filename": "s5m-5pw-population-NVDA.gz",
-      "genome_filename": "s5m-5pw-genome-NVDA.gz",
-      "training_filename": "5m-5pw-data-NVDA.gz"
+      "population_filename": "5m-3pw-population-NVDA.gz",
+      "genome_filename": "5m-3pw-genome-NVDA.gz",
+      "training_filename": "5m-data-NVDA.gz"
     },
     {
       "symbol": "TSLA",
       "data_interval": 5,
       "cash_at_risk": 0.25,
-      "population_filename": "s5m-5pw-population-TSLA.gz",
-      "genome_filename": "s5m-5pw-genome-TSLA.gz",
-      "training_filename": "5m-5pw-data-TSLA.gz"
+      "population_filename": "5m-3pw-population-TSLA.gz",
+      "genome_filename": "5m-3pw-genome-TSLA.gz",
+      "training_filename": "5m-data-TSLA.gz"
     },
     {
       "symbol": "BA",
       "data_interval": 5,
       "cash_at_risk": 0.25,
-      "population_filename": "s5m-5pw-population-BA.gz",
-      "genome_filename": "s5m-5pw-genome-BA.gz",
-      "training_filename": "5m-5pw-data-BA.gz"
+      "population_filename": "5m-3pw-population-BA.gz",
+      "genome_filename": "5m-3pw-genome-BA.gz",
+      "training_filename": "5m-data-BA.gz"
     },
     {
       "symbol": "COIN",
       "data_interval": 5,
       "cash_at_risk": 0.25,
-      "population_filename": "s5m-5pw-population-COIN.gz",
-      "genome_filename": "s5m-5pw-genome-COIN.gz",
-      "training_filename": "5m-5pw-data-COIN.gz"
+      "population_filename": "5m-3pw-population-COIN.gz",
+      "genome_filename": "5m-3pw-genome-COIN.gz",
+      "training_filename": "5m-data-COIN.gz"
     },
     {
       "symbol": "GOOG",
       "data_interval": 5,
       "cash_at_risk": 0.25,
-      "population_filename": "s5m-5pw-population-GOOG.gz",
-      "genome_filename": "s5m-5pw-genome-GOOG.gz",
-      "training_filename": "5m-5pw-data-GOOG.gz"
+      "population_filename": "5m-3pw-population-GOOG.gz",
+      "genome_filename": "5m-3pw-genome-GOOG.gz",
+      "training_filename": "5m-data-GOOG.gz"
     },
     {
       "symbol": "AMD",
       "data_interval": 5,
       "cash_at_risk": 0.25,
-      "population_filename": "s5m-5pw-population-AMD.gz",
-      "genome_filename": "s5m-5pw-genome-AMD.gz",
-      "training_filename": "5m-5pw-data-AMD.gz"
+      "population_filename": "5m-3pw-population-AMD.gz",
+      "genome_filename": "5m-3pw-genome-AMD.gz",
+      "training_filename": "5m-data-AMD.gz"
     },
     {
       "symbol": "META",
       "data_interval": 5,
       "cash_at_risk": 0.25,
-      "population_filename": "s5m-5pw-population-META.gz",
-      "genome_filename": "s5m-5pw-genome-META.gz",
-      "training_filename": "5m-5pw-data-META.gz"
+      "population_filename": "5m-3pw-population-META.gz",
+      "genome_filename": "5m-3pw-genome-META.gz",
+      "training_filename": "5m-data-META.gz"
     }
   ],
   "backtest_days": 200,
-  "profit_window": 5,
-  "training_reset": 5,
+  "profit_window": 3,
+  "training_reset": 3,
   "config_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/config-recurrent.txt",
   "save_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/Saves",
-  "trading_mode": true,
+  "trading_mode": false,
   "extended_hours": false,
   "gen_stagger": 8,
   "trade_delay": 300,

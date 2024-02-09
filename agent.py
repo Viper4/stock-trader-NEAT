@@ -53,7 +53,7 @@ class Training(Agent):
         self.population_file_path = os.path.join(self.population_path, self.ticker_option["population_filename"])
 
     def eval_genome(self, genome, config):
-        nn = neat.nn.RecurrentNetwork.create(genome, config)
+        net = neat.nn.RecurrentNetwork.create(genome, config)
         start_date = self.bars[0]["timestamp"].date()
         current_cash = self.start_cash
         start_equity = self.start_cash
@@ -79,7 +79,7 @@ class Training(Agent):
                       self.rel_change(prev_bar["vwap"], bar["vwap"]),
                       sentiment[0], sentiment[1],  # positive, negative from 0 to 1
                       ]
-            output = nn.activate(inputs)
+            output = net.activate(inputs)
 
             qty_output = (output[1] + 1) * 0.5
             if output[0] > 0.5:  # Buy
@@ -157,7 +157,7 @@ class Training(Agent):
     def plot(self):
         config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
         node_names = {-9: 'plpc', -8: 'open%', -7: 'high%', -6: 'low%', -5: 'close%', -4: 'volume%', -3: 'vwap%', -2: "positive", -1: "negative", 0: 'buy/sell', 1: 'amount'}
-        visualize.draw_net(config, self.best_genome, True, node_names=node_names)
+        visualize.draw_net(config, self.best_genome, view=True, node_names=node_names, show_disabled=False)
 
 
 class Trader(Agent):
@@ -248,6 +248,7 @@ class Trader(Agent):
                               sentiment[0], sentiment[1],  # positive, negative from 0 to 1
                               ]
                     output = nets[ticker].activate(inputs)
+                    print("{0}\n Inputs: {1}\n Output: {2}".format(ticker, inputs, output))
 
                     qty_output = (output[1] + 1) * 0.5
                     if output[0] > 0.5:  # Buy
@@ -295,6 +296,7 @@ class Trader(Agent):
                 next_open = self.alpaca_api.get_clock().next_open
                 next_ext_open = next_open - dt.timedelta(hours=2, minutes=30)
                 wait_time = (next_ext_open - now_date).total_seconds() if self.settings["extended_hours"] else (next_open - now_date).total_seconds()
+                wait_time += 300  # Wait extra 5 minutes so yahoo finance can update
                 if not self.trainer.running:
                     print("Starting training while waiting for market to open in {0} hours.\n-----".format(wait_time / 3600))
                     self.start_training()
