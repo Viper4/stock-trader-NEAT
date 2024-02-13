@@ -221,25 +221,27 @@ class Trader(Agent):
                     ticker = option["symbol"]
                     if ticker not in positions:
                         positions[ticker] = {"quantity": 0, "plpc": 0, "pl": 0}
-                    candles = realtime_candles.get_latest_candles(ticker, interval=str(option["data_interval"] + "m"))
+                    candles = realtime_candles.get_latest_candles(ticker, interval=str(option["data_interval"]) + "m")
 
                     latest = candles[-1]
                     prev = candles[-2] if len(candles) >= 2 else latest
 
                     if ticker not in prev_vwap:
-                        prev_vwap[ticker] = (latest["high"] + latest["low"] + latest["close"]) / 3
+                        prev_vwap[ticker] = (prev["high"] + prev["low"] + prev["close"]) / 3
 
                     cum_prices[ticker] += latest["volume"] * ((latest["high"] + latest["low"] + latest["close"]) / 3)
                     cum_vols[ticker] += latest["volume"]
                     vwap = cum_prices[option["symbol"]] / cum_vols[ticker] if cum_vols[ticker] > 0 else 0
 
                     sentiment = self.finbert.get_api_sentiment(ticker, now_date - dt.timedelta(days=2), now_date)
+                    print(prev)
+                    print(latest)
                     inputs = [positions[ticker]["plpc"],
                               self.rel_change(prev["open"], latest["open"]),
                               self.rel_change(prev["high"], latest["high"]),
-                              self.rel_change(prev["Low"], latest["low"]),
-                              self.rel_change(prev["Close"], latest["close"]),
-                              self.rel_change(prev["Volume"], latest["volume"]),
+                              self.rel_change(prev["low"], latest["low"]),
+                              self.rel_change(prev["close"], latest["close"]),
+                              self.rel_change(prev["volume"], latest["volume"]),
                               self.rel_change(prev_vwap[ticker], vwap),
                               sentiment[0], sentiment[1],  # positive, negative from 0 to 1
                               ]
