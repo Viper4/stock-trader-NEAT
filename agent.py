@@ -1,4 +1,3 @@
-import yfinance as yf
 import neat
 import datetime as dt
 import pytz
@@ -9,6 +8,7 @@ import threading
 import trainer
 import saving
 import visualize
+import realtime_candles
 
 
 class Agent(object):
@@ -182,7 +182,6 @@ class Trader(Agent):
             cum_prices[symbol] = 0
             cum_vols[symbol] = 0
 
-        prev_data = {}
         prev_vwap = {}
 
         # EST time
@@ -213,7 +212,6 @@ class Trader(Agent):
                 if now_date.isoformat() != previous_date.isoformat():
                     cum_prices.clear()
                     cum_vols.clear()
-                    prev_data.clear()
                     prev_vwap.clear()
                     for option in self.settings["ticker_options"]:
                         cum_prices[option["symbol"]] = 0
@@ -223,37 +221,36 @@ class Trader(Agent):
                     ticker = option["symbol"]
                     if ticker not in positions:
                         positions[ticker] = {"quantity": 0, "plpc": 0, "pl": 0}
-                    ticker_df = yf.download(tickers=ticker, period="1d", interval=str(option["data_interval"]) + "m")
-                    current_data = ticker_df.iloc[-1]
+                    candles = realtime_candles.get_latest_candles(ticker, interval=str(option["data_interval"] + "m"))
 
-                    if ticker not in prev_data:
-                        #prev_data[ticker] = ticker_df.iloc[-2]
-                        #prev_vwap[ticker] = (prev_data[ticker]["High"] + prev_data[ticker]["Low"] + prev_data[ticker]["Close"]) / 3
+                    latest = candles[-1]
+                    prev = candles[-2] if len(candles) >= 2 else latest
 
-                        prev_data[ticker] = current_data
-                        prev_vwap[ticker] = 0
+                    if ticker not in prev_vwap:
+                        prev_vwap[ticker] = (latest["high"] + latest["low"] + latest["close"]) / 3
 
-                    cum_prices[ticker] += current_data["Volume"] * ((current_data["High"] + current_data["Low"] + current_data["Close"]) / 3)
-                    cum_vols[ticker] += current_data["Volume"]
+                    cum_prices[ticker] += latest["volume"] * ((latest["high"] + latest["low"] + latest["close"]) / 3)
+                    cum_vols[ticker] += latest["volume"]
                     vwap = cum_prices[option["symbol"]] / cum_vols[ticker] if cum_vols[ticker] > 0 else 0
 
                     sentiment = self.finbert.get_api_sentiment(ticker, now_date - dt.timedelta(days=2), now_date)
                     inputs = [positions[ticker]["plpc"],
-                              self.rel_change(prev_data[ticker]["Open"], current_data["Open"]),
-                              self.rel_change(prev_data[ticker]["High"], current_data["High"]),
-                              self.rel_change(prev_data[ticker]["Low"], current_data["Low"]),
-                              self.rel_change(prev_data[ticker]["Close"], current_data["Close"]),
-                              self.rel_change(prev_data[ticker]["Volume"], current_data["Volume"]),
+                              self.rel_change(prev["open"], latest["open"]),
+                              self.rel_change(prev["high"], latest["high"]),
+                              self.rel_change(prev["Low"], latest["low"]),
+                              self.rel_change(prev["Close"], latest["close"]),
+                              self.rel_change(prev["Volume"], latest["volume"]),
                               self.rel_change(prev_vwap[ticker], vwap),
                               sentiment[0], sentiment[1],  # positive, negative from 0 to 1
                               ]
+
                     output = nets[ticker].activate(inputs)
                     print("{0}\n Inputs: {1}\n Output: {2}".format(ticker, inputs, output))
 
                     qty_output = (output[1] + 1) * 0.5
                     if output[0] > 0.5:  # Buy
-                        quantity = current_cash * qty_output * option["cash_at_risk"] / current_data["Close"]
-                        price = quantity * current_data["Close"]
+                        quantity = current_cash * qty_output * option["cash_at_risk"] / latest["close"]
+                        price = quantity * latest["close"]
                         if price >= 1:  # Alpaca doesn't allow trades under $1
                             print("{0} BUY (qty: {1}, price: ${2}) at {3} EST".format(ticker, quantity, price, now_date.strftime("%Y-%m-%d %H:%M:%S")))
                             if self.alpaca_api.get_clock().is_open:
@@ -262,7 +259,7 @@ class Trader(Agent):
                                 self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="buy", type="limit", time_in_force="day", extended_hours=True)
                     elif output[0] < -0.5 and positions[ticker]["quantity"] > 0:  # Sell
                         quantity = qty_output * positions[ticker]["quantity"]
-                        price = quantity * current_data["Close"]
+                        price = quantity * latest["close"]
                         if price >= 1:
                             print("{0} SELL (qty: {1}, price: ${2}, profit: {3}) at {4} EST".format(ticker, quantity, price, positions[ticker]["pl"], now_date.strftime("%Y-%m-%d %H:%M:%S")))
                             if positions[ticker]["quantity"] - quantity < 0.0001:  # Alpaca doesn't allow selling < 1e-9 qty
@@ -276,7 +273,6 @@ class Trader(Agent):
                                 else:
                                     self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="sell", type="limit", time_in_force="day", extended_hours=True)
 
-                    prev_data[ticker] = current_data
                     prev_vwap[ticker] = vwap
                 previous_date = now_date
                 time.sleep(self.settings["trade_delay"])

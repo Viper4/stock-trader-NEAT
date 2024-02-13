@@ -6,8 +6,8 @@ import agent
 import trainer
 import finbert_news
 
-ALPACA_PUB = "PKIA62DJJIOK9DGOZS2H"
-ALPACA_SEC = "uGAqCEJAXfWibcaXH1VbwzIrl7x41iL1meH3tuig"
+ALPACA_PUB = "PK1C3TXF36HO8QFODCDV"
+ALPACA_SEC = "dY8oCGM6h4J8dRMetfR4FhWix34Ls4bD1sVqU4wK"
 ALPACA_BASE_URL = "https://paper-api.alpaca.markets"  # Paper: https://paper-api.alpaca.markets | Live: https://api.alpaca.markets
 
 

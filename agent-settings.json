@@ -62,7 +62,7 @@
   "training_reset": 3,
   "config_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/config-recurrent.txt",
   "save_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/Saves",
-  "trading_mode": false,
+  "trading_mode": true,
   "extended_hours": false,
   "gen_stagger": 8,
   "trade_delay": 300,
