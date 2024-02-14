@@ -8,7 +8,7 @@ import threading
 import trainer
 import saving
 import visualize
-import realtime_candles
+import candle_scraper as cs
 
 
 class Agent(object):
@@ -174,6 +174,7 @@ class Trader(Agent):
         self.training_thread.start()
 
     def trading_loop(self, config):
+        scraper = cs.Scraper()
         nets = {}
         cum_prices = {}
         cum_vols = {}
@@ -181,7 +182,6 @@ class Trader(Agent):
             nets[symbol] = neat.nn.RecurrentNetwork.create(self.trainer.agents[symbol].best_genome, config)
             cum_prices[symbol] = 0
             cum_vols[symbol] = 0
-
         prev_vwap = {}
 
         # EST time
@@ -221,7 +221,7 @@ class Trader(Agent):
                     ticker = option["symbol"]
                     if ticker not in positions:
                         positions[ticker] = {"quantity": 0, "plpc": 0, "pl": 0}
-                    candles = realtime_candles.get_latest_candles(ticker, interval=str(option["data_interval"]) + "m")
+                    candles = scraper.get_latest_candles(ticker, interval=str(option["data_interval"]) + "m")
 
                     latest = candles[-1]
                     prev = candles[-2] if len(candles) >= 2 else latest
@@ -234,8 +234,6 @@ class Trader(Agent):
                     vwap = cum_prices[option["symbol"]] / cum_vols[ticker] if cum_vols[ticker] > 0 else 0
 
                     sentiment = self.finbert.get_api_sentiment(ticker, now_date - dt.timedelta(days=2), now_date)
-                    print(prev)
-                    print(latest)
                     inputs = [positions[ticker]["plpc"],
                               self.rel_change(prev["open"], latest["open"]),
                               self.rel_change(prev["high"], latest["high"]),
