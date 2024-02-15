@@ -52,7 +52,7 @@ class FinBERTNews(object):
                 del tokens, sentiment
                 torch.cuda.empty_cache()
             else:
-                sentiment_list = sentiment
+                sentiment_list = sentiment.detach().tolist()
 
             self.last_news = news
             self.last_sentiment = sentiment_list
