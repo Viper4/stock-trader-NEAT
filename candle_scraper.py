@@ -6,7 +6,7 @@ import os
 SAVE_PATH = r"C:\Users\vpr16\PythonProjects\StockTraderNEAT\Saves\WebScraping"
 
 
-def save_proxies(limit):
+r'''def save_proxies(limit):
     proxies = []
     response = requests.get(f"https://proxylist.geonode.com/api/proxy-list?country=US&limit={limit}&page=1&sort_by=lastChecked&sort_type=desc").json()
     data = response["data"]
@@ -36,7 +36,7 @@ def load_proxies(limit=50):
                     proxies.append(line.strip())
         return proxies
     else:
-        return save_proxies(limit)
+        return save_proxies(limit)'''
 
 
 def save_user_agents():
@@ -70,9 +70,9 @@ def load_user_agents():
 
 class Scraper(object):
     def __init__(self):
-        self.proxies = load_proxies(100)
+        #self.proxies = load_proxies(100)
         self.user_agents = load_user_agents()
-        print(f"Scraper initialized with {len(self.proxies)} proxies and {len(self.user_agents)} user_agents.")
+        print(f"Scraper initialized with {len(self.user_agents)} user_agents.")
 
     def get_latest_candles(self, symbol, interval="5m"):
         headers = {
@@ -80,10 +80,10 @@ class Scraper(object):
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br"
         }
-        proxy = random.choice(self.proxies)
+        #proxy = random.choice(self.proxies)
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval={interval}"
 
-        response = requests.get(url, headers=headers, proxies={"http": proxy, "https": proxy})
+        response = requests.get(url, headers=headers)
 
         # Check if the request was successful (status code 200)
         if response.status_code == 200:
