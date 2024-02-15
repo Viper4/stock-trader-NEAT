@@ -46,14 +46,17 @@ class FinBERTNews(object):
             sentiment = self.model(tokens["input_ids"], attention_mask=tokens["attention_mask"])["logits"]
             sentiment = torch.nn.functional.softmax(torch.sum(sentiment, 0), dim=-1)
 
-            # Garbage collection on GPU
-            detached_sentiment = sentiment.cpu().detach().tolist()  # python list is faster than numpy and tensor
-            del tokens, sentiment
-            torch.cuda.empty_cache()
+            if self.device == "cuda:0":
+                # Garbage collection on GPU
+                sentiment_list = sentiment.cpu().detach().tolist()  # python list is faster than numpy and tensor
+                del tokens, sentiment
+                torch.cuda.empty_cache()
+            else:
+                sentiment_list = sentiment
 
             self.last_news = news
-            self.last_sentiment = detached_sentiment
-            return detached_sentiment
+            self.last_sentiment = sentiment_list
+            return sentiment_list
 
     def get_api_sentiment(self, symbol, start_date, end_date):
         news_entity = self.alpaca_api.get_news(symbol=symbol,
