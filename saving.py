@@ -22,31 +22,25 @@ class SaveSystem(BaseReporter):
             for key in population:
                 if population[key].fitness is not None and (best_genome is None or population[key].fitness > best_genome.fitness):
                     best_genome = population[key]
-            self.save_genome(best_genome)
+            self.save_data(best_genome, self.g_path)
 
         if self.current_generation % self.p_interval == 0:
-            self.save_population(config, population, species_set, self.current_generation)
+            self.save_data((self.current_generation, config, population, species_set, random.getstate()), self.p_path)
 
-    def save_genome(self, genome):
-        print("Saving genome to {0}".format(self.g_path))
+    @staticmethod
+    def save_data(data, path, mode="w"):
+        print(f"Saving data to {path}")
 
-        with gzip.open(self.g_path, 'w', compresslevel=5) as f:
-            pickle.dump(genome, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    def save_population(self, config, population, species_set, generation):
-        print("Saving population to {0}".format(self.p_path))
-
-        with gzip.open(self.p_path, 'w', compresslevel=5) as f:
-            data = (generation, config, population, species_set, random.getstate())
+        with gzip.open(path, mode, compresslevel=5) as f:
             pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     @staticmethod
-    def restore_genome(file_path):
-        with gzip.open(file_path) as f:
+    def load_data(file_path, mode="r"):
+        with gzip.open(file_path, mode) as f:
             return pickle.load(f)
 
     @staticmethod
-    def restore_population(file_path):
+    def load_population(file_path):
         with gzip.open(file_path) as f:
             generation, config, population, species_set, rndstate = pickle.load(f)
             random.setstate(rndstate)

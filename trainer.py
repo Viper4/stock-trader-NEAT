@@ -39,8 +39,7 @@ class Trainer(object):
             end=end.isoformat(),
             limit=30000,
             sort="asc").df.tz_convert("US/Eastern")
-        if not self.settings["extended_hours"]:
-            bars_df = bars_df.between_time("9:30", "16:00")
+        bars_df = bars_df.between_time("9:30", "16:00")
         return bars_df.reset_index().to_dict("records")
 
     def create_agents(self):

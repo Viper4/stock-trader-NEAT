@@ -9,6 +9,7 @@ import trainer
 import saving
 import visualize
 import candle_scraper as cs
+import plot
 
 
 class Agent(object):
@@ -22,15 +23,21 @@ class Agent(object):
                 exit(0)
 
         self.population_path = self.settings["save_path"] + "/Populations"
-        if not os.path.exists(self.population_path):
-            os.mkdir(self.population_path)
+        self.make_dir(self.population_path)
 
         self.genome_path = self.settings["save_path"] + "/Genomes"
-        if not os.path.exists(self.genome_path):
-            os.mkdir(self.genome_path)
+        self.make_dir(self.genome_path)
+
+        self.log_path = self.settings["save_path"] + "/Logs"
+        self.make_dir(self.log_path)
 
         self.alpaca_api = alpaca_api
         self.finbert = finbert
+
+    @staticmethod
+    def make_dir(path):
+        if not os.path.exists(path):
+            os.mkdir(path)
 
     @staticmethod
     def rel_change(a, b):
@@ -143,7 +150,7 @@ class Training(Agent):
 
             save_system = saving.SaveSystem(1, self.genome_file_path, self.settings["gen_stagger"], self.population_file_path)
             if os.path.exists(self.population_file_path):
-                p = save_system.restore_population(self.population_file_path)
+                p = save_system.load_population(self.population_file_path)
             else:
                 p = neat.Population(config)
             if self.settings["print_stats"]:
@@ -165,6 +172,7 @@ class Trader(Agent):
         super().__init__(settings, alpaca_api, finbert)
         self.trainer = trainer.Trainer(settings, alpaca_api, finbert)
         self.training_thread = None
+        self.log = {}
         print("TRADER agent created with settings: {0}\n".format(settings))
 
     def start_training(self):
@@ -179,21 +187,15 @@ class Trader(Agent):
         cum_prices = {}
         cum_vols = {}
         for symbol in self.trainer.agents:
+            self.log[symbol] = []
             nets[symbol] = neat.nn.RecurrentNetwork.create(self.trainer.agents[symbol].best_genome, config)
             cum_prices[symbol] = 0
             cum_vols[symbol] = 0
         prev_vwap = {}
 
-        # EST time
-        extended_start = dt.time(hour=4)
-        extended_end = dt.time(hour=20)
-        now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-        previous_date = now_date
-        displayed_acc = False
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-            extended_trading = self.settings["extended_hours"] and extended_start < now_date.time() < extended_end
-            if self.alpaca_api.get_clock().is_open or extended_trading:
+            if self.alpaca_api.get_clock().is_open:
                 if self.trainer.running:
                     self.trainer.stop_training()
                     self.trainer.running = False
@@ -202,20 +204,11 @@ class Trader(Agent):
                         if self.trainer.agents[symbol].best_genome is not None:
                             nets[symbol] = neat.nn.RecurrentNetwork.create(self.trainer.agents[symbol].best_genome, config)
 
-                displayed_acc = False
                 account = self.alpaca_api.get_account()
                 current_cash = float(account.cash)
                 positions = {}
                 for position in self.alpaca_api.list_positions():
                     positions[position.symbol] = {"quantity": float(position.qty), "plpc": float(position.unrealized_plpc), "pl": float(position.unrealized_pl)}
-
-                if now_date.isoformat() != previous_date.isoformat():
-                    cum_prices.clear()
-                    cum_vols.clear()
-                    prev_vwap.clear()
-                    for option in self.settings["ticker_options"]:
-                        cum_prices[option["symbol"]] = 0
-                        cum_vols[option["symbol"]] = 0
 
                 for option in self.settings["ticker_options"]:
                     ticker = option["symbol"]
@@ -248,51 +241,59 @@ class Trader(Agent):
                     print("{0}\n Inputs: {1}\n Output: {2}".format(ticker, inputs, output))
 
                     qty_output = (output[1] + 1) * 0.5
+                    time_str = now_date.astimezone(tz=pytz.timezone("US/Central")).isoformat()
                     if output[0] > 0.5:  # Buy
                         quantity = current_cash * qty_output * option["cash_at_risk"] / latest["close"]
                         price = quantity * latest["close"]
                         if price >= 1:  # Alpaca doesn't allow trades under $1
-                            print("{0} BUY (qty: {1}, price: ${2}) at {3} EST".format(ticker, quantity, price, now_date.strftime("%Y-%m-%d %H:%M:%S")))
-                            if self.alpaca_api.get_clock().is_open:
-                                self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="buy", type="market", time_in_force="day")
-                            else:
-                                self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="buy", type="limit", time_in_force="day", extended_hours=True)
+                            print("{0} BUY (qty: {1}, price: ${2}) at {3}".format(ticker, quantity, price, time_str))
+                            self.log[ticker].append({"side": "Buy", "quantity": quantity, "price": price, "cash": current_cash, "time": time_str})
+
+                            self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="buy", type="market", time_in_force="day")
                     elif output[0] < -0.5 and positions[ticker]["quantity"] > 0:  # Sell
                         quantity = qty_output * positions[ticker]["quantity"]
                         price = quantity * latest["close"]
                         if price >= 1:
-                            print("{0} SELL (qty: {1}, price: ${2}, profit: {3}) at {4} EST".format(ticker, quantity, price, positions[ticker]["pl"], now_date.strftime("%Y-%m-%d %H:%M:%S")))
+                            print("{0} SELL (qty: {1}, price: ${2}, profit: {3}) at {4}".format(ticker, quantity, price, positions[ticker]["pl"], time_str))
+                            self.log[ticker].append({"side": "Sell", "quantity": quantity, "price": price, "profit": positions[ticker]["pl"], "cash": current_cash, "time": time_str})
+
                             if positions[ticker]["quantity"] - quantity < 0.0001:  # Alpaca doesn't allow selling < 1e-9 qty
-                                if self.alpaca_api.get_clock().is_open:
-                                    self.alpaca_api.submit_order(symbol=ticker, qty=positions[ticker]["quantity"], side="sell", type="market", time_in_force="day")
-                                else:
-                                    self.alpaca_api.submit_order(symbol=ticker, qty=positions[ticker]["quantity"], side="sell", type="limit", time_in_force="day", extended_hours=True)
+                                self.alpaca_api.submit_order(symbol=ticker, qty=positions[ticker]["quantity"], side="sell", type="market", time_in_force="day")
                             else:
-                                if self.alpaca_api.get_clock().is_open:
-                                    self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="sell", type="market", time_in_force="day")
-                                else:
-                                    self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="sell", type="limit", time_in_force="day", extended_hours=True)
+                                self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="sell", type="market", time_in_force="day")
 
                     prev_vwap[ticker] = vwap
-                previous_date = now_date
                 time.sleep(self.settings["trade_delay"])
             else:
-                if not displayed_acc:
-                    account = self.alpaca_api.get_account()
-                    open_positions = self.alpaca_api.list_positions()
-                    bought_shares = {}
-                    for position in open_positions:
-                        bought_shares[position.symbol] = float(position.qty)
-                    print("\nMarket is closed. Current Account Details:"
-                          "\n Balance Change: " + str(float(account.equity) - float(account.last_equity)) +
-                          "\n Cash: " + str(account.cash) +
-                          "\n Equity: " + str(account.equity) +
-                          "\n Bought shares: " + str(bought_shares) + "\n")
-                    displayed_acc = True
+                cum_prices.clear()
+                cum_vols.clear()
+                prev_vwap.clear()
+                for option in self.settings["ticker_options"]:
+                    cum_prices[option["symbol"]] = 0
+                    cum_vols[option["symbol"]] = 0
+
+                account = self.alpaca_api.get_account()
+                open_positions = self.alpaca_api.list_positions()
+                bought_shares = {}
+                for position in open_positions:
+                    bought_shares[position.symbol] = float(position.qty)
+                balance_change = float(account.equity) - float(account.last_equity)
+                print("\nMarket is closed. Current Account Details:"
+                      "\n Balance Change: " + str(balance_change) +
+                      "\n Cash: " + str(account.cash) +
+                      "\n Equity: " + str(account.equity) +
+                      "\n Bought shares: " + str(bought_shares) + "\n")
+
+                for symbol in self.log:
+                    if len(self.log[symbol]) > 0:
+                        saving.SaveSystem.save_data((self.log, balance_change, bought_shares), os.path.join(self.log_path, f"{now_date.astimezone(tz=pytz.timezone('US/Central')).strftime('%Y-%m-%d')}.gz"), "wt")
+                        plot.plot_log(self.alpaca_api, self.log, self.settings["trade_delay"] / 60)
+                        break
+                self.log.clear()
+
                 next_open = self.alpaca_api.get_clock().next_open
-                next_ext_open = next_open - dt.timedelta(hours=2, minutes=30)
-                wait_time = (next_ext_open - now_date).total_seconds() if self.settings["extended_hours"] else (next_open - now_date).total_seconds()
-                wait_time += 300  # Wait extra 5 minutes so yahoo finance can update
+                wait_time = (next_open - now_date).total_seconds()
+                wait_time += 150  # Wait extra few minutes so yahoo finance can update
                 if not self.trainer.running:
                     print("Starting training while waiting for market to open in {0} hours.\n-----".format(wait_time / 3600))
                     self.start_training()
@@ -307,5 +308,5 @@ class Trader(Agent):
                 print("No genome filename provided for " + option["symbol"])
                 exit(0)
             else:
-                self.trainer.agents[option["symbol"]].best_genome = saving.SaveSystem.restore_genome(os.path.join(self.genome_path, option["genome_filename"]))
+                self.trainer.agents[option["symbol"]].best_genome = saving.SaveSystem.load_data(os.path.join(self.genome_path, option["genome_filename"]))
         self.trading_loop(config)

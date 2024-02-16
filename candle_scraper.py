@@ -70,9 +70,8 @@ def load_user_agents():
 
 class Scraper(object):
     def __init__(self):
-        #self.proxies = load_proxies(100)
         self.user_agents = load_user_agents()
-        print(f"Scraper initialized with {len(self.user_agents)} user_agents.")
+        print(f"Scraper initialized with {len(self.user_agents)} user agents.")
 
     def get_latest_candles(self, symbol, interval="5m"):
         headers = {
@@ -80,7 +79,6 @@ class Scraper(object):
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br"
         }
-        #proxy = random.choice(self.proxies)
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval={interval}"
 
         response = requests.get(url, headers=headers)
