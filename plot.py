@@ -8,7 +8,7 @@ def plot_log(alpaca_api, log, interval):
         end_time = log[symbol][-1]["time"]
         annotations = []
         for action in log[symbol]:
-            text = f"{action['side']} {round(action['quantity'], 2)}\nCash: {round(action['cash'], 1)}"
+            text = f"{action['side']} {round(action['quantity'], 2)}\nCash S|L: {round(action['settled_cash'], 1)}|{round(action['liquid_cash'], 1)}"
             color = "green"
             if action["side"] == "Sell":
                 text += f"\nP/L: {round(action['profit'], 2)}"

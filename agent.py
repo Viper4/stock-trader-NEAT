@@ -62,12 +62,16 @@ class Training(Agent):
     def eval_genome(self, genome, config):
         net = neat.nn.RecurrentNetwork.create(genome, config)
         start_date = self.bars[0]["timestamp"].date()
+        prev_date = start_date
+        liquid_cash = 0.0
+        pending_sales = []
         current_cash = self.start_cash
         start_equity = self.start_cash
         profit_sum = 0.0
         num_windows = 0
         shares = 0.0
         cost = 0.0
+        consecutive_days = 0
 
         # Start at 1 to have previous bar for relative change
         num_bars = len(self.bars)
@@ -75,6 +79,14 @@ class Training(Agent):
             bar = self.bars[i]
             prev_bar = self.bars[i-1]
             date = bar["timestamp"].date()
+            if (date - prev_date).days >= 1:  # Check pending sales to settle cash
+                consecutive_days += 1
+                for j in reversed(range(len(pending_sales))):
+                    sale = pending_sales[j]
+                    if consecutive_days - sale[1] >= 2:
+                        current_cash += sale[0]
+                        liquid_cash -= sale[0]
+                        pending_sales.pop(j)
 
             sentiment = self.sentiments[i]
             inputs = [self.rel_change(cost, bar["close"] * shares),  # plpc
@@ -101,20 +113,22 @@ class Training(Agent):
                 price = quantity * bar["close"]
                 if price >= 1:
                     if shares - quantity < 0.0001:  # Alpaca doesn't allow selling < 1e-9 qty
-                        current_cash += bar["close"] * shares
+                        price = shares * bar["close"]
                         shares = 0.0
                         cost = 0.0
                     else:
                         cost_per_share = cost / shares
                         shares -= quantity
-                        current_cash += price
                         cost = cost_per_share * shares
+                    liquid_cash += price
+                    pending_sales.append((price, consecutive_days))
             if i == num_bars-1 or (date - start_date).days >= self.settings["profit_window"]:
-                equity = current_cash + bar["close"] * shares
+                equity = liquid_cash + current_cash + bar["close"] * shares
                 profit_sum += equity - start_equity
                 num_windows += 1
                 start_equity = equity
                 start_date = date
+            prev_date = date
         time.sleep(0.15)
 
         return profit_sum / num_windows
@@ -186,17 +200,24 @@ class Trader(Agent):
         nets = {}
         cum_prices = {}
         cum_vols = {}
+        account = self.alpaca_api.get_account()
+        current_cash = float(account.cash)
+        liquid_cash = 0.0
+        pending_sales = {}
+        consecutive_days = 0
         for symbol in self.trainer.agents:
             self.log[symbol] = []
             nets[symbol] = neat.nn.RecurrentNetwork.create(self.trainer.agents[symbol].best_genome, config)
             cum_prices[symbol] = 0
             cum_vols[symbol] = 0
+            pending_sales[symbol] = []
         prev_vwap = {}
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
             if self.alpaca_api.get_clock().is_open:
                 if self.trainer.running:
+                    consecutive_days += 1
                     self.trainer.stop_training()
                     self.trainer.running = False
                     self.training_thread.join()
@@ -204,8 +225,13 @@ class Trader(Agent):
                         if self.trainer.agents[symbol].best_genome is not None:
                             nets[symbol] = neat.nn.RecurrentNetwork.create(self.trainer.agents[symbol].best_genome, config)
 
-                account = self.alpaca_api.get_account()
-                current_cash = float(account.cash)
+                        for j in reversed(range(len(pending_sales[symbol]))):
+                            sale = pending_sales[symbol][j]
+                            if consecutive_days - sale[1] >= 2:
+                                current_cash += sale[0]
+                                liquid_cash -= sale[0]
+                                pending_sales[symbol].pop(j)
+
                 positions = {}
                 for position in self.alpaca_api.list_positions():
                     positions[position.symbol] = {"quantity": float(position.qty), "plpc": float(position.unrealized_plpc), "pl": float(position.unrealized_pl)}
@@ -246,21 +272,25 @@ class Trader(Agent):
                         quantity = current_cash * qty_output * option["cash_at_risk"] / latest["close"]
                         price = quantity * latest["close"]
                         if price >= 1:  # Alpaca doesn't allow trades under $1
-                            print("{0} BUY (qty: {1}, price: ${2}) at {3}".format(ticker, quantity, price, time_str))
-                            self.log[ticker].append({"side": "Buy", "quantity": quantity, "price": price, "cash": current_cash, "time": time_str})
+                            action = {"side": "Buy", "quantity": quantity, "price": price, "settled_cash": current_cash, "liquid_cash": liquid_cash, "time": time_str}
+                            print(f"{ticker}: {action}")
+                            self.log[ticker].append(action)
 
                             self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="buy", type="market", time_in_force="day")
                     elif output[0] < -0.5 and positions[ticker]["quantity"] > 0:  # Sell
                         quantity = qty_output * positions[ticker]["quantity"]
                         price = quantity * latest["close"]
                         if price >= 1:
-                            print("{0} SELL (qty: {1}, price: ${2}, profit: {3}) at {4}".format(ticker, quantity, price, positions[ticker]["pl"], time_str))
-                            self.log[ticker].append({"side": "Sell", "quantity": quantity, "price": price, "profit": positions[ticker]["pl"], "cash": current_cash, "time": time_str})
+                            action = {"side": "Sell", "quantity": quantity, "price": price, "profit": positions[ticker]["pl"], "settled_cash": current_cash, "liquid_cash": liquid_cash, "time": time_str}
+                            print(f"{ticker}: {action}")
+                            self.log[ticker].append(action)
 
                             if positions[ticker]["quantity"] - quantity < 0.0001:  # Alpaca doesn't allow selling < 1e-9 qty
                                 self.alpaca_api.submit_order(symbol=ticker, qty=positions[ticker]["quantity"], side="sell", type="market", time_in_force="day")
                             else:
                                 self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="sell", type="market", time_in_force="day")
+                            liquid_cash += price
+                            pending_sales[ticker].append((price, consecutive_days))
 
                     prev_vwap[ticker] = vwap
                 time.sleep(self.settings["trade_delay"])
@@ -278,9 +308,10 @@ class Trader(Agent):
                 for position in open_positions:
                     bought_shares[position.symbol] = float(position.qty)
                 balance_change = float(account.equity) - float(account.last_equity)
-                print("\nMarket is closed. Current Account Details:"
+                print("\nMarket is closed. Account Details:"
                       "\n Balance Change: " + str(balance_change) +
-                      "\n Cash: " + str(account.cash) +
+                      "\n Settled Cash: " + str(current_cash) +
+                      "\n Liquid Cash:" + str(liquid_cash) +
                       "\n Equity: " + str(account.equity) +
                       "\n Bought shares: " + str(bought_shares) + "\n")
 
