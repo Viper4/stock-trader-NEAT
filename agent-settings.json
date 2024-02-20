@@ -33,12 +33,12 @@
       "training_filename": "1m-data-COIN.gz"
     },
     {
-      "symbol": "GOOG",
+      "symbol": "UBER",
       "data_interval": 1,
       "cash_at_risk": 0.25,
-      "population_filename": "1m-1pw-population-GOOG.gz",
-      "genome_filename": "1m-1pw-genome-GOOG.gz",
-      "training_filename": "1m-data-GOOG.gz"
+      "population_filename": "1m-1pw-population-UBER.gz",
+      "genome_filename": "1m-1pw-genome-UBER.gz",
+      "training_filename": "1m-data-UBER.gz"
     },
     {
       "symbol": "AMD",
@@ -55,17 +55,26 @@
       "population_filename": "1m-1pw-population-META.gz",
       "genome_filename": "1m-1pw-genome-META.gz",
       "training_filename": "1m-data-META.gz"
+    },
+    {
+      "symbol": "TSM",
+      "data_interval": 1,
+      "cash_at_risk": 0.25,
+      "population_filename": "1m-1pw-population-TSM.gz",
+      "genome_filename": "1m-1pw-genome-TSM.gz",
+      "training_filename": "1m-data-TSM.gz"
     }
   ],
-  "backtest_days": 75,
+  "backtest_days": 150,
   "profit_window": 1,
   "training_reset": 3,
+  "gen_stagger": 8,
+  "processes": 12,
+  "print_stats": true,
+  "log_training": true,
+  "visualize": false,
   "config_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/config-recurrent.txt",
   "save_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/Saves",
   "trading_mode": true,
-  "gen_stagger": 8,
-  "trade_delay": 60,
-  "processes": 12,
-  "print_stats": true,
-  "visualize": false
+  "trade_delay": 60
 }

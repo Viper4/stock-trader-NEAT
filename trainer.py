@@ -37,7 +37,7 @@ class Trainer(object):
             timeframe=TimeFrame(option["data_interval"], TimeFrameUnit.Minute),
             start=start.isoformat(),
             end=end.isoformat(),
-            limit=30000,
+            limit=100000,
             sort="asc").df.tz_convert("US/Eastern")
         bars_df = bars_df.between_time("9:30", "16:00")
         return bars_df.reset_index().to_dict("records")
@@ -65,17 +65,18 @@ class Trainer(object):
                 bars = self.get_bars(option, start_date, end_date)
 
                 print("{0}: Generating sentiments".format(option["symbol"]))
-                sentiments = [[0, 0, 0]]  # First bar is skipped
+                sentiments = [0]
                 for i in range(1, len(bars)):
                     backtest_date = bars[i]["timestamp"].to_pydatetime()
                     sentiment = self.finbert.get_saved_sentiment(option["symbol"], backtest_date - dt.timedelta(days=2), backtest_date)
                     sentiments.append(sentiment)
+
                 with gzip.open(training_file_path, 'w', compresslevel=5) as f:
                     data = (start_date, end_date, sentiments)
                     pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
                 print("{0}: Saved backtest range and {1} sentiments to {2}".format(option["symbol"], len(sentiments), training_file_path))
 
-            self.agents[option["symbol"]] = agent.Training(self.settings, self.alpaca_api, self.finbert, option, bars, sentiments)
+            self.agents[option["symbol"]] = agent.Training(self.settings, self.alpaca_api, option, bars, sentiments)
 
         print("Trainer: Created {0} training agents\n".format(self.symbols))
 
@@ -84,19 +85,19 @@ class Trainer(object):
         if self.cycles >= self.settings["training_reset"]:
             self.cycles = 0
             self.create_agents()
-        if len(self.agents) > 1:
+        agents_len = len(self.agents)
+        if agents_len > 1:
             i = 0
             while self.running:
-                self.agents[self.symbols[i]].run()
-                while self.agents[self.symbols[i]].running:
+                current_agent = self.agents[self.symbols[i]]
+                current_agent.run()
+                while current_agent.running:
                     time.sleep(1)
                 if self.settings["visualize"]:
-                    self.agents[self.symbols[i]].plot()
-                #if self.settings["print_stats"]:
-                #    time.sleep(5)  # Wait for console printout
+                    current_agent.plot()
 
                 i += 1
-                if i >= len(self.agents):
+                if i >= agents_len:
                     i = 0
         else:
             self.agents[0].run()

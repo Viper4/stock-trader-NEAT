@@ -14,7 +14,7 @@ class FinBERTNews(object):
 
         self.saved_news = {}
         self.last_news = []
-        self.last_sentiment = []
+        self.last_sentiment = 0
 
     def save_news(self, symbols, start_date, end_date):
         self.saved_news.clear()
@@ -22,7 +22,7 @@ class FinBERTNews(object):
             symbol=symbols,
             start=start_date.isoformat(),
             end=end_date.isoformat(),
-            limit=20000)
+            limit=100000)
 
         for entity in news_entity:
             news_dict = entity.__dict__["_raw"]
@@ -38,25 +38,21 @@ class FinBERTNews(object):
 
     def estimate_sentiment(self, news):
         if len(news) == 0:
-            return [0, 0, 0]
+            return 0
         else:
             if np.array_equal(news, self.last_news):
                 return self.last_sentiment
             tokens = self.tokenizer(news, return_tensors="pt", padding=True).to(self.device)
-            sentiment = self.model(tokens["input_ids"], attention_mask=tokens["attention_mask"])["logits"]
-            sentiment = torch.nn.functional.softmax(torch.sum(sentiment, 0), dim=-1)
+            sentiment_list = self.model(tokens["input_ids"], attention_mask=tokens["attention_mask"])["logits"]
+            sentiment_list = torch.nn.functional.softmax(torch.sum(sentiment_list, 0), dim=-1).detach().cpu().tolist()
+            sentiment = sentiment_list[0] - sentiment_list[1]  # positive% - negative%
 
-            if self.device == "cuda:0":
-                # Garbage collection on GPU
-                sentiment_list = sentiment.cpu().detach().tolist()  # python list is faster than numpy and tensor
-                del tokens, sentiment
-                torch.cuda.empty_cache()
-            else:
-                sentiment_list = sentiment.detach().tolist()
+            del tokens, sentiment_list
+            torch.cuda.empty_cache()
 
             self.last_news = news
-            self.last_sentiment = sentiment_list
-            return sentiment_list
+            self.last_sentiment = sentiment
+            return sentiment
 
     def get_api_sentiment(self, symbol, start_date, end_date):
         news_entity = self.alpaca_api.get_news(symbol=symbol,
