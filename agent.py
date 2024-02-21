@@ -83,7 +83,7 @@ class Training(Agent):
                 consecutive_days += 1
                 for j in reversed(range(len(pending_sales))):
                     sale = pending_sales[j]
-                    if consecutive_days - sale[1] >= 2:
+                    if consecutive_days - sale[1] > 2:
                         solid_cash += sale[0]
                         liquid_cash -= sale[0]
                         pending_sales.pop(j)
@@ -244,7 +244,7 @@ class Trader(Agent):
 
                         for j in reversed(range(len(pending_sales[symbol]))):
                             sale = pending_sales[symbol][j]
-                            if consecutive_days - sale[1] >= 2:
+                            if consecutive_days - sale[1] > 2:
                                 solid_cash += sale[0]
                                 liquid_cash -= sale[0]
                                 pending_sales[symbol].pop(j)
