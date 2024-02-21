@@ -44,9 +44,3 @@ def plot_log(alpaca_api, symbol, log, interval):
         yaxis_title="Price ($USD)",
         annotations=annotations)
     candlestick_fig.show()
-
-
-def plot_logs(alpaca_api, log, interval):
-    for symbol in log:
-        plot_log(alpaca_api, symbol, log, interval)
-

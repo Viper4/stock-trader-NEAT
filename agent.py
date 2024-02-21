@@ -212,6 +212,16 @@ class Trader(Agent):
         self.training_thread = threading.Thread(target=self.trainer.start_training)
         self.training_thread.start()
 
+    def get_market_status(self):
+        retries = 0
+        while True:
+            try:
+                return self.alpaca_api.get_clock().is_open
+            except ConnectionError as e:
+                print(f"Connection error: '{e}'. Retrying in 5 seconds... ({retries})")
+                time.sleep(5)
+                retries += 1
+
     def trading_loop(self, config):
         scraper = cs.Scraper()
         nets = {}
@@ -232,7 +242,7 @@ class Trader(Agent):
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-            if self.alpaca_api.get_clock().is_open:
+            if self.get_market_status():
                 if self.trainer.running:
                     consecutive_days += 1
                     self.trainer.stop_training()
@@ -337,12 +347,14 @@ class Trader(Agent):
                       "\n Equity: " + str(account.equity) +
                       "\n Bought shares: " + str(bought_shares) + "\n")
 
+                save_log = False
                 for symbol in self.logs:
                     if len(self.logs[symbol]) > 0:
-                        saving.SaveSystem.save_data((self.logs, balance_change, bought_shares), os.path.join(self.log_path, f"{now_date.astimezone(tz=pytz.timezone('US/Central')).strftime('%Y-%m-%d')}.gz"), "wt")
-                        plot.plot_logs(self.alpaca_api, self.logs, self.settings["trade_delay"] / 60)
-                        break
-                self.logs.clear()
+                        save_log = True
+                        plot.plot_log(self.alpaca_api, symbol, self.logs[symbol], self.settings["trade_delay"] / 60)
+                        self.logs[symbol].clear()
+                if save_log:
+                    saving.SaveSystem.save_data((self.logs, balance_change, bought_shares), os.path.join(self.log_path, f"{now_date.astimezone(tz=pytz.timezone('US/Central')).strftime('%Y-%m-%d')}.gz"))
 
                 next_open = self.alpaca_api.get_clock().next_open
                 wait_time = (next_open - now_date).total_seconds()
