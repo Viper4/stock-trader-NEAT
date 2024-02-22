@@ -261,7 +261,7 @@ class Trader(Agent):
 
                 positions = {}
                 for position in self.alpaca_api.list_positions():
-                    positions[position.symbol] = {"quantity": float(position.qty), "plpc": float(position.unrealized_plpc), "pl": float(position.unrealized_pl), "avg_entry_price": float(position.avg_entry_price)}
+                    positions[position.symbol] = {"quantity": float(position.qty), "price": float(position.current_price), "plpc": float(position.unrealized_plpc), "pl": float(position.unrealized_pl), "avg_entry_price": float(position.avg_entry_price)}
 
                 for option in self.settings["ticker_options"]:
                     ticker = option["symbol"]
@@ -291,7 +291,7 @@ class Trader(Agent):
                               ]
 
                     output = nets[ticker].activate(inputs)
-                    print("{0}\n Inputs: {1}\n Output: {2}".format(ticker, inputs, output))
+                    print(f"Alpaca - yahoo: {positions[ticker]['price'] - latest['close']}")
 
                     qty_output = (output[1] + 1) * 0.5
                     if output[0] > 0.5:  # Buy
@@ -312,6 +312,7 @@ class Trader(Agent):
                         if price >= 1:
                             if positions[ticker]["quantity"] - quantity < 0.0001:  # Alpaca doesn't allow selling < 1e-9 qty
                                 self.alpaca_api.submit_order(symbol=ticker, qty=positions[ticker]["quantity"], side="sell", type="market", time_in_force="day")
+                                price = positions[ticker]["quantity"] * latest["close"]
                             else:
                                 self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="sell", type="market", time_in_force="day")
                             liquid_cash += price
@@ -350,15 +351,15 @@ class Trader(Agent):
                 save_log = False
                 for symbol in self.logs:
                     if len(self.logs[symbol]) > 0:
+                        threading.Thread(target=plot.plot_log, args=(self.alpaca_api, symbol, self.logs[symbol], self.settings["trade_delay"] / 60)).start()
                         save_log = True
-                        plot.plot_log(self.alpaca_api, symbol, self.logs[symbol], self.settings["trade_delay"] / 60)
                         self.logs[symbol].clear()
                 if save_log:
                     saving.SaveSystem.save_data((self.logs, balance_change, bought_shares), os.path.join(self.log_path, f"{now_date.astimezone(tz=pytz.timezone('US/Central')).strftime('%Y-%m-%d')}.gz"))
 
                 next_open = self.alpaca_api.get_clock().next_open
                 wait_time = (next_open - now_date).total_seconds()
-                wait_time += 150  # Wait extra few minutes so yahoo finance can update
+                wait_time += self.settings["trade_delay"]  # Wait for yahoo finance to update
                 if not self.trainer.running:
                     print("Starting training while waiting for market to open in {0} hours.\n-----".format(wait_time / 3600))
                     self.start_training()
