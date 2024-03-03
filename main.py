@@ -5,6 +5,8 @@ import json
 import agent
 import trainer
 import finbert_news
+import plot
+import saving
 
 ALPACA_PUB = "PKHSGZJ9CBQPWGLS63YP"
 ALPACA_SEC = "NBZQMDH1JflJTiUnt4BUHezhwmEKCfpVju2BBblf"
@@ -14,12 +16,28 @@ ALPACA_BASE_URL = "https://paper-api.alpaca.markets"  # Paper: https://paper-api
 if __name__ == "__main__":
     alpaca_api = alpaca.REST(ALPACA_PUB, ALPACA_SEC, base_url=URL(ALPACA_BASE_URL))
 
-    finbert = finbert_news.FinBERTNews(alpaca_api)
-
     local_dir = os.path.dirname(__file__)
     settings_path = os.path.join(local_dir, "agent-settings.json")
     with open(settings_path) as file:
         settings = json.load(file)
+
+    if input("Plot logs? (y/n): ") == "y":
+        logs = {}
+        log_path = settings["save_path"] + "/Logs"
+        for filename in os.listdir(log_path):
+            filepath = os.path.join(log_path, filename)
+            file_logs, balance_change, bought_shares = saving.SaveSystem.load_data(filepath)
+            print(f"{filename}\n Bal Change: {balance_change}\n Bought Shares: {bought_shares}\n")
+            for ticker in file_logs:
+                if ticker in logs:
+                    logs[ticker].extend(file_logs[ticker])
+                else:
+                    logs[ticker] = file_logs[ticker]
+        for ticker in logs:
+            if len(logs[ticker]) != 0:
+                plot.Plot.plot_log(alpaca_api, ticker, logs[ticker], settings["trade_delay"] / 60)
+
+    finbert = finbert_news.FinBERTNews(alpaca_api)
 
     if settings["trading_mode"]:
         trader = agent.Trader(settings, alpaca_api, finbert)

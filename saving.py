@@ -35,13 +35,13 @@ class SaveSystem(BaseReporter):
             pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     @staticmethod
-    def load_data(file_path, mode="r"):
-        with gzip.open(file_path, mode) as f:
+    def load_data(filepath, mode="r"):
+        with gzip.open(filepath, mode) as f:
             return pickle.load(f)
 
     @staticmethod
-    def load_population(file_path):
-        with gzip.open(file_path) as f:
+    def load_population(filepath):
+        with gzip.open(filepath) as f:
             generation, config, population, species_set, rndstate = pickle.load(f)
             random.setstate(rndstate)
             return Population(config, (population, species_set, generation))

@@ -162,7 +162,7 @@ class Training(Agent):
                 best_log = log
                 self.best_genome = genome
         if best_log is not None and self.settings["log_training"]:
-            plot.plot_log(self.alpaca_api, self.ticker_option["symbol"], best_log, self.settings["trade_delay"] / 60)
+            plot.Plot.plot_log(self.alpaca_api, self.ticker_option["symbol"], best_log, self.settings["trade_delay"] / 60)
         pool.close()
         pool.join()
         pool.terminate()
@@ -204,13 +204,13 @@ class Trader(Agent):
         self.finbert = finbert
         self.training_thread = None
         self.logs = {}
+        self.net = None
+        self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
+
         print("TRADER agent created with settings: {0}\n".format(settings))
 
-    def start_training(self):
-        if self.training_thread is not None:
-            self.training_thread.join()
-        self.training_thread = threading.Thread(target=self.trainer.start_training)
-        self.training_thread.start()
+    def update_net(self, genome):
+        self.net = neat.nn.RecurrentNetwork.create(genome, self.config)
 
     def get_market_status(self):
         retries = 0
@@ -222,7 +222,7 @@ class Trader(Agent):
                 time.sleep(5)
                 retries += 1
 
-    def trading_loop(self, config):
+    def trading_loop(self, config, starting_liquid):
         scraper = cs.Scraper()
         nets = {}
         cum_prices = {}
@@ -230,19 +230,25 @@ class Trader(Agent):
         account = self.alpaca_api.get_account()
         solid_cash = float(account.cash)
         liquid_cash = 0.0
-        pending_sales = {}
+        pending_sales = []
+
+        if starting_liquid[0] != 0:
+            liquid_cash = starting_liquid[0]
+            solid_cash -= liquid_cash
+            pending_sales.append((liquid_cash, starting_liquid[1]))
+
         consecutive_days = 0
         for symbol in self.trainer.agents:
             self.logs[symbol] = []
             nets[symbol] = neat.nn.RecurrentNetwork.create(self.trainer.agents[symbol].best_genome, config)
             cum_prices[symbol] = 0
             cum_vols[symbol] = 0
-            pending_sales[symbol] = []
-        prev_vwap = {}
+        prev_data = {}
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
             if self.get_market_status():
+                print("Market is open. Starting trading...")
                 if self.trainer.running:
                     consecutive_days += 1
                     self.trainer.stop_training()
@@ -252,12 +258,12 @@ class Trader(Agent):
                         if self.trainer.agents[symbol].best_genome is not None:
                             nets[symbol] = neat.nn.RecurrentNetwork.create(self.trainer.agents[symbol].best_genome, config)
 
-                        for j in reversed(range(len(pending_sales[symbol]))):
-                            sale = pending_sales[symbol][j]
-                            if consecutive_days - sale[1] > 2:
-                                solid_cash += sale[0]
-                                liquid_cash -= sale[0]
-                                pending_sales[symbol].pop(j)
+                    for j in reversed(range(len(pending_sales))):
+                        sale = pending_sales[j]
+                        if consecutive_days - sale[1] > 2:
+                            solid_cash += sale[0]
+                            liquid_cash -= sale[0]
+                            pending_sales.pop(j)
 
                 positions = {}
                 for position in self.alpaca_api.list_positions():
@@ -266,32 +272,33 @@ class Trader(Agent):
                 for option in self.settings["ticker_options"]:
                     ticker = option["symbol"]
                     if ticker not in positions:
-                        positions[ticker] = {"quantity": 0, "plpc": 0, "pl": 0}
-                    candles = scraper.get_latest_candles(ticker, interval=str(option["data_interval"]) + "m")
-
+                        positions[ticker] = {"quantity": 0, "price": 0, "plpc": 0, "pl": 0, "avg_entry_price": 0}
+                    candles, prev_close = scraper.get_latest_candles(ticker, interval=str(option["data_interval"]) + "m")
                     latest = candles[-1]
-                    prev = candles[-2] if len(candles) >= 2 else latest
-
-                    if ticker not in prev_vwap:
-                        prev_vwap[ticker] = (prev["high"] + prev["low"] + prev["close"]) / 3
-
                     cum_prices[ticker] += latest["volume"] * ((latest["high"] + latest["low"] + latest["close"]) / 3)
                     cum_vols[ticker] += latest["volume"]
-                    vwap = cum_prices[option["symbol"]] / cum_vols[ticker] if cum_vols[ticker] > 0 else 0
+                    latest["vwap"] = cum_prices[option["symbol"]] / cum_vols[ticker] if cum_vols[ticker] > 0 else 0
+
+                    if ticker not in prev_data:
+                        if len(candles) >= 2:
+                            prev_data[ticker] = candles[-2]
+                        else:
+                            prev_data[ticker] = latest
+                            prev_data[ticker]["close"] = prev_close
+                        prev_data[ticker]["vwap"] = (prev_data[ticker]["high"] + prev_data[ticker]["low"] + prev_data[ticker]["close"]) / 3
 
                     sentiment = self.finbert.get_api_sentiment(ticker, now_date - dt.timedelta(days=2), now_date)
                     inputs = [positions[ticker]["plpc"],
-                              self.rel_change(prev["open"], latest["open"]),
-                              self.rel_change(prev["high"], latest["high"]),
-                              self.rel_change(prev["low"], latest["low"]),
-                              self.rel_change(prev["close"], latest["close"]),
-                              self.rel_change(prev["volume"], latest["volume"]),
-                              self.rel_change(prev_vwap[ticker], vwap),
+                              self.rel_change(prev_data[ticker]["open"], latest["open"]),
+                              self.rel_change(prev_data[ticker]["high"], latest["high"]),
+                              self.rel_change(prev_data[ticker]["low"], latest["low"]),
+                              self.rel_change(prev_data[ticker]["close"], latest["close"]),
+                              self.rel_change(prev_data[ticker]["volume"], latest["volume"]),
+                              self.rel_change(prev_data[ticker]["vwap"], latest["vwap"]),
                               sentiment
                               ]
 
                     output = nets[ticker].activate(inputs)
-                    print(f"Alpaca - yahoo: {positions[ticker]['price'] - latest['close']}")
 
                     qty_output = (output[1] + 1) * 0.5
                     if output[0] > 0.5:  # Buy
@@ -316,7 +323,7 @@ class Trader(Agent):
                             else:
                                 self.alpaca_api.submit_order(symbol=ticker, qty=quantity, side="sell", type="market", time_in_force="day")
                             liquid_cash += price
-                            pending_sales[ticker].append((price, consecutive_days))
+                            pending_sales.append((price, consecutive_days))
 
                             action = {"side": "Sell", "quantity": quantity, "price": price,
                                       "profit": price - (positions[ticker]["avg_entry_price"] * quantity),
@@ -325,12 +332,11 @@ class Trader(Agent):
                             print(f"{ticker}: {action}")
                             self.logs[ticker].append(action)
 
-                    prev_vwap[ticker] = vwap
+                    prev_data[ticker] = latest
                 time.sleep(self.settings["trade_delay"])
             else:
                 cum_prices.clear()
                 cum_vols.clear()
-                prev_vwap.clear()
                 for option in self.settings["ticker_options"]:
                     cum_prices[option["symbol"]] = 0
                     cum_vols[option["symbol"]] = 0
@@ -341,38 +347,44 @@ class Trader(Agent):
                 for position in open_positions:
                     bought_shares[position.symbol] = float(position.qty)
                 balance_change = float(account.equity) - float(account.last_equity)
-                print("\nMarket is closed. Account Details:"
-                      "\n Balance Change: " + str(balance_change) +
+                print("\nMarket is closed. Account Details:" +
+                      "\n Daily Bal Change: " + str(balance_change) +
                       "\n Solid Cash: " + str(solid_cash) +
                       "\n Liquid Cash: " + str(liquid_cash) +
                       "\n Equity: " + str(account.equity) +
                       "\n Bought shares: " + str(bought_shares) + "\n")
 
-                save_log = False
+                saved_log = False
                 for symbol in self.logs:
                     if len(self.logs[symbol]) > 0:
-                        threading.Thread(target=plot.plot_log, args=(self.alpaca_api, symbol, self.logs[symbol], self.settings["trade_delay"] / 60)).start()
-                        save_log = True
+                        if not saved_log:
+                            saving.SaveSystem.save_data((self.logs, balance_change, bought_shares), os.path.join(self.log_path, f"{now_date.astimezone(tz=pytz.timezone('US/Central')).strftime('%Y-%m-%d')}.gz"))
+                            saved_log = True
+                        threading.Thread(target=plot.Plot.plot_log, args=(self.alpaca_api, symbol, self.logs[symbol], self.settings["trade_delay"] / 60)).start()
                         self.logs[symbol].clear()
-                if save_log:
-                    saving.SaveSystem.save_data((self.logs, balance_change, bought_shares), os.path.join(self.log_path, f"{now_date.astimezone(tz=pytz.timezone('US/Central')).strftime('%Y-%m-%d')}.gz"))
 
                 next_open = self.alpaca_api.get_clock().next_open
                 wait_time = (next_open - now_date).total_seconds()
-                wait_time += self.settings["trade_delay"]  # Wait for yahoo finance to update
+                wait_time += self.settings["trade_delay"] + 10  # Wait for yahoo finance to update
                 if not self.trainer.running:
-                    print("Starting training while waiting for market to open in {0} hours.\n-----".format(wait_time / 3600))
-                    self.start_training()
+                    print("Waiting for market to open in {0} hours.\n-----".format(wait_time / 3600))
+                    if self.training_thread is not None:
+                        self.training_thread.join()
+                    self.training_thread = threading.Thread(target=self.trainer.start_training)
+                    self.training_thread.start()
                 time.sleep(wait_time)
 
     def run(self):
         print("Starting trader agent...")
         self.running = True
-        config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
         for option in self.settings["ticker_options"]:
             if option["genome_filename"] is None:
                 print("No genome filename provided for " + option["symbol"])
                 exit(0)
             else:
-                self.trainer.agents[option["symbol"]].best_genome = saving.SaveSystem.load_data(os.path.join(self.genome_path, option["genome_filename"]))
-        self.trading_loop(config)
+                try:
+                    self.trainer.agents[option["symbol"]].best_genome = saving.SaveSystem.load_data(os.path.join(self.genome_path, option["genome_filename"]))
+                except FileNotFoundError:
+                    print("No genome file found for " + option["genome_filename"])
+        starting_liquid = (float(input("Enter starting liquid cash: ")), int(input("Enter pending days: ")))
+        self.trading_loop(self.config, starting_liquid)
