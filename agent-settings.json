@@ -3,7 +3,7 @@
   [
     {
       "symbol": "NVDA",
-      "data_interval": 1,
+      "interval": 1,
       "cash_at_risk": 0.25,
       "population_filename": "1m-1pw-population-NVDA.gz",
       "genome_filename": "1m-1pw-genome-NVDA.gz",
@@ -11,7 +11,7 @@
     },
     {
       "symbol": "TSLA",
-      "data_interval": 1,
+      "interval": 1,
       "cash_at_risk": 0.25,
       "population_filename": "1m-1pw-population-TSLA.gz",
       "genome_filename": "1m-1pw-genome-TSLA.gz",
@@ -19,7 +19,7 @@
     },
     {
       "symbol": "BA",
-      "data_interval": 1,
+      "interval": 1,
       "cash_at_risk": 0.25,
       "population_filename": "1m-1pw-population-BA.gz",
       "genome_filename": "1m-1pw-genome-BA.gz",
@@ -27,7 +27,7 @@
     },
     {
       "symbol": "COIN",
-      "data_interval": 1,
+      "interval": 1,
       "cash_at_risk": 0.25,
       "population_filename": "1m-1pw-population-COIN.gz",
       "genome_filename": "1m-1pw-genome-COIN.gz",
@@ -35,7 +35,7 @@
     },
     {
       "symbol": "UBER",
-      "data_interval": 1,
+      "interval": 1,
       "cash_at_risk": 0.25,
       "population_filename": "1m-1pw-population-UBER.gz",
       "genome_filename": "1m-1pw-genome-UBER.gz",
@@ -43,7 +43,7 @@
     },
     {
       "symbol": "AMD",
-      "data_interval": 1,
+      "interval": 1,
       "cash_at_risk": 0.25,
       "population_filename": "1m-1pw-population-AMD.gz",
       "genome_filename": "1m-1pw-genome-AMD.gz",
@@ -51,7 +51,7 @@
     },
     {
       "symbol": "META",
-      "data_interval": 1,
+      "interval": 1,
       "cash_at_risk": 0.25,
       "population_filename": "1m-1pw-population-META.gz",
       "genome_filename": "1m-1pw-genome-META.gz",
@@ -59,7 +59,7 @@
     },
     {
       "symbol": "TSM",
-      "data_interval": 1,
+      "interval": 1,
       "cash_at_risk": 0.25,
       "population_filename": "1m-1pw-population-TSM.gz",
       "genome_filename": "1m-1pw-genome-TSM.gz",
@@ -67,7 +67,7 @@
     },
     {
       "symbol": "GOOG",
-      "data_interval": 1,
+      "interval": 1,
       "cash_at_risk": 0.25,
       "population_filename": "1m-1pw-population-GOOG.gz",
       "genome_filename": "1m-1pw-genome-GOOG.gz",
@@ -82,7 +82,6 @@
   "gen_stagger": 8,
   "processes": 12,
   "trading_mode": true,
-  "trade_delay": 60,
   "print_stats": true,
   "log_training": true,
   "visualize": false

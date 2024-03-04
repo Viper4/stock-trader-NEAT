@@ -43,7 +43,7 @@ class Plot(object):
             time.sleep(wait_time * 60)
         bars_df = alpaca_api.get_bars(
             symbol=symbol,
-            timeframe=TimeFrame(int(interval), TimeFrameUnit.Minute),
+            timeframe=TimeFrame(interval, TimeFrameUnit.Minute),
             start=start_time.isoformat(),
             end=end_time.isoformat(),
             limit=100000,

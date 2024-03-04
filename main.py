@@ -2,8 +2,7 @@ import alpaca_trade_api as alpaca
 from alpaca_trade_api.rest import URL
 import os
 import json
-import agent
-import trainer
+import manager
 import finbert_news
 import plot
 import saving
@@ -34,16 +33,16 @@ if __name__ == "__main__":
                 else:
                     logs[ticker] = file_logs[ticker]
         for ticker in logs:
-            if len(logs[ticker]) != 0:
-                plot.Plot.plot_log(alpaca_api, ticker, logs[ticker], settings["trade_delay"] / 60)
+            if len(logs[ticker]) > 0:
+                plot.Plot.plot_log(alpaca_api, ticker, logs[ticker], 1)
 
     finbert = finbert_news.FinBERTNews(alpaca_api)
 
     if settings["trading_mode"]:
-        trader = agent.Trader(settings, alpaca_api, finbert)
-        if input("Run trader agent? (y/n): ") == "y":
-            trader.run()
+        trader = manager.Trader(settings, alpaca_api, finbert)
+        if input("Start trading? (y/n): ") == "y":
+            trader.start_trading()
     else:
-        trainer = trainer.Trainer(settings, alpaca_api, finbert)
+        trainer = manager.Trainer(settings, alpaca_api, finbert)
         if input("Start training? (y/n): ") == "y":
             trainer.start_training()

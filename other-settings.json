@@ -1,15 +1,16 @@
 {
   "accounts": [
     {
-      "name": "1 minute account",
-      "public_key": "",
-      "secret_key": "",
+      "name": "1m 1pw account",
+      "public_key": "PKHSGZJ9CBQPWGLS63YP",
+      "secret_key": "NBZQMDH1JflJTiUnt4BUHezhwmEKCfpVju2BBblf",
+      "paper": true,
       "backtest_days": 150,
       "profit_window": 1,
+      "interval": 1,
       "ticker_options": [
         {
           "symbol": "NVDA",
-          "interval": 1,
           "cash_at_risk": 0.25,
           "population_filename": "1m-1pw-population-NVDA.gz",
           "genome_filename": "1m-1pw-genome-NVDA.gz",
@@ -17,7 +18,6 @@
         },
         {
           "symbol": "TSLA",
-          "interval": 1,
           "cash_at_risk": 0.25,
           "population_filename": "1m-1pw-population-TSLA.gz",
           "genome_filename": "1m-1pw-genome-TSLA.gz",
@@ -25,7 +25,6 @@
         },
         {
           "symbol": "BA",
-          "interval": 1,
           "cash_at_risk": 0.25,
           "population_filename": "1m-1pw-population-BA.gz",
           "genome_filename": "1m-1pw-genome-BA.gz",
@@ -33,7 +32,6 @@
         },
         {
           "symbol": "COIN",
-          "interval": 1,
           "cash_at_risk": 0.25,
           "population_filename": "1m-1pw-population-COIN.gz",
           "genome_filename": "1m-1pw-genome-COIN.gz",
@@ -41,7 +39,6 @@
         },
         {
           "symbol": "UBER",
-          "interval": 1,
           "cash_at_risk": 0.25,
           "population_filename": "1m-1pw-population-UBER.gz",
           "genome_filename": "1m-1pw-genome-UBER.gz",
@@ -49,7 +46,6 @@
         },
         {
           "symbol": "AMD",
-          "interval": 1,
           "cash_at_risk": 0.25,
           "population_filename": "1m-1pw-population-AMD.gz",
           "genome_filename": "1m-1pw-genome-AMD.gz",
@@ -57,7 +53,6 @@
         },
         {
           "symbol": "META",
-          "interval": 1,
           "cash_at_risk": 0.25,
           "population_filename": "1m-1pw-population-META.gz",
           "genome_filename": "1m-1pw-genome-META.gz",
@@ -65,7 +60,6 @@
         },
         {
           "symbol": "TSM",
-          "interval": 1,
           "cash_at_risk": 0.25,
           "population_filename": "1m-1pw-population-TSM.gz",
           "genome_filename": "1m-1pw-genome-TSM.gz",
@@ -73,7 +67,6 @@
         },
         {
           "symbol": "GOOG",
-          "interval": 1,
           "cash_at_risk": 0.25,
           "population_filename": "1m-1pw-population-GOOG.gz",
           "genome_filename": "1m-1pw-genome-GOOG.gz",

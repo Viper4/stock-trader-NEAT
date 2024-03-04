@@ -80,6 +80,23 @@
           "training_filename": "1m-data-GOOG.gz"
         }
       ]
+    },
+    {
+      "name": "test",
+      "public_key": "",
+      "secret_key": "",
+      "backtest_days": 150,
+      "profit_window": 1,
+      "ticker_options": [
+        {
+          "symbol": "NVDA",
+          "interval": 15,
+          "cash_at_risk": 0.5,
+          "population_filename": "15m-5pw-population-NVDA.gz",
+          "genome_filename": "15m-5pw-genome-NVDA.gz",
+          "training_filename": "15m-data-NVDA.gz"
+        }
+      ]
     }
   ],
   "config_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/config-recurrent.txt",
