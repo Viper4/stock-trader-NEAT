@@ -45,6 +45,96 @@ class Agent:
         return (b - a) / a
 
 
+# Separate from classes so instances don't get cached to RAM and slow things down
+def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_training, profit_window):
+    net = neat.nn.RecurrentNetwork.create(genome, config)
+    start_date = bars[0]["timestamp"].date()
+    solid_cash = start_cash
+    start_equity = start_cash
+    liquid_cash = 0.0
+    pending_sales = []
+    profit_sum = 0.0
+    num_windows = 0
+    shares = 0.0
+    cost = 0.0
+    consecutive_days = 1
+    log = []
+
+    # Start at 1 to have previous bar for relative change
+    num_bars = len(bars)
+    for i in range(1, num_bars):
+        bar = bars[i]
+        prev_bar = bars[i-1]
+        prev_date = prev_bar["timestamp"].date()
+        date = bar["timestamp"].date()
+        if date != prev_date:  # Check pending sales to settle cash after 2 days of sale
+            consecutive_days += 1
+            for j in reversed(range(len(pending_sales))):
+                sale = pending_sales[j]
+                if consecutive_days - sale[1] > 2:
+                    solid_cash += sale[0]
+                    liquid_cash -= sale[0]
+                    pending_sales.pop(j)
+
+        inputs = [Agent.rel_change(cost, bar["close"] * shares),  # plpc
+                  Agent.rel_change(prev_bar["open"], bar["open"]),
+                  Agent.rel_change(prev_bar["high"], bar["high"]),
+                  Agent.rel_change(prev_bar["low"], bar["low"]),
+                  Agent.rel_change(prev_bar["close"], bar["close"]),
+                  Agent.rel_change(prev_bar["volume"], bar["volume"]),
+                  Agent.rel_change(prev_bar["vwap"], bar["vwap"]),
+                  sentiments[i]
+                  ]
+        outputs = net.activate(inputs)
+
+        qty_percent = (outputs[1] + 1) * 0.5
+        if outputs[0] > 0.5:  # Buy
+            quantity = qty_percent * solid_cash * cash_at_risk / bar["close"]
+            price = quantity * bar["close"]
+            if price >= 1:  # Alpaca doesn't allow trades under $1
+                cost += price
+                shares += quantity
+                solid_cash -= price
+
+                if log_training:
+                    action = {"side": "Buy", "quantity": quantity, "price": bar["close"],
+                              "solid_cash": solid_cash, "liquid_cash": liquid_cash,
+                              "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Central'))}
+                    log.append(action)
+        elif outputs[0] < -0.5 and shares > 0:  # Sell
+            quantity = qty_percent * shares
+            price = quantity * bar["close"]
+            if price >= 1:
+                if shares - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
+                    price = shares * bar["close"]
+                    if log_training:
+                        action = {"side": "Sell", "quantity": quantity, "price": bar["close"],
+                                  "profit": price - cost, "solid_cash": solid_cash,
+                                  "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Central'))}
+                        log.append(action)
+                    shares = 0.0
+                    cost = 0.0
+                else:
+                    avg_cost = cost / shares
+                    shares -= quantity
+                    cost = avg_cost * shares
+                    if log_training:
+                        action = {"side": "Sell", "quantity": quantity, "price": bar["close"],
+                                  "profit": price - (avg_cost * quantity), "solid_cash": solid_cash,
+                                  "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Central'))}
+                        log.append(action)
+                liquid_cash += price
+                pending_sales.append((price, consecutive_days))
+        if i == num_bars-1 or (date - start_date).days >= profit_window:
+            equity = liquid_cash + solid_cash + bar["close"] * shares
+            profit_sum += equity - start_equity
+            num_windows += 1
+            start_equity = equity
+            start_date = date
+
+    return profit_sum / num_windows, log
+
+
 class Training(Agent):
     def __init__(self, settings, session, stock, bars, sentiments):
         super().__init__(settings, session, stock)
@@ -57,95 +147,6 @@ class Training(Agent):
         self.genome_file_path = os.path.join(self.genome_path, self.stock["genome_filename"])
         self.population_file_path = os.path.join(self.population_path, self.stock["population_filename"])
 
-    def eval_genome(self, genome, config):
-        net = neat.nn.RecurrentNetwork.create(genome, self.config)
-        start_date = self.bars[0]["timestamp"].date()
-        solid_cash = self.start_cash
-        start_equity = self.start_cash
-        liquid_cash = 0.0
-        pending_sales = []
-        profit_sum = 0.0
-        num_windows = 0
-        shares = 0.0
-        cost = 0.0
-        consecutive_days = 1
-        log = []
-
-        # Start at 1 to have previous bar for relative change
-        num_bars = len(self.bars)
-        for i in range(1, num_bars):
-            bar = self.bars[i]
-            prev_bar = self.bars[i-1]
-            prev_date = prev_bar["timestamp"].date()
-            date = bar["timestamp"].date()
-            if date != prev_date:  # Check pending sales to settle cash after 2 days of sale
-                consecutive_days += 1
-                for j in reversed(range(len(pending_sales))):
-                    sale = pending_sales[j]
-                    if consecutive_days - sale[1] > 2:
-                        solid_cash += sale[0]
-                        liquid_cash -= sale[0]
-                        pending_sales.pop(j)
-
-            inputs = [self.rel_change(cost, bar["close"] * shares),  # plpc
-                      self.rel_change(prev_bar["open"], bar["open"]),
-                      self.rel_change(prev_bar["high"], bar["high"]),
-                      self.rel_change(prev_bar["low"], bar["low"]),
-                      self.rel_change(prev_bar["close"], bar["close"]),
-                      self.rel_change(prev_bar["volume"], bar["volume"]),
-                      self.rel_change(prev_bar["vwap"], bar["vwap"]),
-                      self.sentiments[i]
-                      ]
-            outputs = net.activate(inputs)
-
-            qty_percent = (outputs[1] + 1) * 0.5
-            if outputs[0] > 0.5:  # Buy
-                quantity = qty_percent * solid_cash * self.stock["cash_at_risk"] / bar["close"]
-                price = quantity * bar["close"]
-                if price >= 1:  # Alpaca doesn't allow trades under $1
-                    cost += price
-                    shares += quantity
-                    solid_cash -= price
-
-                    if self.settings["log_training"]:
-                        action = {"side": "Buy", "quantity": quantity, "price": bar["close"],
-                                  "solid_cash": solid_cash, "liquid_cash": liquid_cash,
-                                  "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Central'))}
-                        log.append(action)
-            elif outputs[0] < -0.5 and shares > 0:  # Sell
-                quantity = qty_percent * shares
-                price = quantity * bar["close"]
-                if price >= 1:
-                    if shares - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
-                        price = shares * bar["close"]
-                        if self.settings["log_training"]:
-                            action = {"side": "Sell", "quantity": quantity, "price": bar["close"],
-                                      "profit": price - cost, "solid_cash": solid_cash,
-                                      "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Central'))}
-                            log.append(action)
-                        shares = 0.0
-                        cost = 0.0
-                    else:
-                        avg_cost = cost / shares
-                        shares -= quantity
-                        cost = avg_cost * shares
-                        if self.settings["log_training"]:
-                            action = {"side": "Sell", "quantity": quantity, "price": bar["close"],
-                                      "profit": price - (avg_cost * quantity), "solid_cash": solid_cash,
-                                      "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Central'))}
-                            log.append(action)
-                    liquid_cash += price
-                    pending_sales.append((price, consecutive_days))
-            if i == num_bars-1 or (date - start_date).days >= self.session["profit_window"]:
-                equity = liquid_cash + solid_cash + bar["close"] * shares
-                profit_sum += equity - start_equity
-                num_windows += 1
-                start_equity = equity
-                start_date = date
-        time.sleep(0.15)
-
-        return profit_sum / num_windows, log
-
     def eval_genomes(self, genomes, config):
         while not self.running:
             time.sleep(1)
@@ -154,7 +155,9 @@ class Training(Agent):
         pool = Pool(processes=self.settings["processes"])
         jobs = []
         for genome_id, genome in genomes:
-            jobs.append(pool.apply_async(self.eval_genome, (genome, self.config)))
+            jobs.append(pool.apply_async(eval_genome, (self.bars, self.sentiments, self.start_cash,
+                                                       genome, self.config, self.stock["cash_at_risk"],
+                                                       self.settings["log_training"], self.session["profit_window"])))
 
         best_log = None
         for job, (genome_id, genome) in zip(jobs, genomes):
@@ -162,6 +165,7 @@ class Training(Agent):
             if self.best_genome is None or self.best_genome.fitness < genome.fitness:
                 best_log = log
                 self.best_genome = genome
+
         if best_log is not None and self.settings["log_training"]:
             plot.plot_log(self.session["api"], self.stock["symbol"], best_log, self.session["interval"])
         pool.close()
