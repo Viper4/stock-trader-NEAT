@@ -18,6 +18,7 @@ class FinBERTNews(object):
 
     def save_news(self, symbols, start_date, end_date):
         self.saved_news.clear()
+        # 200 calls/minute API limit makes this slow; Gets 50 news entities per request.
         news_entity = self.alpaca_api.get_news(
             symbol=symbols,
             start=start_date.isoformat(),
@@ -58,7 +59,7 @@ class FinBERTNews(object):
         news_entity = self.alpaca_api.get_news(symbol=symbol,
                                                start=start_date.isoformat(),
                                                end=end_date.isoformat(),
-                                               limit=20)
+                                               limit=50)
         news = [ev.__dict__["_raw"]["headline"] for ev in news_entity]
         return self.estimate_sentiment(news)
 

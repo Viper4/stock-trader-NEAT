@@ -17,14 +17,14 @@ class SaveSystem(BaseReporter):
         self.current_generation = generation
 
     def end_generation(self, config, population, species_set):
-        if self.current_generation % self.g_interval == 0:
+        if (self.current_generation+1) % self.g_interval == 0:
             best_genome = None
             for key in population:
                 if population[key].fitness is not None and (best_genome is None or population[key].fitness > best_genome.fitness):
                     best_genome = population[key]
             self.save_data(best_genome, self.g_path)
 
-        if self.current_generation % self.p_interval == 0:
+        if (self.current_generation+1) % self.p_interval == 0:
             self.save_data((self.current_generation, config, population, species_set, random.getstate()), self.p_path)
 
     @staticmethod

@@ -10,7 +10,7 @@ class JsonEditorApp:
 
         self.json_data = {"accounts": []}
         self.selected_account_index = 0
-        self.selected_ticker_index = 0
+        self.selected_stock_index = 0
 
         # Load JSON Button
         self.load_button = tk.Button(root, text="Load JSON", command=self.load_json)
@@ -36,10 +36,10 @@ class JsonEditorApp:
         self.account_frame.pack(side=tk.LEFT, padx=10, pady=10)
         self.create_account_settings()
 
-        # Ticker Option Settings Frame
-        self.ticker_frame = tk.Frame(root)
-        self.ticker_frame.pack(side=tk.RIGHT, padx=10, pady=10)
-        self.create_ticker_settings()
+        # Stock Settings Frame
+        self.stock_frame = tk.Frame(root)
+        self.stock_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+        self.create_stock_settings()
 
     def create_top_level_settings(self):
         self.create_label_entry(self.top_level_frame, "Config Path:", 0, 40, "config_path")
@@ -47,10 +47,9 @@ class JsonEditorApp:
         self.create_label_entry(self.top_level_frame, "Training Reset:", 2, 10, "training_reset")
         self.create_label_entry(self.top_level_frame, "Gen Stagger:", 3, 10, "gen_stagger")
         self.create_label_entry(self.top_level_frame, "Processes:", 4, 10, "processes")
-        self.create_checkbox(self.top_level_frame, "Trading Mode", 5, "trading_mode")
-        self.create_checkbox(self.top_level_frame, "Print Stats", 6, "print_stats")
-        self.create_checkbox(self.top_level_frame, "Log Training", 7, "log_training")
-        self.create_checkbox(self.top_level_frame, "Visualize", 8, "visualize")
+        self.create_checkbox(self.top_level_frame, "Print Stats", 5, "print_stats")
+        self.create_checkbox(self.top_level_frame, "Log Training", 6, "log_training")
+        self.create_checkbox(self.top_level_frame, "Visualize", 7, "visualize")
 
     def create_account_settings(self):
         # Account Selection Dropdown
@@ -64,32 +63,33 @@ class JsonEditorApp:
         self.create_checkbox(self.account_frame, "Paper", 4, "paper")
         self.create_label_entry(self.account_frame, "Backtest Days:", 5, 10, "backtest_days")
         self.create_label_entry(self.account_frame, "Profit Window:", 6, 10, "profit_window")
+        self.create_label_entry(self.account_frame, "Interval:", 7, 10, "interval")
+        self.create_label_entry(self.account_frame, "Cash Limit:", 8, 10, "cash_limit")
 
         # Center the Add Account button
         self.add_account_button = tk.Button(self.account_frame, text="Add Account", command=self.add_account)
-        self.add_account_button.grid(row=7, columnspan=2, pady=10)
+        self.add_account_button.grid(row=9, columnspan=2, pady=10)
 
-    def create_ticker_settings(self):
-        # Option listbox
-        self.ticker_options_label = tk.Label(self.ticker_frame, text="Ticker Options:")
-        self.ticker_options_label.grid(row=0, column=0, padx=5, pady=5)
-        self.ticker_options_listbox = tk.Listbox(self.ticker_frame, selectmode=tk.SINGLE, height=10, width=60)
-        self.ticker_options_listbox.grid(row=1, column=1, padx=5, pady=5, sticky="w")
-        self.ticker_options_listbox.bind('<<ListboxSelect>>', self.on_ticker_select)
+    def create_stock_settings(self):
+        # Stock listbox
+        self.stocks_label = tk.Label(self.stock_frame, text="Stocks:")
+        self.stocks_label.grid(row=0, column=0, padx=5, pady=5)
+        self.stocks_listbox = tk.Listbox(self.stock_frame, selectmode=tk.SINGLE, height=10, width=60)
+        self.stocks_listbox.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+        self.stocks_listbox.bind('<<ListboxSelect>>', self.on_stock_select)
 
-        self.create_label_entry(self.ticker_frame, "Symbol:", 2, 10, "symbol")
-        self.create_label_entry(self.ticker_frame, "Interval:", 3, 10, "interval")
-        self.create_label_entry(self.ticker_frame, "Cash at Risk:", 4, 10, "cash_at_risk")
-        self.create_label_entry(self.ticker_frame, "Population Filename:", 5, 40, "population_filename")
-        self.create_label_entry(self.ticker_frame, "Genome Filename:", 6, 40, "genome_filename")
-        self.create_label_entry(self.ticker_frame, "Training Filename:", 7, 40, "training_filename")
+        self.create_label_entry(self.stock_frame, "Symbol:", 2, 10, "symbol")
+        self.create_label_entry(self.stock_frame, "Cash at Risk:", 4, 10, "cash_at_risk")
+        self.create_label_entry(self.stock_frame, "Population Filename:", 5, 40, "population_filename")
+        self.create_label_entry(self.stock_frame, "Genome Filename:", 6, 40, "genome_filename")
+        self.create_label_entry(self.stock_frame, "Training Filename:", 7, 40, "training_filename")
 
         # Buttons
-        self.add_ticker_button = tk.Button(self.ticker_frame, text="Add Ticker Option", command=self.add_ticker_option)
-        self.add_ticker_button.grid(row=8, columnspan=2, pady=10)
+        self.add_stock_button = tk.Button(self.stock_frame, text="Add Stock", command=self.add_stock)
+        self.add_stock_button.grid(row=8, columnspan=2, pady=10)
 
-        self.delete_ticker_button = tk.Button(self.ticker_frame, text="Delete Ticker Option", command=self.delete_ticker_option)
-        self.delete_ticker_button.grid(row=9, columnspan=2, pady=10)
+        self.delete_stock_button = tk.Button(self.stock_frame, text="Delete Stock", command=self.delete_stock)
+        self.delete_stock_button.grid(row=9, columnspan=2, pady=10)
 
     def create_label_entry(self, frame, label_text, row, width, setting_key):
         label = tk.Label(frame, text=label_text)
@@ -117,7 +117,7 @@ class JsonEditorApp:
                 entry.insert(0, self.json_data.get(setting_key, ""))
 
         top_level_checkboxes = [
-            "trading_mode", "print_stats", "log_training", "visualize"
+            "print_stats", "log_training", "visualize"
         ]
 
         for setting_key in top_level_checkboxes:
@@ -138,13 +138,13 @@ class JsonEditorApp:
         if account_names:
             self.account_names.set(account_names[self.selected_account_index])
 
-    def update_ticker_options_listbox(self):
-        self.ticker_options_listbox.delete(0, tk.END)
+    def update_stocks_listbox(self):
+        self.stocks_listbox.delete(0, tk.END)
         accounts = self.json_data.get("accounts", [])
-        ticker_options = accounts[self.selected_account_index].get("ticker_options", [])
+        stocks = accounts[self.selected_account_index].get("stocks", [])
 
-        for i, option in enumerate(ticker_options):
-            self.ticker_options_listbox.insert(tk.END, f"Option {i + 1}: {option['symbol']}")
+        for i, stock in enumerate(stocks):
+            self.stocks_listbox.insert(tk.END, f"Stock {i + 1}: {stock['symbol']}")
 
     def select_account(self, account_name):
         accounts = self.json_data.get("accounts", [])
@@ -153,29 +153,29 @@ class JsonEditorApp:
         if account_index is not None:
             self.selected_account_index = account_index
             self.update_account_inputs()
-            self.update_ticker_options_listbox()
+            self.update_stocks_listbox()
             self.update_account_dropdown()
 
-    def on_ticker_select(self, event):
-        selected_index = self.ticker_options_listbox.curselection()
+    def on_stock_select(self, event):
+        selected_index = self.stocks_listbox.curselection()
         if selected_index:
-            self.selected_ticker_index = selected_index[0]
-            self.update_ticker_input_fields()
+            self.selected_stock_index = selected_index[0]
+            self.update_stock_input_fields()
 
-    def update_ticker_input_fields(self):
-        ticker_options = self.get_selected_ticker_options()
-        if ticker_options:
-            ticker_option = ticker_options[self.selected_ticker_index]
-            ticker_option_settings = [
-                "symbol", "interval", "cash_at_risk",
+    def update_stock_input_fields(self):
+        stocks = self.get_selected_stocks()
+        if stocks:
+            stock = stocks[self.selected_stock_index]
+            stock_settings = [
+                "symbol", "cash_at_risk",
                 "population_filename", "genome_filename", "training_filename",
             ]
 
-            for setting_key in ticker_option_settings:
+            for setting_key in stock_settings:
                 entry = getattr(self, f"{setting_key}_entry", None)
                 if entry:
                     entry.delete(0, tk.END)
-                    entry.insert(0, ticker_option.get(setting_key, ""))
+                    entry.insert(0, stock.get(setting_key, ""))
 
     def update_account_inputs(self):
         accounts = self.json_data["accounts"]
@@ -183,7 +183,8 @@ class JsonEditorApp:
 
         account_settings = [
             "name", "public_key", "secret_key",
-            "paper", "backtest_days", "profit_window",
+            "backtest_days", "profit_window", "interval",
+            "cash_limit"
         ]
 
         for setting_key in account_settings:
@@ -191,6 +192,15 @@ class JsonEditorApp:
             if entry:
                 entry.delete(0, tk.END)
                 entry.insert(0, account.get(setting_key, ""))
+
+        account_checkboxes = [
+            "paper"
+        ]
+
+        for setting_key in account_checkboxes:
+            checkbox = getattr(self, f"{setting_key}_var", None)
+            if checkbox:
+                checkbox.set(account.get(setting_key, False))
 
     def get_attribute(self, name, operation):
         attribute = getattr(self, name, None).get()
@@ -213,34 +223,33 @@ class JsonEditorApp:
             elif operation == "bool":
                 return bool(attribute)
 
-    def add_ticker_option(self):
-        ticker_option = {
+    def add_stock(self):
+        stock = {
             "symbol": self.get_attribute("symbol_entry", "str"),
-            "interval": self.get_attribute("interval_entry", "int"),
             "cash_at_risk": self.get_attribute("cash_at_risk_entry", "float"),
             "population_filename": self.get_attribute("population_filename_entry", "str"),
             "genome_filename": self.get_attribute("genome_filename_entry", "str"),
             "training_filename": self.get_attribute("training_filename_entry", "str"),
         }
         accounts = self.json_data.setdefault("accounts", [])
-        accounts[self.selected_account_index]["ticker_options"].append(ticker_option)
+        accounts[self.selected_account_index]["stocks"].append(stock)
 
-        self.update_ticker_options_listbox()
+        self.update_stocks_listbox()
 
-    def delete_ticker_option(self):
-        ticker_options = self.get_selected_ticker_options()
-        if ticker_options:
-            del_index = self.selected_ticker_index
+    def delete_stock(self):
+        stocks = self.get_selected_stocks()
+        if stocks:
+            del_index = self.selected_stock_index
             accounts = self.json_data.get("accounts", [])
-            accounts[self.selected_account_index]["ticker_options"].pop(del_index)
+            accounts[self.selected_account_index]["stocks"].pop(del_index)
 
-            self.update_ticker_options_listbox()
+            self.update_stocks_listbox()
 
-    def get_selected_ticker_options(self):
+    def get_selected_stocks(self):
         accounts = self.json_data.get("accounts", [])
-        ticker_options = accounts[self.selected_account_index].get("ticker_options", [])
+        stocks = accounts[self.selected_account_index].get("stocks", [])
 
-        return ticker_options
+        return stocks
 
     def add_account(self):
         accounts = self.json_data.setdefault("accounts", [])
@@ -251,11 +260,14 @@ class JsonEditorApp:
             "paper": self.get_attribute("paper_var", "bool"),
             "backtest_days": self.get_attribute("backtest_days_entry", "int"),
             "profit_window": self.get_attribute("profit_window_entry", "int"),
-            "ticker_options": [],
+            "interval": self.get_attribute("interval_entry", "int"),
+            "cash_limit": self.get_attribute("cash_limit_entry", "float"),
+            "stocks": [],
         })
 
         self.select_account(accounts[-1]["name"])
-        self.update_ticker_options_listbox()
+        self.update_stocks_listbox()
+        self.update_account_inputs()
 
     def load_json(self):
         file_path = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
@@ -265,7 +277,7 @@ class JsonEditorApp:
             accounts = self.json_data.get("accounts", [])
             if len(accounts) > 0:
                 self.select_account(accounts[0]["name"])
-            self.update_ticker_options_listbox()
+            self.update_stocks_listbox()
             self.update_top_level_settings()
             self.update_account_inputs()
 
@@ -282,7 +294,6 @@ class JsonEditorApp:
         self.json_data["gen_stagger"] = self.get_attribute("gen_stagger_entry", "int")
         self.json_data["processes"] = self.get_attribute("processes_entry", "int")
 
-        self.json_data["trading_mode"] = self.get_attribute("trading_mode_var", "bool")
         self.json_data["print_stats"] = self.get_attribute("print_stats_var", "bool")
         self.json_data["log_training"] = self.get_attribute("log_training_var", "bool")
         self.json_data["visualize"] = self.get_attribute("visualize_var", "bool")
@@ -296,23 +307,30 @@ class JsonEditorApp:
         account["paper"] = self.get_attribute("paper_var", "bool")
         account["backtest_days"] = self.get_attribute("backtest_days_entry", "int")
         account["profit_window"] = self.get_attribute("profit_window_entry", "int")
+        account["interval"] = self.get_attribute("interval_entry", "int")
+        account["cash_limit"] = self.get_attribute("cash_limit_entry", "float")
 
-        ticker_options = self.get_selected_ticker_options()
-        if ticker_options:
-            ticker_option = ticker_options[self.selected_ticker_index]
-            ticker_option["symbol"] = self.get_attribute("symbol_entry", "str")
-            ticker_option["interval"] = self.get_attribute("interval_entry", "int")
-            ticker_option["cash_at_risk"] = self.get_attribute("cash_at_risk_entry", "float")
-            ticker_option["population_filename"] = self.get_attribute("population_filename_entry", "str")
-            ticker_option["genome_filename"] = self.get_attribute("genome_filename_entry", "str")
-            ticker_option["training_filename"] = self.get_attribute("training_filename_entry", "str")
+        stocks = self.get_selected_stocks()
+        if stocks:
+            stock = stocks[self.selected_stock_index]
+            stock["symbol"] = self.get_attribute("symbol_entry", "str")
+            stock["cash_at_risk"] = self.get_attribute("cash_at_risk_entry", "float")
+            stock["population_filename"] = self.get_attribute("population_filename_entry", "str")
+            stock["genome_filename"] = self.get_attribute("genome_filename_entry", "str")
+            stock["training_filename"] = self.get_attribute("training_filename_entry", "str")
 
         # Print the updated JSON data for testing purposes.
         print(json.dumps(self.json_data, indent=2))
+        self.update_stocks_listbox()
+        self.update_top_level_settings()
+        self.update_account_inputs()
 
     def reset_input_fields(self):
         self.update_account_inputs()
-        self.update_ticker_input_fields()
+        self.update_stocks_listbox()
+        self.update_top_level_settings()
+        self.update_stock_input_fields()
+
 
 if __name__ == "__main__":
     root = tk.Tk()

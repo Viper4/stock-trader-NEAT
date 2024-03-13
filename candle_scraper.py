@@ -29,17 +29,19 @@ class Scraper(object):
                 data = response.json()
 
                 # Extract OHLCV data from the response
+                current_price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
                 prev_close = data["chart"]["result"][0]["meta"]["previousClose"]  # Yesterday's close
                 quote_data = data["chart"]["result"][0]["indicators"]["quote"][0]
                 formatted_data = []
                 for i in range(len(quote_data["open"])):
-                    if quote_data["open"][i] != quote_data["high"][i] and quote_data["volume"][i] != 0:  # Sometimes when market is closed last element is weird
+                    # Last element is not updated until interval min mark is hit and just shows current price
+                    if quote_data["open"][i] != quote_data["high"][i] and quote_data["volume"][i] != 0:
                         formatted_data.append({"open": quote_data["open"][i],
                                                "high": quote_data["high"][i],
                                                "low": quote_data["low"][i],
-                                               "close": quote_data["close"][i],
+                                               "close": current_price,
+                                               #"close": quote_data["close"][i],
                                                "volume": quote_data["volume"][i]})
-                #print(symbol + ": " + str(formatted_data))
                 if len(formatted_data) == 0:
                     print(f"Received no candles for {symbol} retrying in 10 seconds... ({tries})")
                     time.sleep(10)
