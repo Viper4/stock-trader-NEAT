@@ -99,7 +99,7 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
                 if log_training:
                     action = {"side": "Buy", "quantity": quantity, "price": bar["close"],
                               "solid_cash": solid_cash, "liquid_cash": liquid_cash,
-                              "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Central'))}
+                              "datetime": bar["timestamp"].to_pydatetime()}
                     log.append(action)
         elif outputs[0] < -0.5 and shares > 0:  # Sell
             quantity = qty_percent * shares
@@ -110,7 +110,7 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
                     if log_training:
                         action = {"side": "Sell", "quantity": quantity, "price": bar["close"],
                                   "profit": price - cost, "solid_cash": solid_cash,
-                                  "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Central'))}
+                                  "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime()}
                         log.append(action)
                     shares = 0.0
                     cost = 0.0
@@ -121,7 +121,7 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
                     if log_training:
                         action = {"side": "Sell", "quantity": quantity, "price": bar["close"],
                                   "profit": price - (avg_cost * quantity), "solid_cash": solid_cash,
-                                  "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Central'))}
+                                  "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime()}
                         log.append(action)
                 liquid_cash += price
                 pending_sales.append((price, consecutive_days))
@@ -210,6 +210,28 @@ class Trading(Agent):
     def update_net(self, genome):
         self.net = neat.nn.RecurrentNetwork.create(genome, self.config)
 
+        # Preparing the network with past 30 days data
+        now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+        bars = self.trader.get_bars(self.stock["symbol"], self.session, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+        for i in range(1, len(bars)):
+            bar = bars[i]
+            prev_bar = bars[i-1]
+            backtest_date = bars[i]["timestamp"].to_pydatetime()
+            sentiment = self.finbert.get_saved_sentiment(self.stock["symbol"],
+                                                         backtest_date - dt.timedelta(days=2),
+                                                         backtest_date)
+            inputs = [0,  # plpc
+                      self.rel_change(prev_bar["open"], bar["open"]),
+                      self.rel_change(prev_bar["high"], bar["high"]),
+                      self.rel_change(prev_bar["low"], bar["low"]),
+                      self.rel_change(prev_bar["close"], bar["close"]),
+                      self.rel_change(prev_bar["volume"], bar["volume"]),
+                      self.rel_change(prev_bar["vwap"], bar["vwap"]),
+                      sentiment
+                      ]
+            self.net.activate(inputs)
+        print(f" {self.stock['symbol']}: Updated network")
+
     def run(self):
         print(f"{self.session['interval']}m {self.stock['symbol']}: Starting trading")
         self.running = True
@@ -221,7 +243,6 @@ class Trading(Agent):
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
             if self.trader.get_market_status(self.session):
-                print(f"{self.session['interval']}m: {self.stock['symbol']} here")
                 candles, prev_close = self.scraper.get_latest_candles(self.stock["symbol"], interval=str(self.session["interval"]) + "m")
                 latest = candles[-1]
                 cum_price += latest["volume"] * ((latest["high"] + latest["low"] + latest["close"]) / 3)
@@ -253,12 +274,14 @@ class Trading(Agent):
 
                 qty_percent = (outputs[1] + 1) * 0.5
 
+                asset = self.session["api"].get_asset(symbol=self.stock["symbol"])
+                if not asset.tradable:
+                    print(f"{self.stock['symbol']}: Not tradable.")
                 if outputs[0] > 0.5:  # Buy
                     max_quantity = (self.session["solid_cash"] - self.session["cash_limit"]) / latest["close"]
-                    cash = self.session["solid_cash"] if self.session["solid_cash"] < self.session["cash_limit"] else self.session["cash_limit"]
-                    quantity = min(cash * qty_percent * self.stock["cash_at_risk"] / latest["close"], max_quantity)
-                    print(f"max: {max_quantity} cash: {cash} quantity: {quantity}")
-                    #quantity = self.session["solid_cash"] * qty_percent * self.stock["cash_at_risk"] / latest["close"]
+                    quantity = min(self.session["solid_cash"] * qty_percent * self.stock["cash_at_risk"] / latest["close"], max_quantity)
+                    if not asset.fractionable:
+                        quantity = int(quantity)
                     price = quantity * latest["close"]
                     if price >= 1:  # Alpaca doesn't allow trades under $1
                         self.session["solid_cash"] -= price
@@ -266,11 +289,13 @@ class Trading(Agent):
 
                         action = {"side": "Buy", "quantity": quantity, "price": latest["close"],
                                   "solid_cash": self.session["solid_cash"], "liquid_cash": self.session["liquid_cash"],
-                                  "datetime": now_date.astimezone(tz=pytz.timezone('US/Central'))}
+                                  "datetime": now_date}
                         print(f"{self.stock['symbol']}: {action}")
                         self.session["logs"][self.stock["symbol"]].append(action)
                 elif outputs[0] < -0.5 and position_qty > 0:  # Sell
                     quantity = qty_percent * position_qty
+                    if not asset.fractionable:
+                        quantity = int(quantity)
                     price = quantity * latest["close"]
                     if price >= 1:
                         if position_qty - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
@@ -284,7 +309,7 @@ class Trading(Agent):
                         action = {"side": "Sell", "quantity": quantity, "price": latest["close"],
                                   "profit": price - (float(position.avg_entry_price) * quantity),
                                   "solid_cash": self.session["solid_cash"], "liquid_cash": self.session["liquid_cash"],
-                                  "datetime": now_date.astimezone(tz=pytz.timezone('US/Central'))}
+                                  "datetime": now_date}
                         print(f"{self.stock['symbol']}: {action}")
                         self.session["logs"][self.stock["symbol"]].append(action)
                 prev_data = latest
@@ -299,6 +324,7 @@ class Trading(Agent):
                 wait_time += self.session["interval"] * 60 + 10  # Wait for yahoo finance to update
                 print(f"{self.session['interval']}m {self.stock['symbol']}: Stopping trading. Waiting until market opens in {wait_time / 3600} hours")
                 time.sleep(wait_time)
+                print(f"{self.session['interval']}m {self.stock['symbol']}: Resuming trading")
 
 
 class Validation(Agent):
@@ -370,8 +396,7 @@ class Validation(Agent):
                     action = {"inputs": inputs, "outputs": outputs,
                               "side": "Buy", "quantity": quantity, "price": bar["close"],
                               "solid_cash": solid_cash, "liquid_cash": liquid_cash,
-                              "datetime": bar["timestamp"].to_pydatetime().astimezone(
-                                  tz=pytz.timezone('US/Central'))}
+                              "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Eastern'))}
                     log.append(action)
                     num_buy += 1
             elif outputs[0] < -0.5 and shares > 0:  # Sell
@@ -384,8 +409,7 @@ class Validation(Agent):
                                   "side": "Sell", "quantity": quantity, "price": bar["close"],
                                   "profit": price - cost, "solid_cash": solid_cash,
                                   "liquid_cash": liquid_cash + price,
-                                  "datetime": bar["timestamp"].to_pydatetime().astimezone(
-                                      tz=pytz.timezone('US/Central'))}
+                                  "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Eastern'))}
                         log.append(action)
                         num_sell += 1
                         shares = 0.0
@@ -398,8 +422,7 @@ class Validation(Agent):
                                   "side": "Sell", "quantity": quantity, "price": bar["close"],
                                   "profit": price - (avg_cost * quantity), "solid_cash": solid_cash,
                                   "liquid_cash": liquid_cash + price,
-                                  "datetime": bar["timestamp"].to_pydatetime().astimezone(
-                                      tz=pytz.timezone('US/Central'))}
+                                  "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Eastern'))}
                         log.append(action)
                         num_sell += 1
                     liquid_cash += price
@@ -421,11 +444,11 @@ class Validation(Agent):
         avg_profit = profit_sum / num_windows
         stock_change = bars[-1]['close'] - bars[0]['close']
         print(f"Simulation finished in {str(time.time() - start_time)} seconds over {consecutive_days} trading days and {num_windows} profit windows"
-              f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / bars[0]['close']), 2)}%"
-              f"\n Total profit: ${round(profit_sum, 2)} {round(100 * (profit_sum / 100000), 2)}%"
-              f"\n Average {self.session['profit_window']} day profit: ${round(avg_profit, 2)} {round(avg_profit / 100000, 2)}%"
-              f"\n Min profit: ${round(min_profit[0], 2)} {round(min_profit[1], 2)}% on {min_date}"
-              f"\n Max profit: ${round(max_profit[0], 2)} {round(max_profit[1], 2)}% on {max_date}"
+              f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / bars[0]['close']), 4)}%"
+              f"\n Total profit: ${round(profit_sum, 2)} {round(100 * (profit_sum / 100000), 4)}%"
+              f"\n Average {self.session['profit_window']} day profit: ${round(avg_profit, 2)} {round(avg_profit / 100000, 4)}%"
+              f"\n Min profit: ${round(min_profit[0], 2)} {round(min_profit[1], 4)}% on {min_date}"
+              f"\n Max profit: ${round(max_profit[0], 2)} {round(max_profit[1], 4)}% on {max_date}"
               f"\n Total buys: {num_buy}"
               f"\n Total sells: {num_sell}"
               f"\n Average actions/day: {len(log) / consecutive_days}")

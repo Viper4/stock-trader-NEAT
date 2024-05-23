@@ -8,7 +8,7 @@
       "backtest_days": 356,
       "profit_window": 1,
       "interval": 1,
-      "cash_limit": 9000000.0,
+      "cash_limit": 0.0,
       "stocks": [
         {
           "symbol": "NVDA",
@@ -90,7 +90,7 @@
       "backtest_days": 721,
       "profit_window": 5,
       "interval": 15,
-      "cash_limit": 9000000.0,
+      "cash_limit": 0.0,
       "stocks": [
         {
           "symbol": "NVDA",
@@ -169,7 +169,7 @@
   "save_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/Saves",
   "training_reset": 3,
   "gen_stagger": 8,
-  "processes": 14,
+  "processes": 8,
   "print_stats": true,
   "log_training": false,
   "visualize": false

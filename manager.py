@@ -3,6 +3,8 @@ import time
 import datetime as dt
 import pytz
 import os
+
+import finbert_news
 import saving
 import plot
 import candle_scraper as cs
@@ -10,6 +12,7 @@ import threading
 import alpaca_trade_api as alpaca
 import alpaca_trade_api.entity
 from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit
+import urllib3
 
 
 class Manager(object):
@@ -21,16 +24,23 @@ class Manager(object):
 
     @staticmethod
     def get_bars(symbol, session, start, end):
-        bars_df = session["api"].get_bars(
-            symbol=symbol,
-            timeframe=TimeFrame(session["interval"], TimeFrameUnit.Minute),
-            start=start.isoformat(),
-            end=end.isoformat(),
-            limit=500000,
-            sort="asc",
-            adjustment="all").df.tz_convert("US/Eastern")
-        bars_df = bars_df.between_time("9:30", "16:00")
-        return bars_df.reset_index().to_dict("records")
+        tries = 1
+        while True:
+            try:
+                bars_df = session["api"].get_bars(
+                    symbol=symbol,
+                    timeframe=TimeFrame(session["interval"], TimeFrameUnit.Minute),
+                    start=start.isoformat(),
+                    end=end.isoformat(),
+                    limit=500000,
+                    sort="asc",
+                    adjustment="all").df.tz_convert("US/Eastern")
+                bars_df = bars_df.between_time("9:30", "16:00")
+                return bars_df.reset_index().to_dict("records")
+            except ConnectionError as e:
+                print(f"Error getting bars: '{e}'. Retrying in 5 seconds... ({tries})")
+                tries += 1
+                time.sleep(5)
 
 
 class Trainer(Manager):
@@ -95,7 +105,7 @@ class Trainer(Manager):
 
     def create_agents(self, regenerate=False):
         print("Trainer: Creating agents")
-        now_date = dt.datetime.now(pytz.UTC)
+        now_date = dt.datetime.now(dt.timezone.utc)
         earliest_date = now_date - dt.timedelta(days=self.largest_backtest)
         end_date = now_date - dt.timedelta(minutes=16)  # Cant get recent 15 minute data with free alpaca acc
 
@@ -189,21 +199,23 @@ class Trader(Manager):
                 "api_account": [None, 0]
             }
 
-            if input(f"Plot {account['name']} logs? (y/n): ") == "y":
+            '''if input(f"Plot {account['name']} logs? (y/n): ") == "y":
                 logs = {}
                 log_path = settings["save_path"] + "/Logs"
                 for filename in os.listdir(log_path):
-                    filepath = os.path.join(log_path, filename)
-                    file_logs, balance_change, bought_shares = saving.SaveSystem.load_data(filepath)
-                    print(f" {filename}\n Bal Change: {balance_change}\n Bought Shares: {bought_shares}\n")
-                    for ticker in file_logs:
-                        if ticker in logs:
-                            logs[ticker].extend(file_logs[ticker])
-                        else:
-                            logs[ticker] = file_logs[ticker]
-                for ticker in logs:
-                    if len(logs[ticker]) > 0:
-                        plot.plot_log(api, ticker, logs[ticker], account["interval"])
+                    if account["name"] in filename:
+                        filepath = os.path.join(log_path, filename)
+                        file_logs, balance_change, bought_shares = saving.SaveSystem.load_data(filepath)
+                        print(f" {filename}\n Bal Change: {balance_change}\n Bought Shares: {bought_shares}\n")
+                        for symbol in file_logs:
+                            if symbol in logs:
+                                logs[symbol].extend(file_logs[symbol])
+                            else:
+                                logs[symbol] = file_logs[symbol]
+                for symbol in logs:
+                    if len(logs[symbol]) > 0:
+                        logs[symbol].sort(key=lambda x: x["datetime"])
+                        plot.plot_log(api, symbol, logs[symbol], account["interval"])'''
         self.create_agents()
 
     def create_agents(self):
@@ -212,6 +224,14 @@ class Trader(Manager):
             print(session_key)
             session = self.sessions[session_key]
             session["agents"].clear()
+
+            if self.get_market_status(session):
+                now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+                symbols = []
+                for stock in session["stocks"]:
+                    symbols.append(stock["symbol"])
+                self.finbert.save_news(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+
             for stock in session["stocks"]:
                 session["logs"][stock["symbol"]] = []
                 session["agents"][stock["symbol"]] = agent.Trading(self.settings, session, stock, self.finbert, self, self.scraper)
@@ -235,8 +255,8 @@ class Trader(Manager):
                     session["clock"][0] = session["api"].get_clock()
                     session["clock"][1] = time.time()
                     return session["clock"][0].is_open
-                except ConnectionError as e:
-                    print(f"Connection error: '{e}'. Retrying in 5 seconds... ({tries})")
+                except (ConnectionError, urllib3.exceptions.ProtocolError) as e:
+                    print(f"Error getting clock: '{e}'. Retrying in 5 seconds... ({tries})")
                     time.sleep(5)
                     tries += 1
         return session["clock"][0].is_open
@@ -244,8 +264,14 @@ class Trader(Manager):
     @staticmethod
     def list_positions(session):
         if session["positions"][0] is None or time.time() - session["positions"][1] > 1:
-            session["positions"][0] = session["api"].list_positions()
-            session["positions"][1] = time.time()
+            tries = 1
+            while True:
+                try:
+                    session["positions"][0] = session["api"].list_positions()
+                    session["positions"][1] = time.time()
+                    return session["positions"][0]
+                except ConnectionError as e:
+                    print(f"Error listing positions: '{e}'. Retrying in 5 seconds... ({tries})")
         return session["positions"][0]
 
     @staticmethod
@@ -267,8 +293,14 @@ class Trader(Manager):
     @staticmethod
     def get_api_account(session):
         if session["api_account"][0] is None or time.time() - session["api_account"][1] > 1:
-            session["api_account"][0] = session["api"].get_account()
-            session["api_account"][1] = time.time()
+            tries = 1
+            while True:
+                try:
+                    session["api_account"][0] = session["api"].get_account()
+                    session["api_account"][1] = time.time()
+                    return session["api_account"][0]
+                except ConnectionError as e:
+                    print(f"Error getting account: '{e}'. Retrying in 5 seconds... ({tries})")
         return session["api_account"][0]
 
     def start(self):
@@ -278,6 +310,7 @@ class Trader(Manager):
             print(session_key)
             session = self.sessions[session_key]
             starting_liquid = (float(input(" Enter starting liquid cash: ")), int(input(" Enter pending days: ")))
+            #starting_liquid = (0, 0)
             account = self.get_api_account(session)
             session["solid_cash"] = float(account.cash)
             session["liquid_cash"] = 0.0
@@ -297,10 +330,12 @@ class Trader(Manager):
             if self.get_market_status(self.sessions[first_session_key]):
                 if self.trainer.running:
                     self.trainer.stop()
-                    self.trainer.running = False
                     self.training_thread.join()
+
                     for session_key in self.sessions:
                         session = self.sessions[session_key]
+                        self.finbert.save_news(list(session["agents"].keys()), now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+
                         for symbol in session["agents"]:
                             trainer_agent = self.trainer.sessions[session_key]["agents"][symbol]
                             if trainer_agent.best_genome is not None:
@@ -387,10 +422,14 @@ class Validator(Manager):
                 i += 1
             index = int(input("Enter account index: "))-1
             session = ordered_sessions[index]
+
             sim_years = float(input("Enter simulation years: "))
-            now_date = dt.datetime.now(pytz.UTC)
-            start_date = now_date - dt.timedelta(days=sim_years*356)
-            end_date = now_date - dt.timedelta(minutes=16)  # Cant get recent 15 minute data with free alpaca acc
+            end_date = dt.datetime(year=int(input("Enter end year: ")),
+                                   month=int(input("Enter end month: ")),
+                                   day=int(input("Enter end day: ")),
+                                   hour=16, tzinfo=pytz.timezone("US/Eastern"))
+            start_date = end_date - dt.timedelta(days=sim_years*356)
+
             self.finbert.save_news(list(session["agents"].keys()), start_date, end_date)
             for stock in session["stocks"]:
                 if input(f"Run simulation for {stock['symbol']}? (y/n): ") == "y":

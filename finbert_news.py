@@ -1,3 +1,4 @@
+import time
 import numpy as np
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
@@ -16,14 +17,24 @@ class FinBERTNews(object):
         self.last_news = []
         self.last_sentiment = 0
 
+    def get_news(self, symbols, start_date, end_date, limit=50):
+        tries = 1
+        while True:
+            try:
+                news_entity = self.alpaca_api.get_news(symbol=symbols,
+                                                       start=start_date.isoformat(),
+                                                       end=end_date.isoformat(),
+                                                       limit=limit)
+                return news_entity
+            except ConnectionError as e:
+                print(f"Error getting news: '{e}'. Retrying in 5 seconds... ({tries})")
+                tries += 1
+                time.sleep(5)
+
     def save_news(self, symbols, start_date, end_date):
         self.saved_news.clear()
         # 200 calls/minute API limit makes this slow; Gets 50 news entities per request.
-        news_entity = self.alpaca_api.get_news(
-            symbol=symbols,
-            start=start_date.isoformat(),
-            end=end_date.isoformat(),
-            limit=100000)
+        news_entity = self.get_news(symbols, start_date, end_date, 500000)
 
         for entity in news_entity:
             news_dict = entity.__dict__["_raw"]
@@ -56,10 +67,7 @@ class FinBERTNews(object):
             return sentiment
 
     def get_api_sentiment(self, symbol, start_date, end_date):
-        news_entity = self.alpaca_api.get_news(symbol=symbol,
-                                               start=start_date.isoformat(),
-                                               end=end_date.isoformat(),
-                                               limit=50)
+        news_entity = self.get_news(symbol, start_date, end_date)
         news = [ev.__dict__["_raw"]["headline"] for ev in news_entity]
         return self.estimate_sentiment(news)
 
@@ -73,7 +81,7 @@ class FinBERTNews(object):
                                         hour=int(news_obj["timestamp"][11:13]),
                                         minute=int(news_obj["timestamp"][14:16]),
                                         second=int(news_obj["timestamp"][17:19]),
-                                        tzinfo=dt.timezone.utc).replace(tzinfo=start_date.tzinfo)
+                                        tzinfo=start_date.tzinfo)
                 if start_date <= news_date <= end_date:
                     news.append(news_obj["headline"])
         return self.estimate_sentiment(news)
