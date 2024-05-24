@@ -3,8 +3,6 @@ import time
 import datetime as dt
 import pytz
 import os
-
-import finbert_news
 import saving
 import plot
 import candle_scraper as cs
@@ -27,7 +25,7 @@ class Manager(object):
         tries = 1
         while True:
             try:
-                bars_df = session["api"].get_bars(
+                bars_df = session["alpaca_api"].get_bars(
                     symbol=symbol,
                     timeframe=TimeFrame(session["interval"], TimeFrameUnit.Minute),
                     start=start.isoformat(),
@@ -57,8 +55,7 @@ class Trainer(Manager):
         self.one_agent = False
 
         for account in settings["accounts"]:
-            base_url = URL("https://paper-api.alpaca.markets") if account["paper"] else URL("https://api.alpaca.markets")
-            api = alpaca.REST(account["public_key"], account["secret_key"], base_url=base_url)
+            alpaca_api = alpaca.REST(account["public_key"], account["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
 
             if len(settings["accounts"]) == 1 and len(account["stocks"]) == 1 and account["gen_stagger"] != 0:
                 print(f"{account['name']}: Only training 1 agent. Setting gen_stagger to 0.")
@@ -66,7 +63,7 @@ class Trainer(Manager):
                 self.one_agent = True
 
             self.sessions[account["name"]] = {
-                "api": api,
+                "alpaca_api": alpaca_api,
                 "agents": {},
                 "logs": {},
                 "stocks": account["stocks"],
@@ -175,17 +172,145 @@ class Trainer(Manager):
 class Trader(Manager):
     def __init__(self, settings, finbert):
         super().__init__(settings, finbert)
+        self.schwab_api = settings["schwab"]
+        self.trainer = Trainer(settings, finbert)
+        self.scraper = cs.Scraper()
+        self.training_thread = None
+        self.consecutive_days = 0
+        account = settings["accounts"][0]
+        self.alpaca_api = alpaca.REST(account["public_key"], account["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
+        self.stocks = account["stocks"]
+        self.interval = account["interval"]
+        self.agents = {}
+        self.logs = {}
+        self.clock = [None, 0]
+        self.positions = [None, 0]
+
+        self.create_agents()
+
+    def create_agents(self):
+        print("Trader: Creating agents")
+        self.agents.clear()
+
+        if self.get_market_status():
+            now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+            symbols = []
+            for stock in self.stocks:
+                symbols.append(stock["symbol"])
+            self.finbert.save_news(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+
+        for stock in self.stocks:
+            self.logs[stock["symbol"]] = []
+            self.agents[stock["symbol"]] = agent.Trading(self.settings, stock, self.interval, self.finbert, self, self.scraper)
+            if stock["genome_filename"] is None:
+                print(f" No genome filename provided for {stock['symbol']}")
+                exit(0)
+            else:
+                try:
+                    best_genome = saving.SaveSystem.load_data(os.path.join(self.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
+                    self.agents[stock["symbol"]].update_net(best_genome)
+                except FileNotFoundError:
+                    print(f" No genome file found for {stock['genome_filename']}")
+            print(f" Created {', '.join(self.agents.keys())} trading agents\n")
+
+    def get_market_status(self):
+        if self.clock[0] is None or time.time() - self.clock[1] > 1:
+            tries = 1
+            while True:
+                try:
+                    self.clock[0] = self.alpaca_api.get_clock()
+                    self.clock[1] = time.time()
+                    return self.clock[0].is_open
+                except (ConnectionError, urllib3.exceptions.ProtocolError) as e:
+                    print(f"Error getting clock: '{e}'. Retrying in 5 seconds... ({tries})")
+                    time.sleep(5)
+                    tries += 1
+        return self.clock[0].is_open
+
+    def start(self):
+        self.running = True
+        self.consecutive_days = 0
+
+        for symbol in self.agents:
+            threading.Thread(target=self.agents[symbol].run).start()
+
+        while self.running:
+            now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+            first_session_key = next(iter(self.sessions))
+            if self.get_market_status():
+                if self.trainer.running:
+                    self.trainer.stop()
+                    self.training_thread.join()
+
+                    self.finbert.save_news(list(self.agents.keys()), now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+
+                    for symbol in self.agents:
+                        trainer_agent = self.trainer.sessions[self.settings["accounts"][0]["name"]]["agents"][symbol]
+                        if trainer_agent.best_genome is not None:
+                            self.agents[symbol].update_net(trainer_agent.best_genome)
+
+                for session in self.sessions.values():
+                    for j in reversed(range(len(session["pending_sales"]))):
+                        sale = session["pending_sales"][j]
+                        if self.consecutive_days - sale[1] > 2:
+                            session["solid_cash"] += sale[0]
+                            session["liquid_cash"] -= sale[0]
+                            session["pending_sales"].pop(j)
+
+                next_close = self.sessions[first_session_key]["clock"][0].next_close
+                wait_time = (next_close - now_date).total_seconds()
+                print(f"Market closes in {wait_time / 3600} hours")
+                time.sleep(wait_time + 5)
+                self.consecutive_days += 1
+            else:
+                for session_key in self.sessions:
+                    session = self.sessions[session_key]
+                    account = self.schwab_api.get_account()
+                    positions = account["positions"]
+                    bought_shares = {}
+                    for position in positions:
+                        bought_shares[position["instrument"]["symbol"]] = float(position["longQuantity"])
+                    balance_change = float(account["currentBalances"]["equity"]) - float(account["initialBalances"]["equity"])
+                    print(f"\n{session_key} Details:" +
+                          f"\n Bal Change: {balance_change}" +
+                          f"\n Solid Cash: {session['solid_cash']}" +
+                          f"\n Liquid Cash: {session['liquid_cash']}" +
+                          f"\n Equity: {account['currentBalances']['equity']}" +
+                          f"\n Bought Shares: {bought_shares}")
+
+                    saved_log = False
+                    for symbol in session["logs"]:
+                        if len(session["logs"][symbol]) > 0:
+                            if not saved_log:
+                                saving.SaveSystem.save_data((session["logs"], balance_change, bought_shares), os.path.join(session["agents"][symbol].log_path, f"{session_key}_{now_date.astimezone(tz=pytz.timezone('US/Central')).strftime('%Y-%m-%d')}.gz"))
+                                saved_log = True
+                            threading.Thread(target=plot.plot_log, args=(session["alpaca_api"], symbol, session["logs"][symbol], session["interval"])).start()
+                            session["logs"][symbol].clear()
+
+                next_open = self.sessions[first_session_key]["clock"][0].next_open
+                wait_time = (next_open - now_date).total_seconds()
+                print(f"\nMarket opens in {wait_time / 3600} hours\n-----")
+                if not self.trainer.running:
+                    if self.training_thread is not None:
+                        self.training_thread.join()
+                    self.training_thread = threading.Thread(target=self.trainer.start)
+                    self.training_thread.start()
+                time.sleep(wait_time + 5)
+
+
+class PaperTrader(Manager):
+    def __init__(self, settings, finbert):
+        super().__init__(settings, finbert)
         self.trainer = Trainer(settings, finbert)
         self.scraper = cs.Scraper()
         self.training_thread = None
         self.consecutive_days = 0
 
         for account in settings["accounts"]:
-            base_url = URL("https://paper-api.alpaca.markets") if account["paper"] else URL("https://api.alpaca.markets")
-            api = alpaca.REST(account["public_key"], account["secret_key"], base_url=base_url)
+            alpaca_api = alpaca.REST(account["public_key"], account["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
 
             self.sessions[account["name"]] = {
-                "api": api,
+                "alpaca_api": alpaca_api,
                 "solid_cash": 0.0,
                 "liquid_cash": 0.0,
                 "pending_sales": [],
@@ -196,7 +321,7 @@ class Trader(Manager):
                 "logs": {},
                 "clock": [None, 0],
                 "positions": [None, 0],
-                "api_account": [None, 0]
+                "alpaca_api_account": [None, 0]
             }
 
             '''if input(f"Plot {account['name']} logs? (y/n): ") == "y":
@@ -234,7 +359,7 @@ class Trader(Manager):
 
             for stock in session["stocks"]:
                 session["logs"][stock["symbol"]] = []
-                session["agents"][stock["symbol"]] = agent.Trading(self.settings, session, stock, self.finbert, self, self.scraper)
+                session["agents"][stock["symbol"]] = agent.PaperTrading(self.settings, session, stock, self.finbert, self, self.scraper)
                 if stock["genome_filename"] is None:
                     print(f" No genome filename provided for {stock['symbol']}")
                     exit(0)
@@ -252,7 +377,7 @@ class Trader(Manager):
             tries = 1
             while True:
                 try:
-                    session["clock"][0] = session["api"].get_clock()
+                    session["clock"][0] = session["alpaca_api"].get_clock()
                     session["clock"][1] = time.time()
                     return session["clock"][0].is_open
                 except (ConnectionError, urllib3.exceptions.ProtocolError) as e:
@@ -262,12 +387,12 @@ class Trader(Manager):
         return session["clock"][0].is_open
 
     @staticmethod
-    def list_positions(session):
+    def get_positions(session):
         if session["positions"][0] is None or time.time() - session["positions"][1] > 1:
             tries = 1
             while True:
                 try:
-                    session["positions"][0] = session["api"].list_positions()
+                    session["positions"][0] = session["alpaca_api"].list_positions()
                     session["positions"][1] = time.time()
                     return session["positions"][0]
                 except ConnectionError as e:
@@ -276,7 +401,7 @@ class Trader(Manager):
 
     @staticmethod
     def get_position(symbol, session):
-        positions = Trader.list_positions(session)
+        positions = PaperTrader.get_positions(session)
         for position in positions:
             if position.symbol == symbol:
                 return position
@@ -292,16 +417,16 @@ class Trader(Manager):
 
     @staticmethod
     def get_api_account(session):
-        if session["api_account"][0] is None or time.time() - session["api_account"][1] > 1:
+        if session["alpaca_api_account"][0] is None or time.time() - session["alpaca_api_account"][1] > 1:
             tries = 1
             while True:
                 try:
-                    session["api_account"][0] = session["api"].get_account()
-                    session["api_account"][1] = time.time()
-                    return session["api_account"][0]
+                    session["alpaca_api_account"][0] = session["alpaca_api"].get_account()
+                    session["alpaca_api_account"][1] = time.time()
+                    return session["alpaca_api_account"][0]
                 except ConnectionError as e:
                     print(f"Error getting account: '{e}'. Retrying in 5 seconds... ({tries})")
-        return session["api_account"][0]
+        return session["alpaca_api_account"][0]
 
     def start(self):
         self.running = True
@@ -358,7 +483,7 @@ class Trader(Manager):
                 for session_key in self.sessions:
                     session = self.sessions[session_key]
                     api_account = self.get_api_account(session)
-                    open_positions = self.list_positions(session)
+                    open_positions = self.get_positions(session)
                     bought_shares = {}
                     for position in open_positions:
                         bought_shares[position.symbol] = float(position.qty)
@@ -376,7 +501,7 @@ class Trader(Manager):
                             if not saved_log:
                                 saving.SaveSystem.save_data((session["logs"], balance_change, bought_shares), os.path.join(session["agents"][symbol].log_path, f"{session_key}_{now_date.astimezone(tz=pytz.timezone('US/Central')).strftime('%Y-%m-%d')}.gz"))
                                 saved_log = True
-                            threading.Thread(target=plot.plot_log, args=(session["api"], symbol, session["logs"][symbol], session["interval"])).start()
+                            threading.Thread(target=plot.plot_log, args=(session["alpaca_api"], symbol, session["logs"][symbol], session["interval"])).start()
                             session["logs"][symbol].clear()
 
                 next_open = self.sessions[first_session_key]["clock"][0].next_open
@@ -395,11 +520,10 @@ class Validator(Manager):
         super().__init__(settings, finbert)
 
         for account in settings["accounts"]:
-            base_url = URL("https://paper-api.alpaca.markets") if account["paper"] else URL("https://api.alpaca.markets")
-            api = alpaca.REST(account["public_key"], account["secret_key"], base_url=base_url)
+            api = alpaca.REST(account["public_key"], account["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
 
             self.sessions[account["name"]] = {
-                "api": api,
+                "alpaca_api": api,
                 "agents": {},
                 "stocks": account["stocks"],
                 "interval": account["interval"],

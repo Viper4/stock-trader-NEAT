@@ -200,6 +200,140 @@ class Training(Agent):
 
 
 class Trading(Agent):
+    def __init__(self, settings, stock, interval, finbert, trader, scraper):
+        super().__init__(settings, None, stock)
+        self.finbert = finbert
+        self.trader = trader
+        self.scraper = scraper
+        self.net = None
+        self.interval = interval
+
+    def update_net(self, genome):
+        self.net = neat.nn.RecurrentNetwork.create(genome, self.config)
+
+        # Preparing the network with past 30 days data
+        now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+        bars = self.trader.get_bars(self.stock["symbol"], now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+        for i in range(1, len(bars)):
+            bar = bars[i]
+            prev_bar = bars[i-1]
+            backtest_date = bars[i]["timestamp"].to_pydatetime()
+            sentiment = self.finbert.get_saved_sentiment(self.stock["symbol"],
+                                                         backtest_date - dt.timedelta(days=2),
+                                                         backtest_date)
+            inputs = [0,  # plpc
+                      self.rel_change(prev_bar["open"], bar["open"]),
+                      self.rel_change(prev_bar["high"], bar["high"]),
+                      self.rel_change(prev_bar["low"], bar["low"]),
+                      self.rel_change(prev_bar["close"], bar["close"]),
+                      self.rel_change(prev_bar["volume"], bar["volume"]),
+                      self.rel_change(prev_bar["vwap"], bar["vwap"]),
+                      sentiment
+                      ]
+            self.net.activate(inputs)
+        print(f" {self.interval}m {self.stock['symbol']}: Updated network")
+
+    def run(self):
+        print(f"{self.interval}m {self.stock['symbol']}: Starting trading")
+        self.running = True
+        cum_price = 0
+        cum_vol = 0
+
+        prev_data = None
+
+        while self.running:
+            now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+            if self.trader.get_market_status():
+                candles, prev_close = self.scraper.get_latest_candles(self.stock["symbol"], interval=str(self.interval) + "m")
+                latest = candles[-1]
+                cum_price += latest["volume"] * ((latest["high"] + latest["low"] + latest["close"]) / 3)
+                cum_vol += latest["volume"]
+                latest["vwap"] = cum_price / cum_vol if cum_vol > 0 else 0
+
+                if prev_data is None:
+                    if len(candles) >= 2:
+                        prev_data = candles[-2]
+                    else:
+                        prev_data = latest
+                        prev_data["close"] = prev_close
+                    prev_data["vwap"] = (prev_data["high"] + prev_data["low"] + prev_data["close"]) / 3
+
+                position = self.trader.get_position(self.stock["symbol"])
+                position_qty = position["instrument"]["longQuantity"]
+
+                sentiment = self.finbert.get_api_sentiment(self.stock["symbol"], now_date - dt.timedelta(days=2), now_date)
+                inputs = [position["longOpenProfitLoss"],
+                          self.rel_change(prev_data["open"], latest["open"]),
+                          self.rel_change(prev_data["high"], latest["high"]),
+                          self.rel_change(prev_data["low"], latest["low"]),
+                          self.rel_change(prev_data["close"], latest["close"]),
+                          self.rel_change(prev_data["volume"], latest["volume"]),
+                          self.rel_change(prev_data["vwap"], latest["vwap"]),
+                          sentiment
+                          ]
+                outputs = self.net.activate(inputs)
+
+                qty_percent = (outputs[1] + 1) * 0.5
+
+                asset = self.trader.alpaca_api.get_asset(symbol=self.stock["symbol"])
+                if not asset.tradable:
+                    print(f"{self.stock['symbol']}: Not tradable.")
+                if outputs[0] > 0.5:  # Buy
+                    account = self.trader.schwab_api.get_account()
+                    solid_cash = account["currentBalances"]["cashAvailableForTrading"]
+                    liquid_cash = account["currentBalances"]["cashBalance"] - solid_cash
+                    max_quantity = (solid_cash - self.session["cash_limit"]) / latest["close"]
+                    quantity = min(solid_cash * qty_percent * self.stock["cash_at_risk"] / latest["close"], max_quantity)
+                    if not asset.fractionable:
+                        quantity = int(quantity)
+                    price = quantity * latest["close"]
+                    if price >= 1:
+                        self.trader.alpaca_api.submit_order(symbol=self.stock["symbol"], qty=quantity, side="buy", type="market", time_in_force="day")
+                        self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity, side="BUY")
+
+                        action = {"side": "Buy", "quantity": quantity, "price": latest["close"],
+                                  "solid_cash": solid_cash, "liquid_cash": liquid_cash,
+                                  "datetime": now_date}
+                        print(f"{self.stock['symbol']}: {action}")
+                        self.trader.logs[self.stock["symbol"]].append(action)
+                elif outputs[0] < -0.5 and position_qty > 0:  # Sell
+                    account = self.trader.schwab_api.get_account()
+                    solid_cash = account["currentBalances"]["cashAvailableForTrading"]
+                    liquid_cash = account["currentBalances"]["cashBalance"] - solid_cash
+                    quantity = qty_percent * position_qty
+                    if not asset.fractionable:
+                        quantity = int(quantity)
+                    price = quantity * latest["close"]
+                    if price >= 1:
+                        if position_qty - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
+                            self.trader.alpaca_api.submit_order(symbol=self.stock["symbol"], qty=position_qty, side="sell", type="market", time_in_force="day")
+                            self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity, side="SELL")
+                            price = position_qty * latest["close"]
+                        else:
+                            self.trader.alpaca_api.submit_order(symbol=self.stock["symbol"], qty=quantity, side="sell", type="market", time_in_force="day")
+                            self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity, side="SELL")
+                        action = {"side": "Sell", "quantity": quantity, "price": latest["close"],
+                                  "profit": price - (float(position["averagePrice"]) * quantity),
+                                  "solid_cash": solid_cash, "liquid_cash": liquid_cash,
+                                  "datetime": now_date}
+                        print(f"{self.stock['symbol']}: {action}")
+                        self.trader.logs[self.stock["symbol"]].append(action)
+                prev_data = latest
+
+                time.sleep(self.interval * 60)
+            else:
+                cum_price = 0.0
+                cum_vol = 0.0
+
+                next_open = self.trader.clock[0].next_open
+                wait_time = (next_open - now_date).total_seconds()
+                wait_time += self.interval * 60 + 10  # Wait for yahoo finance to update
+                print(f"{self.interval}m {self.stock['symbol']}: Stopping trading. Waiting until market opens in {wait_time / 3600} hours")
+                time.sleep(wait_time)
+                print(f"{self.interval}m {self.stock['symbol']}: Resuming trading")
+
+
+class PaperTrading(Agent):
     def __init__(self, settings, session, stock, finbert, trader, scraper):
         super().__init__(settings, session, stock)
         self.finbert = finbert
