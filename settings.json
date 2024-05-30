@@ -1,14 +1,14 @@
 {
-  "accounts": [
+  "profiles": [
     {
-      "name": "1m 1pw Account",
+      "name": "1m 1pw Profile",
       "public_key": "PKHSGZJ9CBQPWGLS63YP",
       "secret_key": "NBZQMDH1JflJTiUnt4BUHezhwmEKCfpVju2BBblf",
       "paper": true,
       "backtest_days": 356,
       "profit_window": 1,
       "interval": 1,
-      "cash_limit": 0.0,
+      "cash_limit": 10000,
       "stocks": [
         {
           "symbol": "NVDA",
@@ -53,37 +53,16 @@
           "training_filename": "1m-data-AMD.gz"
         },
         {
-          "symbol": "META",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-META.gz",
-          "genome_filename": "1m-1pw-genome-META.gz",
-          "training_filename": "1m-data-META.gz"
-        },
-        {
-          "symbol": "TSM",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-TSM.gz",
-          "genome_filename": "1m-1pw-genome-TSM.gz",
-          "training_filename": "1m-data-TSM.gz"
-        },
-        {
           "symbol": "GOOG",
           "cash_at_risk": 0.25,
           "population_filename": "1m-1pw-population-GOOG.gz",
           "genome_filename": "1m-1pw-genome-GOOG.gz",
           "training_filename": "1m-data-GOOG.gz"
-        },
-        {
-          "symbol": "SPCE",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-SPCE.gz",
-          "genome_filename": "1m-1pw-genome-SPCE.gz",
-          "training_filename": "1m-data-SPCE.gz"
         }
       ]
     },
     {
-      "name": "15m 5pw Account",
+      "name": "15m 5pw Profile",
       "public_key": "PK6AZD4FF45XYDQCJ5RO",
       "secret_key": "RqAtutHKBXqsMacxQOKQYBPsgZbfWyVxz0iIPaeo",
       "paper": true,
@@ -169,7 +148,7 @@
   "save_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/Saves",
   "training_reset": 3,
   "gen_stagger": 8,
-  "processes": 8,
+  "processes": 12,
   "print_stats": true,
   "log_training": false,
   "visualize": false

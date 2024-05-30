@@ -54,8 +54,8 @@ class Scraper(object):
                         f"{response.status_code} error code fetching candles for {symbol}. Retrying in 5 seconds... ({tries})")
                     time.sleep(5)
                     tries += 1
-            except ConnectionError as e:
-                print(f"Connection error fetching candles for {symbol}. Retrying in 5 seconds... ({tries}): {e}")
+            except Exception as e:
+                print(f"Error fetching candles for {symbol}. Retrying in 5 seconds... ({tries}): {e}")
                 time.sleep(5)
                 tries += 1
 
@@ -83,7 +83,7 @@ class Scraper(object):
                     '''if i == 0:
                         today = dt.datetime.today().strftime("%Y-%m-%d")
                         if today != line.strip():
-                            return save_user_agents()
+                            return Scraper.save_user_agents()
                     else:
                         user_agents.append(line.strip())'''
             return user_agents

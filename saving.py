@@ -3,6 +3,7 @@ import pickle
 import random
 from neat.population import Population
 from neat.reporting import BaseReporter
+import os
 
 
 class SaveSystem(BaseReporter):
@@ -26,6 +27,11 @@ class SaveSystem(BaseReporter):
 
         if (self.current_generation+1) % self.p_interval == 0:
             self.save_data((self.current_generation, config, population, species_set, random.getstate()), self.p_path)
+
+    @staticmethod
+    def make_dir(path):
+        if not os.path.exists(path):
+            os.mkdir(path)
 
     @staticmethod
     def save_data(data, path, mode="w"):

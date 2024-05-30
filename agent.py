@@ -23,20 +23,12 @@ class Agent:
                 exit(0)
 
         self.population_path = self.settings["save_path"] + "/Populations"
-        self.make_dir(self.population_path)
+        saving.SaveSystem.make_dir(self.population_path)
 
         self.genome_path = self.settings["save_path"] + "/Genomes"
-        self.make_dir(self.genome_path)
-
-        self.log_path = self.settings["save_path"] + "/Logs"
-        self.make_dir(self.log_path)
+        saving.SaveSystem.make_dir(self.genome_path)
 
         self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
-
-    @staticmethod
-    def make_dir(path):
-        if not os.path.exists(path):
-            os.mkdir(path)
 
     @staticmethod
     def rel_change(a, b):
@@ -50,9 +42,8 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
     net = neat.nn.RecurrentNetwork.create(genome, config)
     start_date = bars[0]["timestamp"].date()
     solid_cash = start_cash
+    liquid_cash = 0
     start_equity = start_cash
-    liquid_cash = 0.0
-    pending_sales = []
     profit_sum = 0.0
     num_windows = 0
     shares = 0.0
@@ -69,12 +60,6 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
         date = bar["timestamp"].date()
         if date != prev_date:  # Check pending sales to settle cash after 2 days of sale
             consecutive_days += 1
-            for j in reversed(range(len(pending_sales))):
-                sale = pending_sales[j]
-                if consecutive_days - sale[1] > 2:
-                    solid_cash += sale[0]
-                    liquid_cash -= sale[0]
-                    pending_sales.pop(j)
 
         inputs = [Agent.rel_change(cost, bar["close"] * shares),  # plpc
                   Agent.rel_change(prev_bar["open"], bar["open"]),
@@ -123,8 +108,7 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
                                   "profit": price - (avg_cost * quantity), "solid_cash": solid_cash,
                                   "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime()}
                         log.append(action)
-                liquid_cash += price
-                pending_sales.append((price, consecutive_days))
+                solid_cash += price
         if i == num_bars-1 or (date - start_date).days >= profit_window:
             equity = liquid_cash + solid_cash + bar["close"] * shares
             profit_sum += equity - start_equity
@@ -167,7 +151,7 @@ class Training(Agent):
                 self.best_genome = genome
 
         if best_log is not None and self.settings["log_training"]:
-            plot.plot_log(self.session["api"], self.stock["symbol"], best_log, self.session["interval"])
+            plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], best_log, self.session["interval"])
         pool.close()
         pool.join()
         pool.terminate()
@@ -200,20 +184,19 @@ class Training(Agent):
 
 
 class Trading(Agent):
-    def __init__(self, settings, stock, interval, finbert, trader, scraper):
+    def __init__(self, settings, stock, finbert, trader, scraper):
         super().__init__(settings, None, stock)
         self.finbert = finbert
         self.trader = trader
         self.scraper = scraper
         self.net = None
-        self.interval = interval
 
     def update_net(self, genome):
         self.net = neat.nn.RecurrentNetwork.create(genome, self.config)
 
         # Preparing the network with past 30 days data
         now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-        bars = self.trader.get_bars(self.stock["symbol"], now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+        bars = self.trader.get_bars(self.stock["symbol"], self.trader.alpaca_api, self.trader.profile["interval"], now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
         for i in range(1, len(bars)):
             bar = bars[i]
             prev_bar = bars[i-1]
@@ -231,10 +214,10 @@ class Trading(Agent):
                       sentiment
                       ]
             self.net.activate(inputs)
-        print(f" {self.interval}m {self.stock['symbol']}: Updated network")
+        print(f" {self.trader.profile['name']} {self.stock['symbol']}: Updated network")
 
     def run(self):
-        print(f"{self.interval}m {self.stock['symbol']}: Starting trading")
+        print(f"{self.trader.profile['name']} {self.stock['symbol']}: Starting trading")
         self.running = True
         cum_price = 0
         cum_vol = 0
@@ -244,7 +227,7 @@ class Trading(Agent):
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
             if self.trader.get_market_status():
-                candles, prev_close = self.scraper.get_latest_candles(self.stock["symbol"], interval=str(self.interval) + "m")
+                candles, prev_close = self.scraper.get_latest_candles(self.stock["symbol"], interval=str(self.trader.profile["interval"]) + "m")
                 latest = candles[-1]
                 cum_price += latest["volume"] * ((latest["high"] + latest["low"] + latest["close"]) / 3)
                 cum_vol += latest["volume"]
@@ -258,8 +241,8 @@ class Trading(Agent):
                         prev_data["close"] = prev_close
                     prev_data["vwap"] = (prev_data["high"] + prev_data["low"] + prev_data["close"]) / 3
 
-                position = self.trader.get_position(self.stock["symbol"])
-                position_qty = position["instrument"]["longQuantity"]
+                position = self.trader.schwab_api.get_position(self.stock["symbol"])
+                position_qty = position["longQuantity"]
 
                 sentiment = self.finbert.get_api_sentiment(self.stock["symbol"], now_date - dt.timedelta(days=2), now_date)
                 inputs = [position["longOpenProfitLoss"],
@@ -275,62 +258,61 @@ class Trading(Agent):
 
                 qty_percent = (outputs[1] + 1) * 0.5
 
-                asset = self.trader.alpaca_api.get_asset(symbol=self.stock["symbol"])
-                if not asset.tradable:
-                    print(f"{self.stock['symbol']}: Not tradable.")
                 if outputs[0] > 0.5:  # Buy
                     account = self.trader.schwab_api.get_account()
+                    total_cash = account["currentBalances"]["cashBalance"]
                     solid_cash = account["currentBalances"]["cashAvailableForTrading"]
-                    liquid_cash = account["currentBalances"]["cashBalance"] - solid_cash
-                    max_quantity = (solid_cash - self.session["cash_limit"]) / latest["close"]
-                    quantity = min(solid_cash * qty_percent * self.stock["cash_at_risk"] / latest["close"], max_quantity)
-                    if not asset.fractionable:
+                    liquid_cash = total_cash - solid_cash
+                    if "longMarketValue" in account["currentBalances"]:
+                        market_value = account["currentBalances"]["longMarketValue"]
+                    else:
+                        market_value = 0
+                    used_cash = market_value + liquid_cash  # Cash in stocks + liquid cash
+                    if self.trader.profile["cash_limit"] < 0 or used_cash < self.trader.profile["cash_limit"]:
+                        quantity = self.trader.profile["cash_limit"] * qty_percent * self.stock["cash_at_risk"] / latest["close"]
                         quantity = int(quantity)
-                    price = quantity * latest["close"]
-                    if price >= 1:
-                        self.trader.alpaca_api.submit_order(symbol=self.stock["symbol"], qty=quantity, side="buy", type="market", time_in_force="day")
-                        self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity, side="BUY")
+                        #price = quantity * latest["close"]
+                        #if price >= 1:
+                        if quantity > 0:
+                            self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity, side="BUY")
 
-                        action = {"side": "Buy", "quantity": quantity, "price": latest["close"],
-                                  "solid_cash": solid_cash, "liquid_cash": liquid_cash,
-                                  "datetime": now_date}
-                        print(f"{self.stock['symbol']}: {action}")
-                        self.trader.logs[self.stock["symbol"]].append(action)
+                            action = {"side": "Buy", "quantity": quantity, "price": latest["close"],
+                                      "solid_cash": solid_cash, "liquid_cash": liquid_cash,
+                                      "datetime": now_date}
+                            print(f"{self.trader.profile['name']} {self.stock['symbol']}: {action}")
+                            self.trader.logs[self.stock["symbol"]].append(action)
                 elif outputs[0] < -0.5 and position_qty > 0:  # Sell
                     account = self.trader.schwab_api.get_account()
                     solid_cash = account["currentBalances"]["cashAvailableForTrading"]
                     liquid_cash = account["currentBalances"]["cashBalance"] - solid_cash
                     quantity = qty_percent * position_qty
-                    if not asset.fractionable:
-                        quantity = int(quantity)
+                    quantity = int(quantity)
                     price = quantity * latest["close"]
                     if price >= 1:
-                        if position_qty - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
-                            self.trader.alpaca_api.submit_order(symbol=self.stock["symbol"], qty=position_qty, side="sell", type="market", time_in_force="day")
+                        if position_qty - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty and assume sell all with small qty
                             self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity, side="SELL")
-                            price = position_qty * latest["close"]
                         else:
-                            self.trader.alpaca_api.submit_order(symbol=self.stock["symbol"], qty=quantity, side="sell", type="market", time_in_force="day")
                             self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity, side="SELL")
+
                         action = {"side": "Sell", "quantity": quantity, "price": latest["close"],
-                                  "profit": price - (float(position["averagePrice"]) * quantity),
+                                  "profit": position["longOpenProfitLoss"],
                                   "solid_cash": solid_cash, "liquid_cash": liquid_cash,
                                   "datetime": now_date}
-                        print(f"{self.stock['symbol']}: {action}")
+                        print(f"{self.trader.profile['name']} {self.stock['symbol']}: {action}")
                         self.trader.logs[self.stock["symbol"]].append(action)
                 prev_data = latest
 
-                time.sleep(self.interval * 60)
+                time.sleep(self.trader.profile["interval"] * 60)
             else:
                 cum_price = 0.0
                 cum_vol = 0.0
 
                 next_open = self.trader.clock[0].next_open
                 wait_time = (next_open - now_date).total_seconds()
-                wait_time += self.interval * 60 + 10  # Wait for yahoo finance to update
-                print(f"{self.interval}m {self.stock['symbol']}: Stopping trading. Waiting until market opens in {wait_time / 3600} hours")
+                wait_time += self.trader.profile["interval"] * 60 + 10  # Wait for yahoo finance to update
+                print(f"{self.trader.profile['name']} {self.stock['symbol']}: Pausing trading. Waiting until market opens in {wait_time / 3600} hours")
                 time.sleep(wait_time)
-                print(f"{self.interval}m {self.stock['symbol']}: Resuming trading")
+                print(f"{self.trader.profile['name']} {self.stock['symbol']}: Resuming trading")
 
 
 class PaperTrading(Agent):
@@ -346,7 +328,7 @@ class PaperTrading(Agent):
 
         # Preparing the network with past 30 days data
         now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-        bars = self.trader.get_bars(self.stock["symbol"], self.session, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+        bars = self.trader.get_bars(self.stock["symbol"], self.session["alpaca_api"], self.session["interval"], now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
         for i in range(1, len(bars)):
             bar = bars[i]
             prev_bar = bars[i-1]
@@ -408,44 +390,44 @@ class PaperTrading(Agent):
 
                 qty_percent = (outputs[1] + 1) * 0.5
 
-                asset = self.session["api"].get_asset(symbol=self.stock["symbol"])
+                asset = self.session["alpaca_api"].get_asset(symbol=self.stock["symbol"])
                 if not asset.tradable:
                     print(f"{self.stock['symbol']}: Not tradable.")
-                if outputs[0] > 0.5:  # Buy
-                    max_quantity = (self.session["solid_cash"] - self.session["cash_limit"]) / latest["close"]
-                    quantity = min(self.session["solid_cash"] * qty_percent * self.stock["cash_at_risk"] / latest["close"], max_quantity)
-                    if not asset.fractionable:
-                        quantity = int(quantity)
-                    price = quantity * latest["close"]
-                    if price >= 1:  # Alpaca doesn't allow trades under $1
-                        self.session["solid_cash"] -= price
-                        self.session["api"].submit_order(symbol=self.stock["symbol"], qty=quantity, side="buy", type="market", time_in_force="day")
+                else:
+                    if outputs[0] > 0.5:  # Buy
+                        quantity = self.session["solid_cash"] * qty_percent * self.stock["cash_at_risk"] / latest["close"]
+                        if not asset.fractionable:
+                            quantity = int(quantity)
+                        price = quantity * latest["close"]
+                        if price >= 1:  # Alpaca doesn't allow trades under $1
+                            self.session["solid_cash"] -= price
+                            self.session["alpaca_api"].submit_order(symbol=self.stock["symbol"], qty=quantity, side="buy", type="market", time_in_force="day")
 
-                        action = {"side": "Buy", "quantity": quantity, "price": latest["close"],
-                                  "solid_cash": self.session["solid_cash"], "liquid_cash": self.session["liquid_cash"],
-                                  "datetime": now_date}
-                        print(f"{self.stock['symbol']}: {action}")
-                        self.session["logs"][self.stock["symbol"]].append(action)
-                elif outputs[0] < -0.5 and position_qty > 0:  # Sell
-                    quantity = qty_percent * position_qty
-                    if not asset.fractionable:
-                        quantity = int(quantity)
-                    price = quantity * latest["close"]
-                    if price >= 1:
-                        if position_qty - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
-                            self.session["api"].submit_order(symbol=self.stock["symbol"], qty=position_qty, side="sell", type="market", time_in_force="day")
-                            price = position_qty * latest["close"]
-                        else:
-                            self.session["api"].submit_order(symbol=self.stock["symbol"], qty=quantity, side="sell", type="market", time_in_force="day")
-                        self.session["liquid_cash"] += price
-                        self.session["pending_sales"].append((price, self.trader.consecutive_days))
+                            action = {"side": "Buy", "quantity": quantity, "price": latest["close"],
+                                      "solid_cash": self.session["solid_cash"], "liquid_cash": self.session["liquid_cash"],
+                                      "datetime": now_date}
+                            print(f"{self.session['interval']}m {self.stock['symbol']}: {action}")
+                            self.session["logs"][self.stock["symbol"]].append(action)
+                    elif outputs[0] < -0.5 and position_qty > 0:  # Sell
+                        quantity = qty_percent * position_qty
+                        if not asset.fractionable:
+                            quantity = int(quantity)
+                        price = quantity * latest["close"]
+                        if price >= 1:
+                            if position_qty - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty and assume sell all with small qty
+                                self.session["alpaca_api"].submit_order(symbol=self.stock["symbol"], qty=position_qty, side="sell", type="market", time_in_force="day")
+                                price = position_qty * latest["close"]
+                            else:
+                                self.session["alpaca_api"].submit_order(symbol=self.stock["symbol"], qty=quantity, side="sell", type="market", time_in_force="day")
+                            self.session["liquid_cash"] += price
+                            self.session["pending_sales"].append((price, self.trader.consecutive_days))
 
-                        action = {"side": "Sell", "quantity": quantity, "price": latest["close"],
-                                  "profit": price - (float(position.avg_entry_price) * quantity),
-                                  "solid_cash": self.session["solid_cash"], "liquid_cash": self.session["liquid_cash"],
-                                  "datetime": now_date}
-                        print(f"{self.stock['symbol']}: {action}")
-                        self.session["logs"][self.stock["symbol"]].append(action)
+                            action = {"side": "Sell", "quantity": quantity, "price": latest["close"],
+                                      "profit": price - (float(position.avg_entry_price) * quantity),
+                                      "solid_cash": self.session["solid_cash"], "liquid_cash": self.session["liquid_cash"],
+                                      "datetime": now_date}
+                            print(f"{self.session['interval']}m {self.stock['symbol']}: {action}")
+                            self.session["logs"][self.stock["symbol"]].append(action)
                 prev_data = latest
 
                 time.sleep(self.session["interval"] * 60)
@@ -456,7 +438,7 @@ class PaperTrading(Agent):
                 next_open = self.session["clock"][0].next_open
                 wait_time = (next_open - now_date).total_seconds()
                 wait_time += self.session["interval"] * 60 + 10  # Wait for yahoo finance to update
-                print(f"{self.session['interval']}m {self.stock['symbol']}: Stopping trading. Waiting until market opens in {wait_time / 3600} hours")
+                print(f"{self.session['interval']}m {self.stock['symbol']}: Pausing trading. Waiting until market opens in {wait_time / 3600} hours")
                 time.sleep(wait_time)
                 print(f"{self.session['interval']}m {self.stock['symbol']}: Resuming trading")
 
@@ -586,7 +568,7 @@ class Validation(Agent):
               f"\n Total buys: {num_buy}"
               f"\n Total sells: {num_sell}"
               f"\n Average actions/day: {len(log) / consecutive_days}")
-        plot.plot_log(self.session["api"], self.stock["symbol"], log, self.session["interval"])
+        plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], log, self.session["interval"])
         while True:
             user_input = input("Enter action index or exit: ")
             if user_input == "exit":
