@@ -4,152 +4,137 @@
       "name": "1m 1pw Profile",
       "public_key": "PKHSGZJ9CBQPWGLS63YP",
       "secret_key": "NBZQMDH1JflJTiUnt4BUHezhwmEKCfpVju2BBblf",
-      "paper": true,
       "backtest_days": 356,
       "profit_window": 1,
       "interval": 1,
-      "cash_limit": 10000,
+      "cash_limit": 25000.0,
+      "fitness_multipliers": {
+        "average": 1,
+        "total":  0.1,
+        "risk": 100
+      },
       "stocks": [
         {
-          "symbol": "NVDA",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-NVDA.gz",
-          "genome_filename": "1m-1pw-genome-NVDA.gz",
-          "training_filename": "1m-data-NVDA.gz"
-        },
-        {
-          "symbol": "TSLA",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-TSLA.gz",
-          "genome_filename": "1m-1pw-genome-TSLA.gz",
-          "training_filename": "1m-data-TSLA.gz"
-        },
-        {
-          "symbol": "BA",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-BA.gz",
-          "genome_filename": "1m-1pw-genome-BA.gz",
-          "training_filename": "1m-data-BA.gz"
-        },
-        {
-          "symbol": "COIN",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-COIN.gz",
-          "genome_filename": "1m-1pw-genome-COIN.gz",
-          "training_filename": "1m-data-COIN.gz"
-        },
-        {
-          "symbol": "UBER",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-UBER.gz",
-          "genome_filename": "1m-1pw-genome-UBER.gz",
-          "training_filename": "1m-data-UBER.gz"
-        },
-        {
-          "symbol": "AMD",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-AMD.gz",
-          "genome_filename": "1m-1pw-genome-AMD.gz",
-          "training_filename": "1m-data-AMD.gz"
-        },
-        {
           "symbol": "GOOG",
-          "cash_at_risk": 0.25,
+          "cash_at_risk": 0.15,
           "population_filename": "1m-1pw-population-GOOG.gz",
           "genome_filename": "1m-1pw-genome-GOOG.gz",
-          "training_filename": "1m-data-GOOG.gz"
-        }
-      ]
-    },
-    {
-      "name": "15m 5pw Profile",
-      "public_key": "PK6AZD4FF45XYDQCJ5RO",
-      "secret_key": "RqAtutHKBXqsMacxQOKQYBPsgZbfWyVxz0iIPaeo",
-      "paper": true,
-      "backtest_days": 721,
-      "profit_window": 5,
-      "interval": 15,
-      "cash_limit": 0.0,
-      "stocks": [
-        {
-          "symbol": "NVDA",
-          "cash_at_risk": 0.25,
-          "population_filename": "15m-5pw-population-NVDA.gz",
-          "genome_filename": "15m-5pw-genome-NVDA.gz",
-          "training_filename": "15m-data-NVDA.gz"
+          "training_filename": "1m-data-GOOG.gz",
+          "trading": true
         },
         {
-          "symbol": "AMD",
-          "cash_at_risk": 0.25,
-          "population_filename": "15m-5pw-population-AMD.gz",
-          "genome_filename": "15m-5pw-genome-AMD.gz",
-          "training_filename": "15m-data-AMD.gz"
+          "symbol": "NVDA",
+          "cash_at_risk": 0.15,
+          "population_filename": "1m-1pw-population-NVDA.gz",
+          "genome_filename": "1m-1pw-genome-NVDA.gz",
+          "training_filename": "1m-data-NVDA.gz",
+          "trading": true
         },
         {
           "symbol": "TSLA",
-          "cash_at_risk": 0.25,
-          "population_filename": "15m-5pw-population-TSLA.gz",
-          "genome_filename": "15m-5pw-genome-TSLA.gz",
-          "training_filename": "15m-data-TSLA.gz"
+          "cash_at_risk": 0.15,
+          "population_filename": "1m-1pw-population-TSLA.gz",
+          "genome_filename": "1m-1pw-genome-TSLA.gz",
+          "training_filename": "1m-data-TSLA.gz",
+          "trading": true
         },
         {
           "symbol": "BA",
-          "cash_at_risk": 0.25,
-          "population_filename": "15m-5pw-population-BA.gz",
-          "genome_filename": "15m-5pw-genome-BA.gz",
-          "training_filename": "15m-data-BA.gz"
+          "cash_at_risk": 0.15,
+          "population_filename": "1m-1pw-population-BA.gz",
+          "genome_filename": "1m-1pw-genome-BA.gz",
+          "training_filename": "1m-data-BA.gz",
+          "trading": true
         },
         {
           "symbol": "COIN",
-          "cash_at_risk": 0.25,
-          "population_filename": "15m-5pw-population-COIN.gz",
-          "genome_filename": "15m-5pw-genome-COIN.gz",
-          "training_filename": "15m-data-COIN.gz"
+          "cash_at_risk": 0.15,
+          "population_filename": "1m-1pw-population-COIN.gz",
+          "genome_filename": "1m-1pw-genome-COIN.gz",
+          "training_filename": "1m-data-COIN.gz",
+          "trading": true
         },
         {
           "symbol": "UBER",
-          "cash_at_risk": 0.25,
-          "population_filename": "15m-5pw-population-UBER.gz",
-          "genome_filename": "15m-5pw-genome-UBER.gz",
-          "training_filename": "15m-data-UBER.gz"
+          "cash_at_risk": 0.15,
+          "population_filename": "1m-1pw-population-UBER.gz",
+          "genome_filename": "1m-1pw-genome-UBER.gz",
+          "training_filename": "1m-data-UBER.gz",
+          "trading": true
         },
         {
-          "symbol": "META",
-          "cash_at_risk": 0.25,
-          "population_filename": "15m-5pw-population-META.gz",
-          "genome_filename": "15m-5pw-genome-META.gz",
-          "training_filename": "15m-data-META.gz"
+          "symbol": "AMD",
+          "cash_at_risk": 0.15,
+          "population_filename": "1m-1pw-population-AMD.gz",
+          "genome_filename": "1m-1pw-genome-AMD.gz",
+          "training_filename": "1m-data-AMD.gz",
+          "trading": true
         },
         {
-          "symbol": "GOOG",
-          "cash_at_risk": 0.25,
-          "population_filename": "15m-5pw-population-GOOG.gz",
-          "genome_filename": "15m-5pw-genome-GOOG.gz",
-          "training_filename": "15m-data-GOOG.gz"
+          "symbol": "AMZN",
+          "cash_at_risk": 0.15,
+          "population_filename": "1m-1pw-population-AMZN.gz",
+          "genome_filename": "1m-1pw-genome-AMZN.gz",
+          "training_filename": "1m-data-AMZN.gz",
+          "trading": false
         },
         {
-          "symbol": "TSM",
+          "symbol": "AAPL",
           "cash_at_risk": 0.25,
-          "population_filename": "15m-5pw-population-TSM.gz",
-          "genome_filename": "15m-5pw-genome-TSM.gz",
-          "training_filename": "15m-data-TSM.gz"
+          "population_filename": "1m-1pw-population-AAPL.gz",
+          "genome_filename": "1m-1pw-genome-AAPL.gz",
+          "training_filename": "1m-data-AAPL.gz",
+          "trading": false
         },
         {
-          "symbol": "SPCE",
+          "symbol": "INTC",
           "cash_at_risk": 0.25,
-          "population_filename": "15m-5pw-population-SPCE.gz",
-          "genome_filename": "15m-5pw-genome-SPCE.gz",
-          "training_filename": "15m-data-SPCE.gz"
+          "population_filename": "1m-1pw-population-INTC.gz",
+          "genome_filename": "1m-1pw-genome-INTC.gz",
+          "training_filename": "1m-data-INTC.gz",
+          "trading": false
+        },
+        {
+          "symbol": "SOUN",
+          "cash_at_risk": 0.25,
+          "population_filename": "1m-1pw-population-SOUN.gz",
+          "genome_filename": "1m-1pw-genome-SOUN.gz",
+          "training_filename": "1m-data-SOUN.gz",
+          "trading": false
+        },
+        {
+          "symbol": "DIS",
+          "cash_at_risk": 0.25,
+          "population_filename": "1m-1pw-population-DIS.gz",
+          "genome_filename": "1m-1pw-genome-DIS.gz",
+          "training_filename": "1m-data-DIS.gz",
+          "trading": false
+        },
+        {
+          "symbol": "QCOM",
+          "cash_at_risk": 0.25,
+          "population_filename": "1m-1pw-population-QCOM.gz",
+          "genome_filename": "1m-1pw-genome-QCOM.gz",
+          "training_filename": "1m-data-QCOM.gz",
+          "trading": false
+        },
+        {
+          "symbol": "CVNA",
+          "cash_at_risk": 0.25,
+          "population_filename": "1m-1pw-population-CVNA.gz",
+          "genome_filename": "1m-1pw-genome-CVNA.gz",
+          "training_filename": "1m-data-CVNA.gz",
+          "trading": false
         }
       ]
     }
   ],
-  "config_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/config-recurrent.txt",
-  "save_path": "C:/Users/vpr16/PythonProjects/StockTraderNEAT/Saves",
+  "config_path": "C:\\Users\\vpr16\\PythonProjects\\StockTraderNEAT\\config_recurrent.txt",
+  "save_path": "C:\\Users\\vpr16\\PythonProjects\\StockTraderNEAT\\Saves",
   "training_reset": 3,
   "gen_stagger": 8,
   "processes": 12,
   "print_stats": true,
   "log_training": false,
-  "visualize": false
+  "visualize": true
 }

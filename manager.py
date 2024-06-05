@@ -1,3 +1,4 @@
+import json
 import agent
 import time
 import datetime as dt
@@ -11,6 +12,7 @@ import alpaca_trade_api as alpaca
 import alpaca_trade_api.entity
 from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit
 import urllib3
+import subprocess
 
 
 class Manager(object):
@@ -19,8 +21,20 @@ class Manager(object):
         self.settings = settings
         self.finbert = finbert
         self.sessions = {}
-        self.log_path = self.settings["save_path"] + "/Logs"
+        self.log_path = self.settings["save_path"] + "\\Logs"
         saving.SaveSystem.make_dir(self.log_path)
+
+    @staticmethod
+    def check_internet_connection():
+        tries = 0
+        while True:
+            try:
+                subprocess.check_output(["ping", "-c", "1", "8.8.8.8"])
+                break
+            except subprocess.CalledProcessError:
+                print(f"No internet connection. ({tries})")
+                time.sleep(5)
+                tries += 1
 
     @staticmethod
     def get_bars(symbol, alpaca_api, interval, start, end):
@@ -37,10 +51,25 @@ class Manager(object):
                     adjustment="all").df.tz_convert("US/Eastern")
                 bars_df = bars_df.between_time("9:30", "16:00")
                 return bars_df.reset_index().to_dict("records")
-            except ConnectionError as e:
+            except (ConnectionError, urllib3.exceptions.ProtocolError) as e:
+                Manager.check_internet_connection()
                 print(f"Error getting bars: '{e}'. Retrying in 5 seconds... ({tries})")
                 tries += 1
                 time.sleep(5)
+
+    @staticmethod
+    def get_settings_and_alpaca(profile_index):
+        # Settings
+        local_dir = os.path.dirname(__file__)
+        settings_path = os.path.join(local_dir, "settings.json")
+        with open(settings_path) as file:
+            settings = json.load(file)
+
+        # Alpaca API
+        first_profile = settings["profiles"][profile_index]
+        alpaca_api = alpaca.REST(first_profile["public_key"], first_profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
+
+        return settings, alpaca_api
 
 
 class Trainer(Manager):
@@ -48,7 +77,7 @@ class Trainer(Manager):
         super().__init__(settings, finbert)
         self.cycles = 0
 
-        self.training_path = self.settings["save_path"] + "/TrainingData"
+        self.training_path = self.settings["save_path"] + "\\TrainingData"
         if not os.path.exists(self.training_path):
             os.mkdir(self.training_path)
 
@@ -58,33 +87,46 @@ class Trainer(Manager):
 
         for profile in settings["profiles"]:
             alpaca_api = alpaca.REST(profile["public_key"], profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
-
-            if len(settings["profiles"]) == 1 and len(profile["stocks"]) == 1 and profile["gen_stagger"] != 0:
-                print(f"{profile['name']}: Only training 1 agent. Setting gen_stagger to 0.")
-                profile["gen_stagger"] = 0
-                self.one_agent = True
-
-            self.sessions[profile["name"]] = {
-                "alpaca_api": alpaca_api,
-                "agents": {},
-                "logs": {},
-                "stocks": profile["stocks"],
-                "backtest_days": profile["backtest_days"],
-                "interval": profile["interval"],
-                "profit_window": profile["profit_window"]
-            }
-
-            for stock in profile["stocks"]:
-                if stock["symbol"] not in self.symbols:
-                    self.symbols.append(stock["symbol"])
-
-            if self.largest_backtest < profile["backtest_days"]:
-                self.largest_backtest = profile["backtest_days"]
+            
+            self.update_session_profile(profile, alpaca_api)
 
         self.create_agents()
+    
+    def update_session_profile(self, profile, alpaca_api):
+        print("Updated profile")
+        if len(self.settings["profiles"]) == 1 and len(profile["stocks"]) == 1 and profile["gen_stagger"] != 0:
+            print(f"{profile['name']}: Only training 1 agent. Setting gen_stagger to 0.")
+            profile["gen_stagger"] = 0
+            self.one_agent = True
 
-    def generate_data(self, symbol, session, earliest_date, start_date, end_date, file_path):
-        if len(self.finbert.saved_news) == 0:
+        previous_agents = self.sessions[profile["name"]]["agents"]
+        previous_logs = self.sessions[profile["name"]]["logs"]
+
+        self.sessions[profile["name"]] = {
+            "alpaca_api": alpaca_api,
+            "agents": previous_agents,
+            "logs": previous_logs,
+            "stocks": profile["stocks"],
+            "backtest_days": profile["backtest_days"],
+            "interval": profile["interval"],
+            "profit_window": profile["profit_window"],
+            "fitness_multipliers": profile["fitness_multipliers"]
+        }
+
+        update_agents = False
+        for stock in profile["stocks"]:
+            if stock["symbol"] not in self.symbols:
+                self.symbols.append(stock["symbol"])
+                update_agents = True
+
+        if update_agents:
+            self.create_agents(False, True)
+
+        if self.largest_backtest < profile["backtest_days"]:
+            self.largest_backtest = profile["backtest_days"]
+    
+    def generate_data(self, symbol, session, earliest_date, start_date, end_date, file_path, save_news):
+        if save_news or len(self.finbert.saved_news) == 0:
             self.finbert.save_news(self.symbols, earliest_date, end_date)
 
         bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], start_date, end_date)
@@ -102,15 +144,15 @@ class Trainer(Manager):
         print(f" {symbol}: Saved backtest range and {len(sentiments)} sentiments to {file_path}")
         return bars, sentiments
 
-    def create_agents(self, regenerate=False):
+    def create_agents(self, regenerate=False, save_news=False):
         print("Trainer: Creating agents")
         now_date = dt.datetime.now(dt.timezone.utc)
         earliest_date = now_date - dt.timedelta(days=self.largest_backtest)
         end_date = now_date - dt.timedelta(minutes=16)  # Cant get recent 15 minute data with free alpaca acc
 
-        for session_key in self.sessions:
-            print(session_key)
-            session = self.sessions[session_key]
+        for profile_name in self.sessions:
+            print(profile_name)
+            session = self.sessions[profile_name]
             start_date = now_date - dt.timedelta(days=session["backtest_days"])
 
             session["agents"].clear()
@@ -126,11 +168,11 @@ class Trainer(Manager):
                     bars = self.get_bars(stock["symbol"], session["alpaca_api"], session["interval"], backtest_start, backtest_end)
                     if len(bars) != len(sentiments):
                         print(f" {stock['symbol']}: Loaded {len(bars)} bars but have {len(sentiments)} sentiments. Regenerating training data")
-                        bars, sentiments = self.generate_data(stock["symbol"], session, earliest_date, start_date, end_date, training_file_path)
+                        bars, sentiments = self.generate_data(stock["symbol"], session, earliest_date, start_date, end_date, training_file_path, save_news)
                     else:
                         print(f" {stock['symbol']}: Loaded {len(bars)} bars and sentiments from {bars[0]['timestamp']} to {bars[-1]['timestamp']}")
                 else:
-                    bars, sentiments = self.generate_data(stock["symbol"], session, earliest_date, start_date, end_date, training_file_path)
+                    bars, sentiments = self.generate_data(stock["symbol"], session, earliest_date, start_date, end_date, training_file_path, save_news)
 
                 session["agents"][stock["symbol"]] = agent.Training(self.settings, session, stock, bars, sentiments)
 
@@ -148,10 +190,17 @@ class Trainer(Manager):
             first_session["agents"][next(iter(first_session["agents"]))].run()
         else:
             while self.running:
-                for session_key in self.sessions:
-                    session = self.sessions[session_key]
+                for profile_name in self.sessions:
+                    session = self.sessions[profile_name]
                     for symbol in session["agents"]:
+                        self.settings, session["alpaca_api"] = self.get_settings_and_alpaca(0)
+                        for profile in self.settings["profiles"]:
+                            if profile["name"] == profile_name:
+                                self.update_session_profile(self.settings["profiles"][profile_name], session["alpaca_api"])
+                                break
+
                         current_agent = session["agents"][symbol]
+                        current_agent.settings = self.settings
                         current_agent.run()
                         while current_agent.running:
                             time.sleep(1)
@@ -164,8 +213,8 @@ class Trainer(Manager):
         print("Stopping training...")
         self.running = False
         self.cycles += 1
-        for session_key in self.sessions:
-            session = self.sessions[session_key]
+        for profile_name in self.sessions:
+            session = self.sessions[profile_name]
             for symbol in session["agents"]:
                 session["agents"][symbol].running = False
 
@@ -195,21 +244,23 @@ class Trader(Manager):
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
             symbols = []
             for stock in self.profile["stocks"]:
-                symbols.append(stock["symbol"])
+                if stock["trading"]:
+                    symbols.append(stock["symbol"])
             self.finbert.save_news(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
 
         for stock in self.profile["stocks"]:
-            self.logs[stock["symbol"]] = []
-            self.agents[stock["symbol"]] = agent.Trading(self.settings, stock, self.finbert, self, self.scraper)
-            if stock["genome_filename"] is None:
-                print(f" No genome filename provided for {stock['symbol']}")
-                exit(0)
-            else:
-                try:
-                    best_genome = saving.SaveSystem.load_data(os.path.join(self.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
-                    self.agents[stock["symbol"]].update_net(best_genome)
-                except FileNotFoundError:
-                    print(f" No genome file found for {stock['genome_filename']}")
+            if stock["trading"]:
+                self.logs[stock["symbol"]] = []
+                self.agents[stock["symbol"]] = agent.Trading(self.settings, stock, self.finbert, self, self.scraper)
+                if stock["genome_filename"] is None:
+                    print(f" No genome filename provided for {stock['symbol']}")
+                    exit(0)
+                else:
+                    try:
+                        best_genome = saving.SaveSystem.load_data(os.path.join(self.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
+                        self.agents[stock["symbol"]].update_net(best_genome)
+                    except FileNotFoundError:
+                        print(f" No genome file found for {stock['genome_filename']}")
         print(f" Created {', '.join(self.agents.keys())} trading agents\n")
 
     def get_market_status(self):
@@ -221,6 +272,7 @@ class Trader(Manager):
                     self.clock[1] = time.time()
                     return self.clock[0].is_open
                 except (ConnectionError, urllib3.exceptions.ProtocolError) as e:
+                    self.check_internet_connection()
                     print(f"Error getting clock: '{e}'. Retrying in 5 seconds... ({tries})")
                     time.sleep(5)
                     tries += 1
@@ -335,9 +387,9 @@ class PaperTrader(Manager):
 
     def create_agents(self):
         print("Trader: Creating agents")
-        for session_key in self.sessions:
-            print(session_key)
-            session = self.sessions[session_key]
+        for profile_name in self.sessions:
+            print(profile_name)
+            session = self.sessions[profile_name]
             session["agents"].clear()
 
             if self.get_market_status(session):
@@ -371,6 +423,7 @@ class PaperTrader(Manager):
                     session["clock"][1] = time.time()
                     return session["clock"][0].is_open
                 except (ConnectionError, urllib3.exceptions.ProtocolError) as e:
+                    Manager.check_internet_connection()
                     print(f"Error getting clock: '{e}'. Retrying in 5 seconds... ({tries})")
                     time.sleep(5)
                     tries += 1
@@ -385,7 +438,8 @@ class PaperTrader(Manager):
                     session["positions"][0] = session["alpaca_api"].list_positions()
                     session["positions"][1] = time.time()
                     return session["positions"][0]
-                except ConnectionError as e:
+                except (ConnectionError, urllib3.exceptions.ProtocolError) as e:
+                    Manager.check_internet_connection()
                     print(f"Error listing positions: '{e}'. Retrying in 5 seconds... ({tries})")
         return session["positions"][0]
 
@@ -414,16 +468,17 @@ class PaperTrader(Manager):
                     session["alpaca_api_account"][0] = session["alpaca_api"].get_account()
                     session["alpaca_api_account"][1] = time.time()
                     return session["alpaca_api_account"][0]
-                except ConnectionError as e:
+                except (ConnectionError, urllib3.exceptions.ProtocolError) as e:
+                    Manager.check_internet_connection()
                     print(f"Error getting account: '{e}'. Retrying in 5 seconds... ({tries})")
         return session["alpaca_api_account"][0]
 
     def start(self):
         self.running = True
         self.consecutive_days = 0
-        for session_key in self.sessions:
-            print(session_key)
-            session = self.sessions[session_key]
+        for profile_name in self.sessions:
+            print(profile_name)
+            session = self.sessions[profile_name]
             starting_liquid = (float(input(" Enter starting liquid cash: ")), int(input(" Enter pending days: ")))
             #starting_liquid = (0, 0)
             account = self.get_api_account(session)
@@ -441,18 +496,18 @@ class PaperTrader(Manager):
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-            first_session_key = next(iter(self.sessions))
-            if self.get_market_status(self.sessions[first_session_key]):
+            first_profile_name = next(iter(self.sessions))
+            if self.get_market_status(self.sessions[first_profile_name]):
                 if self.trainer.running:
                     self.trainer.stop()
                     self.training_thread.join()
 
-                    for session_key in self.sessions:
-                        session = self.sessions[session_key]
+                    for profile_name in self.sessions:
+                        session = self.sessions[profile_name]
                         self.finbert.save_news(list(session["agents"].keys()), now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
 
                         for symbol in session["agents"]:
-                            trainer_agent = self.trainer.sessions[session_key]["agents"][symbol]
+                            trainer_agent = self.trainer.sessions[profile_name]["agents"][symbol]
                             if trainer_agent.best_genome is not None:
                                 session["agents"][symbol].update_net(trainer_agent.best_genome)
 
@@ -464,28 +519,28 @@ class PaperTrader(Manager):
                             session["liquid_cash"] -= sale[0]
                             session["pending_sales"].pop(j)
 
-                next_close = self.sessions[first_session_key]["clock"][0].next_close
+                next_close = self.sessions[first_profile_name]["clock"][0].next_close
                 wait_time = (next_close - now_date).total_seconds()
                 print(f"Market closes in {wait_time / 3600} hours")
                 time.sleep(wait_time + 5)
                 self.consecutive_days += 1
             else:
-                for session_key in self.sessions:
-                    session = self.sessions[session_key]
+                for profile_name in self.sessions:
+                    session = self.sessions[profile_name]
                     api_account = self.get_api_account(session)
                     open_positions = self.get_positions(session)
                     bought_shares = {}
                     for position in open_positions:
                         bought_shares[position.symbol] = float(position.qty)
                     balance_change = float(api_account.equity) - float(api_account.last_equity)
-                    print(f"\n{session_key} Details:" +
+                    print(f"\n{profile_name} Details:" +
                           f"\n Daily Bal Change: {balance_change}" +
                           f"\n Solid Cash: {session['solid_cash']}" +
                           f"\n Liquid Cash: {session['liquid_cash']}" +
                           f"\n Equity: {api_account.equity}" +
                           f"\n Bought Shares: {bought_shares}")
 
-                    logs_path = os.path.join(self.log_path, f"{session_key}.gz")
+                    logs_path = os.path.join(self.log_path, f"{profile_name}.gz")
                     if os.path.exists(logs_path):
                         previous_logs = saving.SaveSystem.load_data(logs_path)
                     else:
@@ -498,8 +553,8 @@ class PaperTrader(Manager):
                                 previous_logs[symbol] = session["logs"]["symbol"]
                             threading.Thread(target=plot.plot_log, args=(session["alpaca_api"], symbol, session["logs"][symbol], session["interval"])).start()
                             session["logs"][symbol].clear()
-                    saving.SaveSystem.save_data(previous_logs, os.path.join(self.log_path, f"{session_key} (Paper).gz"))
-                next_open = self.sessions[first_session_key]["clock"][0].next_open
+                    saving.SaveSystem.save_data(previous_logs, os.path.join(self.log_path, f"{profile_name} (Paper).gz"))
+                next_open = self.sessions[first_profile_name]["clock"][0].next_open
                 wait_time = (next_open - now_date).total_seconds()
                 print(f"\nMarket opens in {wait_time / 3600} hours\n-----")
                 if not self.trainer.running:

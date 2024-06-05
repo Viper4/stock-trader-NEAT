@@ -9,6 +9,7 @@ from selenium.webdriver.edge.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+
 class Schwab:
     def __init__(self):
         self.credentials = encryption.load_saved_data()
@@ -16,10 +17,17 @@ class Schwab:
         self.account_hash = None
         self.account = [None, 0]
         self.tokens = None
+        self.authorizing = False
 
         self.authorize()
 
     def authorize(self):
+        if self.authorizing:
+            while self.authorizing:
+                time.sleep(1)
+            return
+        print("Authorizing Charles Schwab client...")
+        self.authorizing = True
         options = Options()
         options.add_experimental_option("detach", True)
         options.add_argument("--no-sandbox")
@@ -36,6 +44,7 @@ class Schwab:
         auth_url = f"https://api.schwabapi.com/v1/oauth/authorize?client_id={self.credentials['public_key']}&redirect_uri=https://127.0.0.1"
         driver.get(auth_url)
 
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "loginIdInput")))
         login_input = driver.find_element(By.ID, "loginIdInput")
         login_input.send_keys(self.credentials["username"])
 
@@ -80,24 +89,33 @@ class Schwab:
         for item in response.json():
             if item["accountNumber"][-3:] == self.credentials["account_number"]:
                 self.account_hash = item["hashValue"]
-        driver.close()
+        try:
+            driver.close()
+        except Exception as e:
+            print(f"Failed to close driver: {e}")
+        self.authorizing = False
 
     def get_account(self):
         if self.account[0] is None or time.time() - self.account[1] > 1:
             tries = 1
             while True:
-                response = requests.get(url=f"{self.base_url}/accounts/{self.account_hash}?fields=positions",
-                                        headers={"Authorization": f"Bearer {self.tokens['access_token']}"})
-                if response.status_code == 200:
-                    self.account[0] = response.json()["securitiesAccount"]
-                    self.account[1] = time.time()
-                    return self.account[0]
-                elif response.status_code == 401:
-                    print("Schwab client not authorized. Re authorizing...")
-                    self.authorize()
-                    tries += 1
-                else:
-                    print(f"Error getting account: '{response.status_code}: {response.content}'. Retrying in 5 seconds... ({tries})")
+                try:
+                    response = requests.get(url=f"{self.base_url}/accounts/{self.account_hash}?fields=positions",
+                                            headers={"Authorization": f"Bearer {self.tokens['access_token']}"})
+
+                    if response.status_code == 200:
+                        self.account[0] = response.json()["securitiesAccount"]
+                        self.account[1] = time.time()
+                        return self.account[0]
+                    elif response.status_code == 401:
+                        self.authorize()
+                        tries += 1
+                    else:
+                        print(f"Error getting account: '{response.status_code}: {response.content}'. Retrying in 5 seconds... ({tries})")
+                        time.sleep(5)
+                        tries += 1
+                except ConnectionError as e:
+                    print(f"Error getting account: '{e}'. Retrying in 5 seconds... ({tries})")
                     time.sleep(5)
                     tries += 1
         return self.account[0]
@@ -149,7 +167,6 @@ class Schwab:
                 print(f"Order submitted to {side} {quantity} shares of {symbol}")
                 return
             elif response.status_code == 401:
-                print("Schwab client not authorized. Re authorizing...")
                 self.authorize()
                 tries += 1
             else:

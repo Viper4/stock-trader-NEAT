@@ -2,10 +2,9 @@ import plotly.graph_objects as go
 from alpaca_trade_api.rest import TimeFrame, TimeFrameUnit
 import time
 import datetime as dt
-import pytz
 import saving
 import os
-import main
+import manager
 
 
 def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
@@ -13,14 +12,15 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
     log_end = log[-1]["datetime"]
 
     if log_start.date() == log_end.date():
-        start_time = dt.datetime(log_start.year, log_start.month, log_start.day, 9, 30, tzinfo=pytz.timezone("US/Eastern"))
-        end_time = dt.datetime(log_end.year, log_end.month, log_end.day, 16, 0, tzinfo=pytz.timezone("US/Eastern"))
+        start_time = dt.datetime(log_start.year, log_start.month, log_start.day, 9, 30, tzinfo=log_start.tzinfo)
+        end_time = dt.datetime(log_end.year, log_end.month, log_end.day, 16, 0, tzinfo=log_end.tzinfo)
     else:
         start_time = log_start
         end_time = log_end
 
     shares = 0
     profit = 0
+    cost = 0
     annotations = []
     for i in range(len(log)):
         action = log[i]
@@ -31,8 +31,10 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
             profit += action["profit"]
             text += f"<br>P/L: {round(action['profit'], 2)}"
             color = "red"
+            cost -= (action["price"] * action["quantity"] - action["profit"])
         elif action["side"] == "Buy":
             shares += action["quantity"]
+            cost += action["price"] * action["quantity"]
 
         annotations.append(dict(x=action["datetime"].isoformat(),
                                 y=action["price"],
@@ -44,12 +46,17 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
                                 arrowcolor=color,
                                 arrowsize=2,
                                 ))
+
+    if shares < 0:
+        print("Logged shares are less than 0. Some data may be missing")
+        shares = 0
+        cost = 0
+
     # Alpaca doesn't allow getting recent 15 minute data so wait if needed
-    now_date = dt.datetime.now(tz=pytz.timezone("US/Eastern"))
+    now_date = dt.datetime.now(tz=log_start.tzinfo)
     time_since = (now_date - end_time).total_seconds() / 60
     if time_since < 16:
         wait_time = 16 - time_since
-        # start_time and end_time are -05:51 timezone but now_time is -05:00
         print(f"{symbol}: Waiting {wait_time} minutes before logging")
         time.sleep(wait_time * 60)
     bars_df = alpaca_api.get_bars(
@@ -64,7 +71,8 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
 
     if print_profit:
         last_bar = bars_df.iloc[-1]
-        print(f"Total {symbol} profit: ${profit + (shares * last_bar['close'])}")
+        print(f"{symbol} realized profit: ${profit}")
+        print(f"{symbol} unrealized profit: ${round(shares * last_bar['close'] - cost, 2)}")
 
     candlestick_fig = go.Figure(data=[go.Candlestick(x=bars_df.index,
                                                      open=bars_df["open"],
@@ -80,10 +88,13 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
 
 
 if __name__ == "__main__":
-    settings, alpaca_api = main.get_settings_and_alpaca(0)
+    settings, alpaca_api = manager.Manager.get_settings_and_alpaca(0)
     log_path = f"{settings['save_path']}\\Logs"
     filename = input("Enter file name: ")
     logs = saving.SaveSystem.load_data(os.path.join(log_path, f"{filename}.gz"))
     for symbol in logs:
-        if input(f"Plot {symbol}? (y/n): ") == "y":
-            plot_log(alpaca_api, symbol, logs[symbol], int(input("Enter interval: ")), True)
+        if len(logs[symbol]) > 0:
+            if input(f"Plot {symbol}? (y/n): ") == "y":
+                plot_log(alpaca_api, symbol, logs[symbol], int(input("Enter interval: ")), True)
+        else:
+            print(f" {symbol} log is empty. Skipping")

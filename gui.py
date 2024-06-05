@@ -8,8 +8,8 @@ class JsonEditorApp:
         self.root = root
         self.root.title("JSON Editor")
 
-        self.json_data = {"accounts": []}
-        self.selected_account_index = 0
+        self.json_data = {"profiles": []}
+        self.selected_profile_index = 0
         self.selected_stock_index = 0
 
         # Load JSON Button
@@ -31,10 +31,10 @@ class JsonEditorApp:
         self.top_level_frame.pack(side=tk.LEFT, padx=10, pady=10)
         self.create_top_level_settings()
 
-        # Account Settings Frame
-        self.account_frame = tk.Frame(root)
-        self.account_frame.pack(side=tk.LEFT, padx=10, pady=10)
-        self.create_account_settings()
+        # profile Settings Frame
+        self.profile_frame = tk.Frame(root)
+        self.profile_frame.pack(side=tk.LEFT, padx=10, pady=10)
+        self.create_profile_settings()
 
         # Stock Settings Frame
         self.stock_frame = tk.Frame(root)
@@ -51,24 +51,26 @@ class JsonEditorApp:
         self.create_checkbox(self.top_level_frame, "Log Training", 6, "log_training")
         self.create_checkbox(self.top_level_frame, "Visualize", 7, "visualize")
 
-    def create_account_settings(self):
-        # Account Selection Dropdown
-        self.account_names = tk.StringVar(root)
-        self.account_dropdown = tk.OptionMenu(self.account_frame, self.account_names, "")
-        self.account_dropdown.grid(row=0, columnspan=2, pady=10)
+    def create_profile_settings(self):
+        # profile Selection Dropdown
+        self.profile_names = tk.StringVar(root)
+        self.profile_dropdown = tk.OptionMenu(self.profile_frame, self.profile_names, "")
+        self.profile_dropdown.grid(row=0, columnspan=2, pady=10)
 
-        self.create_label_entry(self.account_frame, "Account Name:", 1, 40, "name")
-        self.create_label_entry(self.account_frame, "Public Key:", 2, 40, "public_key")
-        self.create_label_entry(self.account_frame, "Secret Key:", 3, 40, "secret_key")
-        self.create_checkbox(self.account_frame, "Paper", 4, "paper")
-        self.create_label_entry(self.account_frame, "Backtest Days:", 5, 10, "backtest_days")
-        self.create_label_entry(self.account_frame, "Profit Window:", 6, 10, "profit_window")
-        self.create_label_entry(self.account_frame, "Interval:", 7, 10, "interval")
-        self.create_label_entry(self.account_frame, "Cash Limit:", 8, 10, "cash_limit")
+        self.create_label_entry(self.profile_frame, "Profile Name:", 1, 40, "name")
+        self.create_label_entry(self.profile_frame, "Public Key:", 2, 40, "public_key")
+        self.create_label_entry(self.profile_frame, "Secret Key:", 3, 40, "secret_key")
+        self.create_label_entry(self.profile_frame, "Backtest Days:", 4, 10, "backtest_days")
+        self.create_label_entry(self.profile_frame, "Profit Window:", 5, 10, "profit_window")
+        self.create_label_entry(self.profile_frame, "Interval:", 6, 10, "interval")
+        self.create_label_entry(self.profile_frame, "Cash Limit:", 7, 10, "cash_limit")
+        self.create_label_entry(self.profile_frame, "Fitness Average Multiplier:", 8, 10, "fitness_average")
+        self.create_label_entry(self.profile_frame, "Fitness Total Multiplier:", 9, 10, "fitness_total")
+        self.create_label_entry(self.profile_frame, "Fitness Risk Multiplier:", 10, 10, "fitness_risk")
 
-        # Center the Add Account button
-        self.add_account_button = tk.Button(self.account_frame, text="Add Account", command=self.add_account)
-        self.add_account_button.grid(row=9, columnspan=2, pady=10)
+        # Center the Add profile button
+        self.add_profile_button = tk.Button(self.profile_frame, text="Add Profile", command=self.add_profile)
+        self.add_profile_button.grid(row=11, columnspan=2, pady=10)
 
     def create_stock_settings(self):
         # Stock listbox
@@ -83,13 +85,14 @@ class JsonEditorApp:
         self.create_label_entry(self.stock_frame, "Population Filename:", 5, 40, "population_filename")
         self.create_label_entry(self.stock_frame, "Genome Filename:", 6, 40, "genome_filename")
         self.create_label_entry(self.stock_frame, "Training Filename:", 7, 40, "training_filename")
+        self.create_checkbox(self.stock_frame, "Trading", 8, "trading")
 
         # Buttons
         self.add_stock_button = tk.Button(self.stock_frame, text="Add Stock", command=self.add_stock)
-        self.add_stock_button.grid(row=8, columnspan=2, pady=10)
+        self.add_stock_button.grid(row=9, columnspan=2, pady=10)
 
         self.delete_stock_button = tk.Button(self.stock_frame, text="Delete Stock", command=self.delete_stock)
-        self.delete_stock_button.grid(row=9, columnspan=2, pady=10)
+        self.delete_stock_button.grid(row=10, columnspan=2, pady=10)
 
     def create_label_entry(self, frame, label_text, row, width, setting_key):
         label = tk.Label(frame, text=label_text)
@@ -125,36 +128,36 @@ class JsonEditorApp:
             if checkbox:
                 checkbox.set(self.json_data.get(setting_key, False))
 
-    def update_account_dropdown(self):
-        accounts = self.json_data.get("accounts", [])
-        account_names = [account["name"] for account in accounts]
+    def update_profile_dropdown(self):
+        profiles = self.json_data.get("profiles", [])
+        profile_names = [profile["name"] for profile in profiles]
 
-        self.account_names.set("")  # Clear the default value
-        self.account_dropdown['menu'].delete(0, 'end')
-        for name in account_names:
-            self.account_dropdown['menu'].add_command(label=name,
-                                                      command=tk._setit(self.account_names, name, self.select_account))
+        self.profile_names.set("")  # Clear the default value
+        self.profile_dropdown["menu"].delete(0, "end")
+        for name in profile_names:
+            self.profile_dropdown['menu'].add_command(label=name,
+                                                      command=tk._setit(self.profile_names, name, self.select_profile))
 
-        if account_names:
-            self.account_names.set(account_names[self.selected_account_index])
+        if profile_names:
+            self.profile_names.set(profile_names[self.selected_profile_index])
 
     def update_stocks_listbox(self):
         self.stocks_listbox.delete(0, tk.END)
-        accounts = self.json_data.get("accounts", [])
-        stocks = accounts[self.selected_account_index].get("stocks", [])
+        profiles = self.json_data.get("profiles", [])
+        stocks = profiles[self.selected_profile_index].get("stocks", [])
 
         for i, stock in enumerate(stocks):
             self.stocks_listbox.insert(tk.END, f"Stock {i + 1}: {stock['symbol']}")
 
-    def select_account(self, account_name):
-        accounts = self.json_data.get("accounts", [])
-        account_index = next((i for i, account in enumerate(accounts) if account["name"] == account_name), None)
+    def select_profile(self, profile_name):
+        profiles = self.json_data.get("profiles", [])
+        profile_index = next((i for i, profile in enumerate(profiles) if profile["name"] == profile_name), None)
 
-        if account_index is not None:
-            self.selected_account_index = account_index
-            self.update_account_inputs()
+        if profile_index is not None:
+            self.selected_profile_index = profile_index
+            self.update_profile_inputs()
             self.update_stocks_listbox()
-            self.update_account_dropdown()
+            self.update_profile_dropdown()
 
     def on_stock_select(self, event):
         selected_index = self.stocks_listbox.curselection()
@@ -177,30 +180,32 @@ class JsonEditorApp:
                     entry.delete(0, tk.END)
                     entry.insert(0, stock.get(setting_key, ""))
 
-    def update_account_inputs(self):
-        accounts = self.json_data["accounts"]
-        account = accounts[self.selected_account_index]
+            checkbox = getattr(self, "trading_var", None)
+            if checkbox:
+                checkbox.set(stock.get("trading", False))
 
-        account_settings = [
+    def update_profile_inputs(self):
+        profiles = self.json_data["profiles"]
+        profile = profiles[self.selected_profile_index]
+
+        profile_settings = [
             "name", "public_key", "secret_key",
             "backtest_days", "profit_window", "interval",
-            "cash_limit"
+            "cash_limit", "fitness"
         ]
 
-        for setting_key in account_settings:
-            entry = getattr(self, f"{setting_key}_entry", None)
-            if entry:
-                entry.delete(0, tk.END)
-                entry.insert(0, account.get(setting_key, ""))
-
-        account_checkboxes = [
-            "paper"
-        ]
-
-        for setting_key in account_checkboxes:
-            checkbox = getattr(self, f"{setting_key}_var", None)
-            if checkbox:
-                checkbox.set(account.get(setting_key, False))
+        for setting_key in profile_settings:
+            if setting_key == "fitness":
+                for multiplier in profile["fitness_multipliers"]:
+                    entry = getattr(self, f"fitness_{multiplier}_entry", None)
+                    if entry:
+                        entry.delete(0, tk.END)
+                        entry.insert(0, profile["fitness_multipliers"][multiplier])
+            else:
+                entry = getattr(self, f"{setting_key}_entry", None)
+                if entry:
+                    entry.delete(0, tk.END)
+                    entry.insert(0, profile.get(setting_key, ""))
 
     def get_attribute(self, name, operation):
         attribute = getattr(self, name, None).get()
@@ -230,9 +235,10 @@ class JsonEditorApp:
             "population_filename": self.get_attribute("population_filename_entry", "str"),
             "genome_filename": self.get_attribute("genome_filename_entry", "str"),
             "training_filename": self.get_attribute("training_filename_entry", "str"),
+            "trading": self.get_attribute("trading_var", "bool"),
         }
-        accounts = self.json_data.setdefault("accounts", [])
-        accounts[self.selected_account_index]["stocks"].append(stock)
+        profiles = self.json_data.setdefault("profiles", [])
+        profiles[self.selected_profile_index]["stocks"].append(stock)
 
         self.update_stocks_listbox()
 
@@ -240,46 +246,51 @@ class JsonEditorApp:
         stocks = self.get_selected_stocks()
         if stocks:
             del_index = self.selected_stock_index
-            accounts = self.json_data.get("accounts", [])
-            accounts[self.selected_account_index]["stocks"].pop(del_index)
+            profiles = self.json_data.get("profiles", [])
+            profiles[self.selected_profile_index]["stocks"].pop(del_index)
 
             self.update_stocks_listbox()
 
     def get_selected_stocks(self):
-        accounts = self.json_data.get("accounts", [])
-        stocks = accounts[self.selected_account_index].get("stocks", [])
+        profiles = self.json_data.get("profiles", [])
+        stocks = profiles[self.selected_profile_index].get("stocks", [])
 
         return stocks
 
-    def add_account(self):
-        accounts = self.json_data.setdefault("accounts", [])
-        accounts.append({
+    def add_profile(self):
+        profiles = self.json_data.setdefault("profiles", [])
+        profiles.append({
             "name": self.get_attribute("name_entry", "str"),
             "public_key": self.get_attribute("public_key_entry", "str"),
             "secret_key": self.get_attribute("secret_key_entry", "str"),
-            "paper": self.get_attribute("paper_var", "bool"),
             "backtest_days": self.get_attribute("backtest_days_entry", "int"),
             "profit_window": self.get_attribute("profit_window_entry", "int"),
             "interval": self.get_attribute("interval_entry", "int"),
             "cash_limit": self.get_attribute("cash_limit_entry", "float"),
+            "fitness_multipliers":
+                {
+                    "average": self.get_attribute("fitness_average_entry", "float"),
+                    "total": self.get_attribute("fitness_total_entry", "float"),
+                    "risk": self.get_attribute("fitness_risk_entry", "float"),
+                },
             "stocks": [],
         })
 
-        self.select_account(accounts[-1]["name"])
+        self.select_profile(profiles[-1]["name"])
         self.update_stocks_listbox()
-        self.update_account_inputs()
+        self.update_profile_inputs()
 
     def load_json(self):
         file_path = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
         if file_path:
             with open(file_path, 'r') as file:
                 self.json_data = json.load(file)
-            accounts = self.json_data.get("accounts", [])
-            if len(accounts) > 0:
-                self.select_account(accounts[0]["name"])
+            profiles = self.json_data.get("profiles", [])
+            if len(profiles) > 0:
+                self.select_profile(profiles[0]["name"])
             self.update_stocks_listbox()
             self.update_top_level_settings()
-            self.update_account_inputs()
+            self.update_profile_inputs()
 
     def save_json(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
@@ -298,17 +309,19 @@ class JsonEditorApp:
         self.json_data["log_training"] = self.get_attribute("log_training_var", "bool")
         self.json_data["visualize"] = self.get_attribute("visualize_var", "bool")
 
-        accounts = self.json_data.get("accounts", [])
-        account = accounts[self.selected_account_index]
+        profiles = self.json_data.get("profiles", [])
+        profile = profiles[self.selected_profile_index]
 
-        account["name"] = self.get_attribute("name_entry", "str")
-        account["public_key"] = self.get_attribute("public_key_entry", "str")
-        account["secret_key"] = self.get_attribute("secret_key_entry", "str")
-        account["paper"] = self.get_attribute("paper_var", "bool")
-        account["backtest_days"] = self.get_attribute("backtest_days_entry", "int")
-        account["profit_window"] = self.get_attribute("profit_window_entry", "int")
-        account["interval"] = self.get_attribute("interval_entry", "int")
-        account["cash_limit"] = self.get_attribute("cash_limit_entry", "float")
+        profile["name"] = self.get_attribute("name_entry", "str")
+        profile["public_key"] = self.get_attribute("public_key_entry", "str")
+        profile["secret_key"] = self.get_attribute("secret_key_entry", "str")
+        profile["backtest_days"] = self.get_attribute("backtest_days_entry", "int")
+        profile["profit_window"] = self.get_attribute("profit_window_entry", "int")
+        profile["interval"] = self.get_attribute("interval_entry", "int")
+        profile["cash_limit"] = self.get_attribute("cash_limit_entry", "float")
+        profile["fitness_multipliers"]["average"] = self.get_attribute("fitness_average_entry", "float")
+        profile["fitness_multipliers"]["total"] = self.get_attribute("fitness_total_entry", "float")
+        profile["fitness_multipliers"]["risk"] = self.get_attribute("fitness_risk_entry", "float")
 
         stocks = self.get_selected_stocks()
         if stocks:
@@ -318,15 +331,16 @@ class JsonEditorApp:
             stock["population_filename"] = self.get_attribute("population_filename_entry", "str")
             stock["genome_filename"] = self.get_attribute("genome_filename_entry", "str")
             stock["training_filename"] = self.get_attribute("training_filename_entry", "str")
+            stock["trading"] = self.get_attribute("trading_var", "bool")
 
         # Print the updated JSON data for testing purposes.
         print(json.dumps(self.json_data, indent=2))
         self.update_stocks_listbox()
         self.update_top_level_settings()
-        self.update_account_inputs()
+        self.update_profile_inputs()
 
     def reset_input_fields(self):
-        self.update_account_inputs()
+        self.update_profile_inputs()
         self.update_stocks_listbox()
         self.update_top_level_settings()
         self.update_stock_input_fields()

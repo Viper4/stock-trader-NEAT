@@ -8,6 +8,7 @@ import threading
 import saving
 import visualize
 import plot
+import numpy as np
 
 
 class Agent:
@@ -22,10 +23,10 @@ class Agent:
             if input("Proceed? (y/n): ") != "y":
                 exit(0)
 
-        self.population_path = self.settings["save_path"] + "/Populations"
+        self.population_path = self.settings["save_path"] + "\\Populations"
         saving.SaveSystem.make_dir(self.population_path)
 
-        self.genome_path = self.settings["save_path"] + "/Genomes"
+        self.genome_path = self.settings["save_path"] + "\\Genomes"
         saving.SaveSystem.make_dir(self.genome_path)
 
         self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
@@ -36,9 +37,17 @@ class Agent:
             return 0
         return (b - a) / a
 
+    @staticmethod
+    def max_drawdown(portfolio_values):
+        portfolio_values = np.array(portfolio_values)
+        running_max = np.maximum.accumulate(portfolio_values)
+        drawdowns = (running_max - portfolio_values) / running_max
+        max_drawdown = np.max(drawdowns)
+        return max_drawdown
+
 
 # Separate from classes so instances don't get cached to RAM and slow things down
-def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_training, profit_window):
+def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_training, profit_window, fitness_multipliers):
     net = neat.nn.RecurrentNetwork.create(genome, config)
     start_date = bars[0]["timestamp"].date()
     solid_cash = start_cash
@@ -50,6 +59,7 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
     cost = 0.0
     consecutive_days = 1
     log = []
+    portfolio_values = [start_equity]
 
     # Start at 1 to have previous bar for relative change
     num_bars = len(bars)
@@ -115,8 +125,12 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
             num_windows += 1
             start_equity = equity
             start_date = date
+            portfolio_values.append(equity)
 
-    return profit_sum / num_windows, log
+    avg_factor = (profit_sum / num_windows) * fitness_multipliers["average"]
+    total_factor = profit_sum * fitness_multipliers["total"]
+    risk_factor = Agent.max_drawdown(portfolio_values) * fitness_multipliers["risk"]
+    return avg_factor + total_factor - risk_factor, log
 
 
 class Training(Agent):
@@ -141,7 +155,8 @@ class Training(Agent):
         for genome_id, genome in genomes:
             jobs.append(pool.apply_async(eval_genome, (self.bars, self.sentiments, self.start_cash,
                                                        genome, self.config, self.stock["cash_at_risk"],
-                                                       self.settings["log_training"], self.session["profit_window"])))
+                                                       self.settings["log_training"], self.session["profit_window"],
+                                                       self.session["fitness_multipliers"])))
 
         best_log = None
         for job, (genome_id, genome) in zip(jobs, genomes):
@@ -151,7 +166,7 @@ class Training(Agent):
                 self.best_genome = genome
 
         if best_log is not None and self.settings["log_training"]:
-            plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], best_log, self.session["interval"])
+            plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], best_log, 15)
         pool.close()
         pool.join()
         pool.terminate()
@@ -214,7 +229,7 @@ class Trading(Agent):
                       sentiment
                       ]
             self.net.activate(inputs)
-        print(f" {self.trader.profile['name']} {self.stock['symbol']}: Updated network")
+        print(f"{self.trader.profile['name']} {self.stock['symbol']}: Updated network")
 
     def run(self):
         print(f"{self.trader.profile['name']} {self.stock['symbol']}: Starting trading")
@@ -270,9 +285,7 @@ class Trading(Agent):
                     used_cash = market_value + liquid_cash  # Cash in stocks + liquid cash
                     if self.trader.profile["cash_limit"] < 0 or used_cash < self.trader.profile["cash_limit"]:
                         quantity = self.trader.profile["cash_limit"] * qty_percent * self.stock["cash_at_risk"] / latest["close"]
-                        quantity = int(quantity)
-                        #price = quantity * latest["close"]
-                        #if price >= 1:
+                        quantity = round(quantity)
                         if quantity > 0:
                             self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity, side="BUY")
 
@@ -286,7 +299,7 @@ class Trading(Agent):
                     solid_cash = account["currentBalances"]["cashAvailableForTrading"]
                     liquid_cash = account["currentBalances"]["cashBalance"] - solid_cash
                     quantity = qty_percent * position_qty
-                    quantity = int(quantity)
+                    quantity = round(quantity)
                     price = quantity * latest["close"]
                     if price >= 1:
                         if position_qty - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty and assume sell all with small qty
@@ -397,7 +410,7 @@ class PaperTrading(Agent):
                     if outputs[0] > 0.5:  # Buy
                         quantity = self.session["solid_cash"] * qty_percent * self.stock["cash_at_risk"] / latest["close"]
                         if not asset.fractionable:
-                            quantity = int(quantity)
+                            quantity = round(quantity)
                         price = quantity * latest["close"]
                         if price >= 1:  # Alpaca doesn't allow trades under $1
                             self.session["solid_cash"] -= price
@@ -411,7 +424,7 @@ class PaperTrading(Agent):
                     elif outputs[0] < -0.5 and position_qty > 0:  # Sell
                         quantity = qty_percent * position_qty
                         if not asset.fractionable:
-                            quantity = int(quantity)
+                            quantity = round(quantity)
                         price = quantity * latest["close"]
                         if price >= 1:
                             if position_qty - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty and assume sell all with small qty
