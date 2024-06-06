@@ -136,5 +136,5 @@
   "processes": 12,
   "print_stats": true,
   "log_training": false,
-  "visualize": true
+  "visualize": false
 }

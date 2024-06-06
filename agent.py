@@ -199,11 +199,9 @@ class Training(Agent):
 
 
 class Trading(Agent):
-    def __init__(self, settings, stock, finbert, trader, scraper):
+    def __init__(self, settings, stock, trader):
         super().__init__(settings, None, stock)
-        self.finbert = finbert
         self.trader = trader
-        self.scraper = scraper
         self.net = None
 
     def update_net(self, genome):
@@ -216,7 +214,7 @@ class Trading(Agent):
             bar = bars[i]
             prev_bar = bars[i-1]
             backtest_date = bars[i]["timestamp"].to_pydatetime()
-            sentiment = self.finbert.get_saved_sentiment(self.stock["symbol"],
+            sentiment = self.trader.finbert.get_saved_sentiment(self.stock["symbol"],
                                                          backtest_date - dt.timedelta(days=2),
                                                          backtest_date)
             inputs = [0,  # plpc
@@ -242,7 +240,7 @@ class Trading(Agent):
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
             if self.trader.get_market_status():
-                candles, prev_close = self.scraper.get_latest_candles(self.stock["symbol"], interval=str(self.trader.profile["interval"]) + "m")
+                candles, prev_close = self.trader.scraper.get_latest_candles(self.stock["symbol"], interval=str(self.trader.profile["interval"]) + "m")
                 latest = candles[-1]
                 cum_price += latest["volume"] * ((latest["high"] + latest["low"] + latest["close"]) / 3)
                 cum_vol += latest["volume"]
@@ -259,7 +257,7 @@ class Trading(Agent):
                 position = self.trader.schwab_api.get_position(self.stock["symbol"])
                 position_qty = position["longQuantity"]
 
-                sentiment = self.finbert.get_api_sentiment(self.stock["symbol"], now_date - dt.timedelta(days=2), now_date)
+                sentiment = self.trader.finbert.get_api_sentiment(self.stock["symbol"], now_date - dt.timedelta(days=2), now_date)
                 inputs = [position["longOpenProfitLoss"],
                           self.rel_change(prev_data["open"], latest["open"]),
                           self.rel_change(prev_data["high"], latest["high"]),

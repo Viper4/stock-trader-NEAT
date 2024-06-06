@@ -1,6 +1,7 @@
 import base64
 import requests
 import time
+import random
 import encryption
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -8,16 +9,19 @@ from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import threading
 
 
 class Schwab:
     def __init__(self):
         self.credentials = encryption.load_saved_data()
         self.base_url = "https://api.schwabapi.com/trader/v1"
+        self.token_url = "https://api.schwabapi.com/v1/oauth/token"
         self.account_hash = None
         self.account = [None, 0]
         self.tokens = None
         self.authorizing = False
+        self.refresh_thread = None
 
         self.authorize()
 
@@ -26,9 +30,16 @@ class Schwab:
             while self.authorizing:
                 time.sleep(1)
             return
+
         print("Authorizing Charles Schwab client...")
         self.authorizing = True
+
+        if self.refresh_thread is not None:
+            self.refresh_thread.join()
+            self.refresh_thread = None
+
         options = Options()
+
         options.add_experimental_option("detach", True)
         options.add_argument("--no-sandbox")
         options.add_argument("--start-maximized")
@@ -37,11 +48,20 @@ class Schwab:
         options.add_experimental_option("useAutomationExtension", False)
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_argument("disable-infobars")
+
+        user_agents = []
+        with open(r"Saves\WebScraping\user_agents.txt", "r") as f:
+            for i, line in enumerate(f):
+                if i > 0:
+                    user_agents.append(line.strip())
         options.add_argument(f"user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.3")
 
         service = Service(executable_path="C:\\Users\\vpr16\\PythonProjects\\StockTraderNEAT\\edgedriver_win64\\msedgedriver.exe")
         driver = webdriver.Edge(options, service)
         auth_url = f"https://api.schwabapi.com/v1/oauth/authorize?client_id={self.credentials['public_key']}&redirect_uri=https://127.0.0.1"
+
+        #print(auth_url)
+        #returned_link = input("Enter code link: ")
         driver.get(auth_url)
 
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "loginIdInput")))
@@ -53,7 +73,7 @@ class Schwab:
 
         driver.find_element(By.ID, "btnLogin").click()
 
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "acceptTerms")))
+        WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "acceptTerms")))
         driver.find_element(By.ID, "acceptTerms").click()
         driver.find_element(By.ID, "submit-btn").click()
         driver.find_element(By.ID, "agree-modal-btn-").click()
@@ -79,10 +99,10 @@ class Schwab:
 
         headers = {"Authorization": f"Basic {base64.b64encode(bytes(self.credentials['public_key'] + ':' + self.credentials['secret_key'], 'utf-8')).decode('utf-8')}",
                    "Content-Type": "application/x-www-form-urlencoded"}
-        data = {"grant_type": "authorization_code", 'code': code,
-                "redirect_uri": "https://127.0.0.1"}  # gets access and refresh tokens using authorization code
+        payload = {"grant_type": "authorization_code", 'code': code,
+                   "redirect_uri": "https://127.0.0.1"}  # gets access and refresh tokens using authorization code
 
-        self.tokens = requests.post('https://api.schwabapi.com/v1/oauth/token', headers=headers, data=data).json()
+        self.tokens = requests.post('https://api.schwabapi.com/v1/oauth/token', headers=headers, data=payload).json()
 
         response = requests.get(url=f"{self.base_url}/accounts/accountNumbers",
                                 headers={"Authorization": f"Bearer {self.tokens['access_token']}"})
@@ -93,7 +113,30 @@ class Schwab:
             driver.close()
         except Exception as e:
             print(f"Failed to close driver: {e}")
+
         self.authorizing = False
+
+        self.refresh_thread = threading.Thread(target=self.refresh_token_loop)
+        self.refresh_thread.start()
+
+    def refresh_token_loop(self):
+        while not self.authorizing:
+            time.sleep(self.tokens["expires_in"] - 10)
+            headers = {"Authorization": f"Basic {base64.b64encode(bytes(self.credentials['public_key'] + ':' + self.credentials['secret_key'], 'utf-8')).decode('utf-8')}",
+                       "Content-Type": "application/x-www-form-urlencoded"}
+            payload = {'grant_type': 'refresh_token',
+                       'refresh_token': self.tokens["refresh_token"]}
+
+            response = requests.post(self.token_url,
+                                     headers=headers,
+                                     data=payload)
+
+            if response.status_code == 201:
+                print("Refreshed Charles Schwab tokens.")
+                self.tokens = response.json()
+            elif response.status_code == 401:
+                self.authorize()
+                return
 
     def get_account(self):
         if self.account[0] is None or time.time() - self.account[1] > 1:

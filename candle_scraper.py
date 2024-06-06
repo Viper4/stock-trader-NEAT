@@ -80,12 +80,12 @@ class Scraper(object):
                 for i, line in enumerate(f):
                     user_agents.append(line.strip())
 
-                    '''if i == 0:
+                    if i == 0:
                         today = dt.datetime.today().strftime("%Y-%m-%d")
-                        if today != line.strip():
-                            return Scraper.save_user_agents()
+                        '''if today != line.strip():
+                            return Scraper.save_user_agents()'''
                     else:
-                        user_agents.append(line.strip())'''
+                        user_agents.append(line.strip())
             return user_agents
         else:
             return Scraper.save_user_agents()

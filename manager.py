@@ -88,24 +88,28 @@ class Trainer(Manager):
         for profile in settings["profiles"]:
             alpaca_api = alpaca.REST(profile["public_key"], profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
             
-            self.update_session_profile(profile, alpaca_api)
+            self.update_profile(profile, alpaca_api)
 
         self.create_agents()
     
-    def update_session_profile(self, profile, alpaca_api):
+    def update_profile(self, profile, alpaca_api):
         print("Updated profile")
         if len(self.settings["profiles"]) == 1 and len(profile["stocks"]) == 1 and profile["gen_stagger"] != 0:
             print(f"{profile['name']}: Only training 1 agent. Setting gen_stagger to 0.")
             profile["gen_stagger"] = 0
             self.one_agent = True
 
-        previous_agents = self.sessions[profile["name"]]["agents"]
-        previous_logs = self.sessions[profile["name"]]["logs"]
+        if profile["name"] in self.sessions:
+            agents = self.sessions[profile["name"]]["agents"]
+            logs = self.sessions[profile["name"]]["logs"]
+        else:
+            agents = {}
+            logs = {}
 
         self.sessions[profile["name"]] = {
             "alpaca_api": alpaca_api,
-            "agents": previous_agents,
-            "logs": previous_logs,
+            "agents": agents,
+            "logs": logs,
             "stocks": profile["stocks"],
             "backtest_days": profile["backtest_days"],
             "interval": profile["interval"],
@@ -196,7 +200,7 @@ class Trainer(Manager):
                         self.settings, session["alpaca_api"] = self.get_settings_and_alpaca(0)
                         for profile in self.settings["profiles"]:
                             if profile["name"] == profile_name:
-                                self.update_session_profile(self.settings["profiles"][profile_name], session["alpaca_api"])
+                                self.update_profile(profile, session["alpaca_api"])
                                 break
 
                         current_agent = session["agents"][symbol]
@@ -236,31 +240,47 @@ class Trader(Manager):
 
         self.create_agents()
 
+    def update_profile(self):
+        print("Updated profile")
+        self.settings, self.alpaca_api = self.get_settings_and_alpaca(0)
+        self.profile = self.settings["profiles"][0]
+        for stock in self.profile["stocks"]:
+            if stock["trading"]:
+                if stock["symbol"] not in self.agents:
+                    self.create_agents()
+                    break
+                else:
+                    self.agents[stock["symbol"]].settings = self.settings
+                    self.agents[stock["symbol"]].stock = stock
+
     def create_agents(self):
         print("Trader: Creating agents")
-        self.agents.clear()
 
-        if self.get_market_status():
-            now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-            symbols = []
-            for stock in self.profile["stocks"]:
-                if stock["trading"]:
-                    symbols.append(stock["symbol"])
-            self.finbert.save_news(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+        now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+        symbols = []
+        for stock in self.profile["stocks"]:
+            if stock["trading"]:
+                symbols.append(stock["symbol"])
+        self.finbert.save_news(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
 
         for stock in self.profile["stocks"]:
             if stock["trading"]:
-                self.logs[stock["symbol"]] = []
-                self.agents[stock["symbol"]] = agent.Trading(self.settings, stock, self.finbert, self, self.scraper)
-                if stock["genome_filename"] is None:
-                    print(f" No genome filename provided for {stock['symbol']}")
-                    exit(0)
+                if stock["symbol"] not in self.agents:
+                    self.logs[stock["symbol"]] = []
+                    self.agents[stock["symbol"]] = agent.Trading(self.settings, stock, self)
+                    if stock["genome_filename"] is None:
+                        print(f" No genome filename provided for {stock['symbol']}")
+                        exit(0)
+                    else:
+                        try:
+                            best_genome = saving.SaveSystem.load_data(os.path.join(self.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
+                            self.agents[stock["symbol"]].update_net(best_genome)
+                        except FileNotFoundError:
+                            print(f" No genome file found for {stock['genome_filename']}")
                 else:
-                    try:
-                        best_genome = saving.SaveSystem.load_data(os.path.join(self.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
-                        self.agents[stock["symbol"]].update_net(best_genome)
-                    except FileNotFoundError:
-                        print(f" No genome file found for {stock['genome_filename']}")
+                    self.agents[stock["symbol"]].settings = self.settings
+                    self.agents[stock["symbol"]].stock = stock
+
         print(f" Created {', '.join(self.agents.keys())} trading agents\n")
 
     def get_market_status(self):
@@ -287,6 +307,7 @@ class Trader(Manager):
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+            self.update_profile()
             if self.get_market_status():
                 if self.trainer.running:
                     self.trainer.stop()
