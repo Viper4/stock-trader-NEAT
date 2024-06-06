@@ -120,8 +120,9 @@ class Schwab:
         self.refresh_thread.start()
 
     def refresh_token_loop(self):
+        sleep_time = self.tokens["expires_in"] - 10
         while not self.authorizing:
-            time.sleep(self.tokens["expires_in"] - 10)
+            time.sleep(sleep_time)
             headers = {"Authorization": f"Basic {base64.b64encode(bytes(self.credentials['public_key'] + ':' + self.credentials['secret_key'], 'utf-8')).decode('utf-8')}",
                        "Content-Type": "application/x-www-form-urlencoded"}
             payload = {'grant_type': 'refresh_token',
@@ -131,12 +132,16 @@ class Schwab:
                                      headers=headers,
                                      data=payload)
 
-            if response.status_code == 201:
+            if response.status_code == 200 or response.status_code == 201:
                 print("Refreshed Charles Schwab tokens.")
                 self.tokens = response.json()
+                sleep_time = self.tokens["expires_in"] - 10
             elif response.status_code == 401:
                 self.authorize()
                 return
+            else:
+                print(f"{response.status_code} error refreshing tokens: {response.content}")
+                sleep_time = 5
 
     def get_account(self):
         if self.account[0] is None or time.time() - self.account[1] > 1:
@@ -146,7 +151,7 @@ class Schwab:
                     response = requests.get(url=f"{self.base_url}/accounts/{self.account_hash}?fields=positions",
                                             headers={"Authorization": f"Bearer {self.tokens['access_token']}"})
 
-                    if response.status_code == 200:
+                    if response.status_code == 200 or response.status_code == 201:
                         self.account[0] = response.json()["securitiesAccount"]
                         self.account[1] = time.time()
                         return self.account[0]
@@ -206,7 +211,7 @@ class Schwab:
                                          "Content-Type": "application/json"
                                      },
                                      json=order)
-            if response.status_code == 201:
+            if response.status_code == 200 or response.status_code == 201:
                 print(f"Order submitted to {side} {quantity} shares of {symbol}")
                 return
             elif response.status_code == 401:

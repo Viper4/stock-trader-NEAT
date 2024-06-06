@@ -25,8 +25,7 @@ class Scraper(object):
             try:
                 response = requests.get(url, headers=headers)
 
-                # Check if the request was successful (status code 200)
-                if response.status_code == 200:
+                if response.status_code == 200 or response.status_code == 201:
                     data = response.json()
 
                     # Extract OHLCV data from the response
