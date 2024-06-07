@@ -52,6 +52,7 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
     start_date = bars[0]["timestamp"].date()
     solid_cash = start_cash
     liquid_cash = 0
+    pending_sales = []
     start_equity = start_cash
     profit_sum = 0.0
     num_windows = 0
@@ -70,6 +71,12 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
         date = bar["timestamp"].date()
         if date != prev_date:  # Check pending sales to settle cash after 2 days of sale
             consecutive_days += 1
+            for j in reversed(range(len(pending_sales))):
+                sale = pending_sales[j]
+                if consecutive_days - sale[1] > 2:
+                    solid_cash += sale[0]
+                    liquid_cash -= sale[0]
+                    pending_sales.pop(j)
 
         inputs = [Agent.rel_change(cost, bar["close"] * shares),  # plpc
                   Agent.rel_change(prev_bar["open"], bar["open"]),
@@ -118,7 +125,8 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
                                   "profit": price - (avg_cost * quantity), "solid_cash": solid_cash,
                                   "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime()}
                         log.append(action)
-                solid_cash += price
+                liquid_cash += price
+                pending_sales.append((price, consecutive_days))
         if i == num_bars-1 or (date - start_date).days >= profit_window:
             equity = liquid_cash + solid_cash + bar["close"] * shares
             profit_sum += equity - start_equity
@@ -273,9 +281,9 @@ class Trading(Agent):
 
                 if outputs[0] > 0.5:  # Buy
                     account = self.trader.schwab_api.get_account()
-                    total_cash = account["currentBalances"]["cashBalance"]
-                    solid_cash = account["currentBalances"]["cashAvailableForTrading"]
-                    liquid_cash = total_cash - solid_cash
+                    liquid_cash = account["currentBalances"]["unsettledCash"]
+                    solid_cash = account["currentBalances"]["cashAvailableForTrading"] - account["currentBalances"]["unsettledCash"]
+
                     if "longMarketValue" in account["currentBalances"]:
                         market_value = account["currentBalances"]["longMarketValue"]
                     else:
@@ -294,8 +302,8 @@ class Trading(Agent):
                             self.trader.logs[self.stock["symbol"]].append(action)
                 elif outputs[0] < -0.5 and position_qty > 0:  # Sell
                     account = self.trader.schwab_api.get_account()
-                    solid_cash = account["currentBalances"]["cashAvailableForTrading"]
-                    liquid_cash = account["currentBalances"]["cashBalance"] - solid_cash
+                    liquid_cash = account["currentBalances"]["unsettledCash"]
+                    solid_cash = account["currentBalances"]["cashAvailableForTrading"] - account["currentBalances"]["unsettledCash"]
                     quantity = qty_percent * position_qty
                     quantity = round(quantity)
                     price = quantity * latest["close"]
