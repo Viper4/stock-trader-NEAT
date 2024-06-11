@@ -50,8 +50,8 @@ class Agent:
 def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_training, profit_window, fitness_multipliers):
     net = neat.nn.RecurrentNetwork.create(genome, config)
     start_date = bars[0]["timestamp"].date()
-    solid_cash = start_cash
-    liquid_cash = 0
+    settled_cash = start_cash
+    unsettled_cash = 0
     pending_sales = []
     start_equity = start_cash
     profit_sum = 0.0
@@ -74,8 +74,8 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
             for j in reversed(range(len(pending_sales))):
                 sale = pending_sales[j]
                 if consecutive_days - sale[1] > 2:
-                    solid_cash += sale[0]
-                    liquid_cash -= sale[0]
+                    settled_cash += sale[0]
+                    unsettled_cash -= sale[0]
                     pending_sales.pop(j)
 
         inputs = [Agent.rel_change(cost, bar["close"] * shares),  # plpc
@@ -91,16 +91,16 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
 
         qty_percent = (outputs[1] + 1) * 0.5
         if outputs[0] > 0.5:  # Buy
-            quantity = qty_percent * solid_cash * cash_at_risk / bar["close"]
+            quantity = qty_percent * settled_cash * cash_at_risk / bar["close"]
             price = quantity * bar["close"]
             if price >= 1:  # Alpaca doesn't allow trades under $1
                 cost += price
                 shares += quantity
-                solid_cash -= price
+                settled_cash -= price
 
                 if log_training:
                     action = {"side": "Buy", "quantity": quantity, "price": bar["close"],
-                              "solid_cash": solid_cash, "liquid_cash": liquid_cash,
+                              "settled_cash": settled_cash, "unsettled_cash": unsettled_cash,
                               "datetime": bar["timestamp"].to_pydatetime()}
                     log.append(action)
         elif outputs[0] < -0.5 and shares > 0:  # Sell
@@ -111,8 +111,8 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
                     price = shares * bar["close"]
                     if log_training:
                         action = {"side": "Sell", "quantity": quantity, "price": bar["close"],
-                                  "profit": price - cost, "solid_cash": solid_cash,
-                                  "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime()}
+                                  "profit": price - cost, "settled_cash": settled_cash,
+                                  "unsettled_cash": unsettled_cash + price, "datetime": bar["timestamp"].to_pydatetime()}
                         log.append(action)
                     shares = 0.0
                     cost = 0.0
@@ -122,13 +122,13 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
                     cost = avg_cost * shares
                     if log_training:
                         action = {"side": "Sell", "quantity": quantity, "price": bar["close"],
-                                  "profit": price - (avg_cost * quantity), "solid_cash": solid_cash,
-                                  "liquid_cash": liquid_cash + price, "datetime": bar["timestamp"].to_pydatetime()}
+                                  "profit": price - (avg_cost * quantity), "settled_cash": settled_cash,
+                                  "unsettled_cash": unsettled_cash + price, "datetime": bar["timestamp"].to_pydatetime()}
                         log.append(action)
-                liquid_cash += price
+                unsettled_cash += price
                 pending_sales.append((price, consecutive_days))
         if i == num_bars-1 or (date - start_date).days >= profit_window:
-            equity = liquid_cash + solid_cash + bar["close"] * shares
+            equity = unsettled_cash + settled_cash + bar["close"] * shares
             profit_sum += equity - start_equity
             num_windows += 1
             start_equity = equity
@@ -281,14 +281,14 @@ class Trading(Agent):
 
                 if outputs[0] > 0.5:  # Buy
                     account = self.trader.schwab_api.get_account()
-                    liquid_cash = account["currentBalances"]["unsettledCash"]
-                    solid_cash = account["currentBalances"]["cashAvailableForTrading"] - account["currentBalances"]["unsettledCash"]
+                    unsettled_cash = account["currentBalances"]["unsettledCash"]
+                    settled_cash = account["currentBalances"]["cashAvailableForTrading"] - unsettled_cash
 
                     if "longMarketValue" in account["currentBalances"]:
                         market_value = account["currentBalances"]["longMarketValue"]
                     else:
                         market_value = 0
-                    used_cash = market_value + liquid_cash  # Cash in stocks + liquid cash
+                    used_cash = market_value + unsettled_cash  # Cash in stocks + unsettled cash
                     if self.trader.profile["cash_limit"] < 0 or used_cash < self.trader.profile["cash_limit"]:
                         quantity = self.trader.profile["cash_limit"] * qty_percent * self.stock["cash_at_risk"] / latest["close"]
                         quantity = round(quantity)
@@ -296,14 +296,14 @@ class Trading(Agent):
                             self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity, side="BUY")
 
                             action = {"side": "Buy", "quantity": quantity, "price": latest["close"],
-                                      "solid_cash": solid_cash, "liquid_cash": liquid_cash,
+                                      "settled_cash": settled_cash, "unsettled_cash": unsettled_cash,
                                       "datetime": now_date}
                             print(f"{self.trader.profile['name']} {self.stock['symbol']}: {action}")
                             self.trader.logs[self.stock["symbol"]].append(action)
                 elif outputs[0] < -0.5 and position_qty > 0:  # Sell
                     account = self.trader.schwab_api.get_account()
-                    liquid_cash = account["currentBalances"]["unsettledCash"]
-                    solid_cash = account["currentBalances"]["cashAvailableForTrading"] - account["currentBalances"]["unsettledCash"]
+                    unsettled_cash = account["currentBalances"]["unsettledCash"]
+                    settled_cash = account["currentBalances"]["cashAvailableForTrading"] - account["currentBalances"]["unsettledCash"]
                     quantity = qty_percent * position_qty
                     quantity = round(quantity)
                     price = quantity * latest["close"]
@@ -315,7 +315,7 @@ class Trading(Agent):
 
                         action = {"side": "Sell", "quantity": quantity, "price": latest["close"],
                                   "profit": position["longOpenProfitLoss"],
-                                  "solid_cash": solid_cash, "liquid_cash": liquid_cash,
+                                  "settled_cash": settled_cash, "unsettled_cash": unsettled_cash,
                                   "datetime": now_date}
                         print(f"{self.trader.profile['name']} {self.stock['symbol']}: {action}")
                         self.trader.logs[self.stock["symbol"]].append(action)
@@ -414,16 +414,16 @@ class PaperTrading(Agent):
                     print(f"{self.stock['symbol']}: Not tradable.")
                 else:
                     if outputs[0] > 0.5:  # Buy
-                        quantity = self.session["solid_cash"] * qty_percent * self.stock["cash_at_risk"] / latest["close"]
+                        quantity = self.session["settled_cash"] * qty_percent * self.stock["cash_at_risk"] / latest["close"]
                         if not asset.fractionable:
                             quantity = round(quantity)
                         price = quantity * latest["close"]
                         if price >= 1:  # Alpaca doesn't allow trades under $1
-                            self.session["solid_cash"] -= price
+                            self.session["settled_cash"] -= price
                             self.session["alpaca_api"].submit_order(symbol=self.stock["symbol"], qty=quantity, side="buy", type="market", time_in_force="day")
 
                             action = {"side": "Buy", "quantity": quantity, "price": latest["close"],
-                                      "solid_cash": self.session["solid_cash"], "liquid_cash": self.session["liquid_cash"],
+                                      "settled_cash": self.session["settled_cash"], "unsettled_cash": self.session["unsettled_cash"],
                                       "datetime": now_date}
                             print(f"{self.session['interval']}m {self.stock['symbol']}: {action}")
                             self.session["logs"][self.stock["symbol"]].append(action)
@@ -438,12 +438,12 @@ class PaperTrading(Agent):
                                 price = position_qty * latest["close"]
                             else:
                                 self.session["alpaca_api"].submit_order(symbol=self.stock["symbol"], qty=quantity, side="sell", type="market", time_in_force="day")
-                            self.session["liquid_cash"] += price
+                            self.session["unsettled_cash"] += price
                             self.session["pending_sales"].append((price, self.trader.consecutive_days))
 
                             action = {"side": "Sell", "quantity": quantity, "price": latest["close"],
                                       "profit": price - (float(position.avg_entry_price) * quantity),
-                                      "solid_cash": self.session["solid_cash"], "liquid_cash": self.session["liquid_cash"],
+                                      "settled_cash": self.session["settled_cash"], "unsettled_cash": self.session["unsettled_cash"],
                                       "datetime": now_date}
                             print(f"{self.session['interval']}m {self.stock['symbol']}: {action}")
                             self.session["logs"][self.stock["symbol"]].append(action)
@@ -471,9 +471,9 @@ class Validation(Agent):
         start_time = time.time()
         net = neat.nn.RecurrentNetwork.create(genome, self.config)
         start_date = bars[0]["timestamp"].date()
-        solid_cash = 100000
+        settled_cash = 100000
         start_equity = 100000
-        liquid_cash = 0.0
+        unsettled_cash = 0.0
         pending_sales = []
         profit_sum = 0.0
         num_windows = 0
@@ -500,8 +500,8 @@ class Validation(Agent):
                 for j in reversed(range(len(pending_sales))):
                     sale = pending_sales[j]
                     if consecutive_days - sale[1] > 2:
-                        solid_cash += sale[0]
-                        liquid_cash -= sale[0]
+                        settled_cash += sale[0]
+                        unsettled_cash -= sale[0]
                         pending_sales.pop(j)
 
             backtest_date = bar["timestamp"].to_pydatetime()
@@ -521,16 +521,16 @@ class Validation(Agent):
 
             qty_percent = (outputs[1] + 1) * 0.5
             if outputs[0] > 0.5:  # Buy
-                quantity = qty_percent * solid_cash * self.stock["cash_at_risk"] / bar["close"]
+                quantity = qty_percent * settled_cash * self.stock["cash_at_risk"] / bar["close"]
                 price = quantity * bar["close"]
                 if price >= 1:  # Alpaca doesn't allow trades under $1
                     cost += price
                     shares += quantity
-                    solid_cash -= price
+                    settled_cash -= price
 
                     action = {"inputs": inputs, "outputs": outputs,
                               "side": "Buy", "quantity": quantity, "price": bar["close"],
-                              "solid_cash": solid_cash, "liquid_cash": liquid_cash,
+                              "settled_cash": settled_cash, "unsettled_cash": unsettled_cash,
                               "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Eastern'))}
                     log.append(action)
                     num_buy += 1
@@ -542,8 +542,8 @@ class Validation(Agent):
                         price = shares * bar["close"]
                         action = {"inputs": inputs, "outputs": outputs,
                                   "side": "Sell", "quantity": quantity, "price": bar["close"],
-                                  "profit": price - cost, "solid_cash": solid_cash,
-                                  "liquid_cash": liquid_cash + price,
+                                  "profit": price - cost, "settled_cash": settled_cash,
+                                  "unsettled_cash": unsettled_cash + price,
                                   "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Eastern'))}
                         log.append(action)
                         num_sell += 1
@@ -555,15 +555,15 @@ class Validation(Agent):
                         cost = avg_cost * shares
                         action = {"inputs": inputs, "outputs": outputs,
                                   "side": "Sell", "quantity": quantity, "price": bar["close"],
-                                  "profit": price - (avg_cost * quantity), "solid_cash": solid_cash,
-                                  "liquid_cash": liquid_cash + price,
+                                  "profit": price - (avg_cost * quantity), "settled_cash": settled_cash,
+                                  "unsettled_cash": unsettled_cash + price,
                                   "datetime": bar["timestamp"].to_pydatetime().astimezone(tz=pytz.timezone('US/Eastern'))}
                         log.append(action)
                         num_sell += 1
-                    liquid_cash += price
+                    unsettled_cash += price
                     pending_sales.append((price, consecutive_days))
             if i == num_bars - 1 or (date - start_date).days >= self.session["profit_window"]:
-                equity = liquid_cash + solid_cash + bar["close"] * shares
+                equity = unsettled_cash + settled_cash + bar["close"] * shares
                 profit = equity - start_equity
                 if profit < min_profit[0]:
                     min_profit = (profit, 100 * (profit / start_equity))

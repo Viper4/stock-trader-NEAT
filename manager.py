@@ -88,12 +88,16 @@ class Trainer(Manager):
         for profile in settings["profiles"]:
             alpaca_api = alpaca.REST(profile["public_key"], profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
             
-            self.update_profile(profile, alpaca_api)
+            self.update_profile(profile, alpaca_api, True)
 
         self.create_agents()
     
-    def update_profile(self, profile, alpaca_api):
-        print("Updated profile")
+    def update_profile(self, profile, alpaca_api, no_agents=False):
+        print(f"Updating {profile['name']} profile")
+
+        if self.largest_backtest < profile["backtest_days"]:
+            self.largest_backtest = profile["backtest_days"]
+
         if len(self.settings["profiles"]) == 1 and len(profile["stocks"]) == 1 and profile["gen_stagger"] != 0:
             print(f"{profile['name']}: Only training 1 agent. Setting gen_stagger to 0.")
             profile["gen_stagger"] = 0
@@ -123,12 +127,9 @@ class Trainer(Manager):
                 self.symbols.append(stock["symbol"])
                 update_agents = True
 
-        if update_agents:
+        if not no_agents and update_agents:
             self.create_agents(False, True)
 
-        if self.largest_backtest < profile["backtest_days"]:
-            self.largest_backtest = profile["backtest_days"]
-    
     def generate_data(self, symbol, session, earliest_date, start_date, end_date, file_path, save_news):
         if save_news or len(self.finbert.saved_news) == 0:
             self.finbert.save_news(self.symbols, earliest_date, end_date)
@@ -331,9 +332,9 @@ class Trader(Manager):
                     positions = schwab_account["positions"]
                 else:
                     positions = {}
-                total_cash = schwab_account["currentBalances"]["cashBalance"]
-                solid_cash = schwab_account["currentBalances"]["cashAvailableForTrading"]
-                liquid_cash = total_cash - solid_cash
+                total_cash = schwab_account["currentBalances"]["cashAvailableForTrading"]
+                unsettled_cash = schwab_account["currentBalances"]["unsettledCash"]
+                settled_cash = total_cash - unsettled_cash
                 bought_shares = {}
                 for position in positions:
                     bought_shares[position["instrument"]["symbol"]] = position["longQuantity"]
@@ -347,8 +348,8 @@ class Trader(Manager):
 
                 print(f"\n{self.profile['name']} Details:" +
                       f"\n Bal Change: {balance_change}" +
-                      f"\n Solid Cash: {solid_cash}" +
-                      f"\n Liquid Cash: {liquid_cash}" +
+                      f"\n Settled Cash: {settled_cash}" +
+                      f"\n Unsettled Cash: {unsettled_cash}" +
                       f"\n Market Value: {market_value}" +
                       f"\n Bought Shares: {bought_shares}")
 
@@ -391,8 +392,8 @@ class PaperTrader(Manager):
 
             self.sessions[profile["name"]] = {
                 "alpaca_api": alpaca_api,
-                "solid_cash": 0.0,
-                "liquid_cash": 0.0,
+                "settled_cash": 0.0,
+                "unsettled_cash": 0.0,
                 "pending_sales": [],
                 "cash_limit": profile["cash_limit"],
                 "stocks": profile["stocks"],
@@ -500,17 +501,17 @@ class PaperTrader(Manager):
         for profile_name in self.sessions:
             print(profile_name)
             session = self.sessions[profile_name]
-            starting_liquid = (float(input(" Enter starting liquid cash: ")), int(input(" Enter pending days: ")))
-            #starting_liquid = (0, 0)
+            starting_unsettled = (float(input(" Enter starting unsettled cash: ")), int(input(" Enter pending days: ")))
+            #starting_unsettled = (0, 0)
             account = self.get_api_account(session)
-            session["solid_cash"] = float(account.cash)
-            session["liquid_cash"] = 0.0
+            session["settled_cash"] = float(account.cash)
+            session["unsettled_cash"] = 0.0
             session["pending_sales"].clear()
 
-            if starting_liquid[0] > 0:
-                session["liquid_cash"] = starting_liquid[0]
-                session["solid_cash"] -= session["liquid_cash"]
-                session["pending_sales"].append((session["liquid_cash"], starting_liquid[1]))
+            if starting_unsettled[0] > 0:
+                session["unsettled_cash"] = starting_unsettled[0]
+                session["settled_cash"] -= session["unsettled_cash"]
+                session["pending_sales"].append((session["unsettled_cash"], starting_unsettled[1]))
 
             for symbol in session["agents"]:
                 threading.Thread(target=session["agents"][symbol].run).start()
@@ -536,8 +537,8 @@ class PaperTrader(Manager):
                     for j in reversed(range(len(session["pending_sales"]))):
                         sale = session["pending_sales"][j]
                         if self.consecutive_days - sale[1] > 2:
-                            session["solid_cash"] += sale[0]
-                            session["liquid_cash"] -= sale[0]
+                            session["settled_cash"] += sale[0]
+                            session["unsettled_cash"] -= sale[0]
                             session["pending_sales"].pop(j)
 
                 next_close = self.sessions[first_profile_name]["clock"][0].next_close
@@ -556,8 +557,8 @@ class PaperTrader(Manager):
                     balance_change = float(api_account.equity) - float(api_account.last_equity)
                     print(f"\n{profile_name} Details:" +
                           f"\n Daily Bal Change: {balance_change}" +
-                          f"\n Solid Cash: {session['solid_cash']}" +
-                          f"\n Liquid Cash: {session['liquid_cash']}" +
+                          f"\n settled Cash: {session['settled_cash']}" +
+                          f"\n unsettled Cash: {session['unsettled_cash']}" +
                           f"\n Equity: {api_account.equity}" +
                           f"\n Bought Shares: {bought_shares}")
 

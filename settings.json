@@ -7,7 +7,7 @@
       "backtest_days": 356,
       "profit_window": 1,
       "interval": 1,
-      "cash_limit": 25000.0,
+      "cash_limit": 5000.0,
       "fitness_multipliers": {
         "average": 1,
         "total":  0.1,
@@ -133,7 +133,7 @@
   "save_path": "C:\\Users\\vpr16\\PythonProjects\\StockTraderNEAT\\Saves",
   "training_reset": 3,
   "gen_stagger": 8,
-  "processes": 12,
+  "processes": 6,
   "print_stats": true,
   "log_training": false,
   "visualize": false

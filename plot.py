@@ -24,7 +24,7 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
     annotations = []
     for i in range(len(log)):
         action = log[i]
-        text = f"{i} {action['side']} {round(action['quantity'], 2)} ${round(action['price'], 2)}<br>Cash S|L: {round(action['solid_cash'], 1)}|{round(action['liquid_cash'], 1)}"
+        text = f"{i} {action['side']} {round(action['quantity'], 2)} ${round(action['price'], 2)}<br>Cash S|U: {round(action['settled_cash'], 1)}|{round(action['unsettled_cash'], 1)}"
         color = "green"
         if action["side"] == "Sell":
             shares -= action["quantity"]
