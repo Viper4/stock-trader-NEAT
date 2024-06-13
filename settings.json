@@ -7,7 +7,7 @@
       "backtest_days": 356,
       "profit_window": 1,
       "interval": 1,
-      "cash_limit": 5000.0,
+      "cash_limit": 20000.0,
       "fitness_multipliers": {
         "average": 1,
         "total":  0.1,
@@ -20,7 +20,8 @@
           "population_filename": "1m-1pw-population-GOOG.gz",
           "genome_filename": "1m-1pw-genome-GOOG.gz",
           "training_filename": "1m-data-GOOG.gz",
-          "trading": true
+          "trading": true,
+          "shorting": true
         },
         {
           "symbol": "NVDA",
@@ -28,7 +29,8 @@
           "population_filename": "1m-1pw-population-NVDA.gz",
           "genome_filename": "1m-1pw-genome-NVDA.gz",
           "training_filename": "1m-data-NVDA.gz",
-          "trading": true
+          "trading": true,
+          "shorting": false
         },
         {
           "symbol": "TSLA",
@@ -36,7 +38,8 @@
           "population_filename": "1m-1pw-population-TSLA.gz",
           "genome_filename": "1m-1pw-genome-TSLA.gz",
           "training_filename": "1m-data-TSLA.gz",
-          "trading": true
+          "trading": true,
+          "shorting": true
         },
         {
           "symbol": "BA",
@@ -44,7 +47,8 @@
           "population_filename": "1m-1pw-population-BA.gz",
           "genome_filename": "1m-1pw-genome-BA.gz",
           "training_filename": "1m-data-BA.gz",
-          "trading": true
+          "trading": true,
+          "shorting": true
         },
         {
           "symbol": "COIN",
@@ -52,7 +56,8 @@
           "population_filename": "1m-1pw-population-COIN.gz",
           "genome_filename": "1m-1pw-genome-COIN.gz",
           "training_filename": "1m-data-COIN.gz",
-          "trading": true
+          "trading": true,
+          "shorting": true
         },
         {
           "symbol": "UBER",
@@ -60,7 +65,8 @@
           "population_filename": "1m-1pw-population-UBER.gz",
           "genome_filename": "1m-1pw-genome-UBER.gz",
           "training_filename": "1m-data-UBER.gz",
-          "trading": true
+          "trading": true,
+          "shorting": true
         },
         {
           "symbol": "AMD",
@@ -68,7 +74,8 @@
           "population_filename": "1m-1pw-population-AMD.gz",
           "genome_filename": "1m-1pw-genome-AMD.gz",
           "training_filename": "1m-data-AMD.gz",
-          "trading": true
+          "trading": true,
+          "shorting": true
         },
         {
           "symbol": "AMZN",
@@ -76,7 +83,8 @@
           "population_filename": "1m-1pw-population-AMZN.gz",
           "genome_filename": "1m-1pw-genome-AMZN.gz",
           "training_filename": "1m-data-AMZN.gz",
-          "trading": false
+          "trading": false,
+          "shorting": true
         },
         {
           "symbol": "AAPL",
@@ -84,7 +92,8 @@
           "population_filename": "1m-1pw-population-AAPL.gz",
           "genome_filename": "1m-1pw-genome-AAPL.gz",
           "training_filename": "1m-data-AAPL.gz",
-          "trading": false
+          "trading": false,
+          "shorting": true
         },
         {
           "symbol": "INTC",
@@ -92,7 +101,8 @@
           "population_filename": "1m-1pw-population-INTC.gz",
           "genome_filename": "1m-1pw-genome-INTC.gz",
           "training_filename": "1m-data-INTC.gz",
-          "trading": false
+          "trading": false,
+          "shorting": true
         },
         {
           "symbol": "SOUN",
@@ -100,7 +110,8 @@
           "population_filename": "1m-1pw-population-SOUN.gz",
           "genome_filename": "1m-1pw-genome-SOUN.gz",
           "training_filename": "1m-data-SOUN.gz",
-          "trading": false
+          "trading": false,
+          "shorting": true
         },
         {
           "symbol": "DIS",
@@ -108,7 +119,8 @@
           "population_filename": "1m-1pw-population-DIS.gz",
           "genome_filename": "1m-1pw-genome-DIS.gz",
           "training_filename": "1m-data-DIS.gz",
-          "trading": false
+          "trading": false,
+          "shorting": true
         },
         {
           "symbol": "QCOM",
@@ -116,7 +128,8 @@
           "population_filename": "1m-1pw-population-QCOM.gz",
           "genome_filename": "1m-1pw-genome-QCOM.gz",
           "training_filename": "1m-data-QCOM.gz",
-          "trading": false
+          "trading": false,
+          "shorting": true
         },
         {
           "symbol": "CVNA",
@@ -124,7 +137,8 @@
           "population_filename": "1m-1pw-population-CVNA.gz",
           "genome_filename": "1m-1pw-genome-CVNA.gz",
           "training_filename": "1m-data-CVNA.gz",
-          "trading": false
+          "trading": false,
+          "shorting": true
         }
       ]
     }
@@ -133,7 +147,7 @@
   "save_path": "C:\\Users\\vpr16\\PythonProjects\\StockTraderNEAT\\Saves",
   "training_reset": 3,
   "gen_stagger": 8,
-  "processes": 6,
+  "processes": 8,
   "print_stats": true,
   "log_training": false,
   "visualize": false

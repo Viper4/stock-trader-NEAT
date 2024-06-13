@@ -1,7 +1,6 @@
 import base64
 import requests
 import time
-import random
 import encryption
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -120,7 +119,7 @@ class Schwab:
         self.refresh_thread.start()
 
     def refresh_token_loop(self):
-        sleep_time = self.tokens["expires_in"] - 10
+        sleep_time = self.tokens["expires_in"] - 5
         while not self.authorizing:
             time.sleep(sleep_time)
             headers = {"Authorization": f"Basic {base64.b64encode(bytes(self.credentials['public_key'] + ':' + self.credentials['secret_key'], 'utf-8')).decode('utf-8')}",

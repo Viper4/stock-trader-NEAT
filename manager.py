@@ -93,7 +93,7 @@ class Trainer(Manager):
         self.create_agents()
     
     def update_profile(self, profile, alpaca_api, no_agents=False):
-        print(f"Updating {profile['name']} profile")
+        print(f"Trainer: Updating {profile['name']} profile")
 
         if self.largest_backtest < profile["backtest_days"]:
             self.largest_backtest = profile["backtest_days"]
@@ -242,9 +242,9 @@ class Trader(Manager):
         self.create_agents()
 
     def update_profile(self):
-        print("Updated profile")
         self.settings, self.alpaca_api = self.get_settings_and_alpaca(0)
         self.profile = self.settings["profiles"][0]
+        print(f"Trader: Updating {self.profile['name']} profile")
         for stock in self.profile["stocks"]:
             if stock["trading"]:
                 if stock["symbol"] not in self.agents:
@@ -335,9 +335,9 @@ class Trader(Manager):
                 total_cash = schwab_account["currentBalances"]["cashAvailableForTrading"]
                 unsettled_cash = schwab_account["currentBalances"]["unsettledCash"]
                 settled_cash = total_cash - unsettled_cash
-                bought_shares = {}
+                held_shares = {}
                 for position in positions:
-                    bought_shares[position["instrument"]["symbol"]] = position["longQuantity"]
+                    held_shares[position["instrument"]["symbol"]] = position["longQuantity"]
 
                 if "longMarketValue" in schwab_account["currentBalances"]:
                     market_value = schwab_account["currentBalances"]["longMarketValue"]
@@ -351,7 +351,7 @@ class Trader(Manager):
                       f"\n Settled Cash: {settled_cash}" +
                       f"\n Unsettled Cash: {unsettled_cash}" +
                       f"\n Market Value: {market_value}" +
-                      f"\n Bought Shares: {bought_shares}")
+                      f"\n Held Shares: {held_shares}")
 
                 logs_path = os.path.join(self.log_path, f"{self.profile['name']}.gz")
                 if os.path.exists(logs_path):
@@ -551,16 +551,16 @@ class PaperTrader(Manager):
                     session = self.sessions[profile_name]
                     api_account = self.get_api_account(session)
                     open_positions = self.get_positions(session)
-                    bought_shares = {}
+                    held_shares = {}
                     for position in open_positions:
-                        bought_shares[position.symbol] = float(position.qty)
+                        held_shares[position.symbol] = float(position.qty)
                     balance_change = float(api_account.equity) - float(api_account.last_equity)
                     print(f"\n{profile_name} Details:" +
                           f"\n Daily Bal Change: {balance_change}" +
                           f"\n settled Cash: {session['settled_cash']}" +
                           f"\n unsettled Cash: {session['unsettled_cash']}" +
                           f"\n Equity: {api_account.equity}" +
-                          f"\n Bought Shares: {bought_shares}")
+                          f"\n Held Shares: {held_shares}")
 
                     logs_path = os.path.join(self.log_path, f"{profile_name}.gz")
                     if os.path.exists(logs_path):

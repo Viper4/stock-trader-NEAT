@@ -86,13 +86,14 @@ class JsonEditorApp:
         self.create_label_entry(self.stock_frame, "Genome Filename:", 6, 40, "genome_filename")
         self.create_label_entry(self.stock_frame, "Training Filename:", 7, 40, "training_filename")
         self.create_checkbox(self.stock_frame, "Trading", 8, "trading")
+        self.create_checkbox(self.stock_frame, "Shorting", 9, "shorting")
 
         # Buttons
         self.add_stock_button = tk.Button(self.stock_frame, text="Add Stock", command=self.add_stock)
-        self.add_stock_button.grid(row=9, columnspan=2, pady=10)
+        self.add_stock_button.grid(row=10, columnspan=2, pady=10)
 
         self.delete_stock_button = tk.Button(self.stock_frame, text="Delete Stock", command=self.delete_stock)
-        self.delete_stock_button.grid(row=10, columnspan=2, pady=10)
+        self.delete_stock_button.grid(row=11, columnspan=2, pady=10)
 
     def create_label_entry(self, frame, label_text, row, width, setting_key):
         label = tk.Label(frame, text=label_text)
@@ -169,20 +170,25 @@ class JsonEditorApp:
         stocks = self.get_selected_stocks()
         if stocks:
             stock = stocks[self.selected_stock_index]
-            stock_settings = [
+            input_fields = [
                 "symbol", "cash_at_risk",
                 "population_filename", "genome_filename", "training_filename",
             ]
 
-            for setting_key in stock_settings:
+            checkboxes = [
+                "trading", "shorting"
+            ]
+
+            for setting_key in input_fields:
                 entry = getattr(self, f"{setting_key}_entry", None)
                 if entry:
                     entry.delete(0, tk.END)
                     entry.insert(0, stock.get(setting_key, ""))
 
-            checkbox = getattr(self, "trading_var", None)
-            if checkbox:
-                checkbox.set(stock.get("trading", False))
+            for setting_key in checkboxes:
+                checkbox = getattr(self, f"{setting_key}_var", None)
+                if checkbox:
+                    checkbox.set(stock.get(setting_key, False))
 
     def update_profile_inputs(self):
         profiles = self.json_data["profiles"]
@@ -236,6 +242,7 @@ class JsonEditorApp:
             "genome_filename": self.get_attribute("genome_filename_entry", "str"),
             "training_filename": self.get_attribute("training_filename_entry", "str"),
             "trading": self.get_attribute("trading_var", "bool"),
+            "shorting": self.get_attribute("shorting_var", "bool")
         }
         profiles = self.json_data.setdefault("profiles", [])
         profiles[self.selected_profile_index]["stocks"].append(stock)
@@ -332,6 +339,7 @@ class JsonEditorApp:
             stock["genome_filename"] = self.get_attribute("genome_filename_entry", "str")
             stock["training_filename"] = self.get_attribute("training_filename_entry", "str")
             stock["trading"] = self.get_attribute("trading_var", "bool")
+            stock["shorting"] = self.get_attribute("shorting_var", "bool")
 
         # Print the updated JSON data for testing purposes.
         print(json.dumps(self.json_data, indent=2))

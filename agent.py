@@ -47,7 +47,7 @@ class Agent:
 
 
 # Separate from classes so instances don't get cached to RAM and slow things down
-def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_training, profit_window, fitness_multipliers):
+def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_training, profit_window, fitness_multipliers, shortable):
     net = neat.nn.RecurrentNetwork.create(genome, config)
     start_date = bars[0]["timestamp"].date()
     settled_cash = start_cash
@@ -105,10 +105,10 @@ def eval_genome(bars, sentiments, start_cash, genome, config, cash_at_risk, log_
                     log.append(action)
         elif outputs[0] < -0.5 and shares > 0:  # Sell
             quantity = qty_percent * shares
-            price = quantity * bar["close"]
+            price = quantity * bar["close"] * 0.9999  # Transaction fee of 0.0001 per dollar
             if price >= 1:
                 if shares - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
-                    price = shares * bar["close"]
+                    price = shares * bar["close"] * 0.9999  # Transaction fee of 0.0001 per dollar
                     if log_training:
                         action = {"side": "Sell", "quantity": quantity, "price": bar["close"],
                                   "profit": price - cost, "settled_cash": settled_cash,
@@ -145,7 +145,7 @@ class Training(Agent):
     def __init__(self, settings, session, stock, bars, sentiments):
         super().__init__(settings, session, stock)
         self.started = False
-        self.best_genome = None  # Do this instead of self.p.best_genome since pickling population object adds 10s to each gen
+        self.best_genome = None  # Saving population object adds 10s to each gen
         self.consecutive_gens = 0
         self.start_cash = 100000.0
         self.bars = bars
@@ -157,14 +157,14 @@ class Training(Agent):
         while not self.running:
             time.sleep(1)
 
-        # There's probably a better way to do this. self.pool doesn't work: cant pickle Pool(). Separate class doesn't work: leaks memory
+        # self.pool doesn't work: cant pickle Pool(). Separate class doesn't work: leaks memory
         pool = Pool(processes=self.settings["processes"])
         jobs = []
         for genome_id, genome in genomes:
             jobs.append(pool.apply_async(eval_genome, (self.bars, self.sentiments, self.start_cash,
                                                        genome, self.config, self.stock["cash_at_risk"],
                                                        self.settings["log_training"], self.session["profit_window"],
-                                                       self.session["fitness_multipliers"])))
+                                                       self.session["fitness_multipliers"], self.stock["shorting"])))
 
         best_log = None
         for job, (genome_id, genome) in zip(jobs, genomes):
@@ -264,7 +264,6 @@ class Trading(Agent):
 
                 position = self.trader.schwab_api.get_position(self.stock["symbol"])
                 position_qty = position["longQuantity"]
-
                 sentiment = self.trader.finbert.get_api_sentiment(self.stock["symbol"], now_date - dt.timedelta(days=2), now_date)
                 inputs = [position["longOpenProfitLoss"],
                           self.rel_change(prev_data["open"], latest["open"]),
@@ -275,10 +274,18 @@ class Trading(Agent):
                           self.rel_change(prev_data["vwap"], latest["vwap"]),
                           sentiment
                           ]
+                '''if position["longQuantity"] > 0:
+                    position_qty = position["longQuantity"]
+                    inputs[8] = 1
+                else:
+                    position_qty = position["shortQuantity"]
+                    inputs[8] = -1'''
+
                 outputs = self.net.activate(inputs)
 
                 qty_percent = (outputs[1] + 1) * 0.5
 
+                asset = self.trader.alpaca_api.get_asset(symbol=self.stock["symbol"])
                 if outputs[0] > 0.5:  # Buy
                     account = self.trader.schwab_api.get_account()
                     unsettled_cash = account["currentBalances"]["unsettledCash"]
@@ -405,6 +412,7 @@ class PaperTrading(Agent):
                           self.rel_change(prev_data["vwap"], latest["vwap"]),
                           sentiment
                           ]
+                '''inputs[8] = 1 if position.side == "long" else -1'''
                 outputs = self.net.activate(inputs)
 
                 qty_percent = (outputs[1] + 1) * 0.5
@@ -417,7 +425,7 @@ class PaperTrading(Agent):
                         quantity = self.session["settled_cash"] * qty_percent * self.stock["cash_at_risk"] / latest["close"]
                         if not asset.fractionable:
                             quantity = round(quantity)
-                        price = quantity * latest["close"]
+                        price = quantity * latest["close"] * 0.9999  # Transaction fee of 0.0001 per dollar
                         if price >= 1:  # Alpaca doesn't allow trades under $1
                             self.session["settled_cash"] -= price
                             self.session["alpaca_api"].submit_order(symbol=self.stock["symbol"], qty=quantity, side="buy", type="market", time_in_force="day")
@@ -431,7 +439,7 @@ class PaperTrading(Agent):
                         quantity = qty_percent * position_qty
                         if not asset.fractionable:
                             quantity = round(quantity)
-                        price = quantity * latest["close"]
+                        price = quantity * latest["close"] * 0.9999  # Transaction fee of 0.0001 per dollar
                         if price >= 1:
                             if position_qty - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty and assume sell all with small qty
                                 self.session["alpaca_api"].submit_order(symbol=self.stock["symbol"], qty=position_qty, side="sell", type="market", time_in_force="day")
@@ -517,8 +525,11 @@ class Validation(Agent):
                       self.rel_change(prev_bar["vwap"], bar["vwap"]),
                       sentiment
                       ]
+            #inputs[8] = 1 if position.side == "long" else -1
+
             outputs = net.activate(inputs)
 
+            asset = self.session["alpaca_api"].get_asset(symbol=self.stock["symbol"])
             qty_percent = (outputs[1] + 1) * 0.5
             if outputs[0] > 0.5:  # Buy
                 quantity = qty_percent * settled_cash * self.stock["cash_at_risk"] / bar["close"]
@@ -536,10 +547,10 @@ class Validation(Agent):
                     num_buy += 1
             elif outputs[0] < -0.5 and shares > 0:  # Sell
                 quantity = qty_percent * shares
-                price = quantity * bar["close"]
+                price = quantity * bar["close"] * 0.9999  # Transaction fee of 0.0001 per dollar
                 if price >= 1:
                     if shares - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
-                        price = shares * bar["close"]
+                        price = shares * bar["close"] * 0.9999  # Transaction fee of 0.0001 per dollar
                         action = {"inputs": inputs, "outputs": outputs,
                                   "side": "Sell", "quantity": quantity, "price": bar["close"],
                                   "profit": price - cost, "settled_cash": settled_cash,
