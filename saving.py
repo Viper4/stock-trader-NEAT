@@ -13,20 +13,23 @@ class SaveSystem(BaseReporter):
         self.p_interval = population_interval
         self.p_path = population_file_path
         self.current_generation = None
+        self.consecutive_gens = 0
 
     def start_generation(self, generation):
         self.current_generation = generation
+        self.consecutive_gens += 1
 
     def end_generation(self, config, population, species_set):
-        if (self.current_generation+1) % self.g_interval == 0:
+        if self.consecutive_gens % self.g_interval == 0:
             best_genome = None
             for key in population:
                 if population[key].fitness is not None and (best_genome is None or population[key].fitness > best_genome.fitness):
                     best_genome = population[key]
             self.save_data(best_genome, self.g_path)
 
-        if (self.current_generation+1) % self.p_interval == 0:
+        if self.consecutive_gens >= self.p_interval:
             self.save_data((self.current_generation, config, population, species_set, random.getstate()), self.p_path)
+            self.consecutive_gens = 0
 
     @staticmethod
     def make_dir(path):

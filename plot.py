@@ -23,18 +23,38 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
     cost = 0
     annotations = []
     for i in range(len(log)):
+        if i > 2500:
+            print("Too many actions. Plotting only last 2500 actions.")
+            break
         action = log[i]
-        text = f"{i} {action['side']} {round(action['quantity'], 2)} ${round(action['price'], 2)}<br>Cash S|U: {round(action['settled_cash'], 1)}|{round(action['unsettled_cash'], 1)}"
+        if "solid_cash" in action:
+            action["settled_cash"] = action["solid_cash"]
+        if "liquid_cash" in action:
+            action["unsettled_cash"] = action["liquid_cash"]
+        if "type" not in action:
+            action["type"] = "long"
+        text = f"{i} {action['type']} {action['side']} {round(action['quantity'], 2)} ${round(action['price'], 2)}<br>Cash S|U: {round(action['settled_cash'], 1)}|{round(action['unsettled_cash'], 1)}"
         color = "green"
-        if action["side"] == "Sell":
-            shares -= action["quantity"]
-            profit += action["profit"]
-            text += f"<br>P/L: {round(action['profit'], 2)}"
-            color = "red"
-            cost -= (action["price"] * action["quantity"] - action["profit"])
-        elif action["side"] == "Buy":
-            shares += action["quantity"]
-            cost += action["price"] * action["quantity"]
+        if action["type"] == "long":
+            if action["side"] == "Sell":
+                shares -= action["quantity"]
+                profit += action["profit"]
+                text += f"<br>P/L: {round(action['profit'], 2)}"
+                cost -= (action["price"] * action["quantity"] - action["profit"])
+                color = "red"
+            elif action["side"] == "Buy":
+                shares += action["quantity"]
+                cost += action["price"] * action["quantity"]
+        elif action["type"] == "short":
+            if action["side"] == "Buy":
+                shares += action["quantity"]
+                profit += action["profit"]
+                text += f"<br>P/L: {round(action['profit'], 2)}"
+                cost -= (action["price"] * action["quantity"] - action["profit"])
+                color = "red"
+            elif action["side"] == "Sell":
+                shares += action["quantity"]
+                cost += action["price"] * action["quantity"]
 
         annotations.append(dict(x=action["datetime"].isoformat(),
                                 y=action["price"],
@@ -46,11 +66,6 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
                                 arrowcolor=color,
                                 arrowsize=2,
                                 ))
-
-    if shares < 0:
-        print("Logged shares are less than 0. Some data may be missing")
-        shares = 0
-        cost = 0
 
     # Alpaca doesn't allow getting recent 15 minute data so wait if needed
     now_date = dt.datetime.now(tz=log_start.tzinfo)

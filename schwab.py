@@ -8,6 +8,7 @@ from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from requests.exceptions import ConnectionError as RequestsConnectionError
 import threading
 
 
@@ -161,7 +162,7 @@ class Schwab:
                         print(f"Error getting account: '{response.status_code}: {response.content}'. Retrying in 5 seconds... ({tries})")
                         time.sleep(5)
                         tries += 1
-                except ConnectionError as e:
+                except RequestsConnectionError as e:
                     print(f"Error getting account: '{e}'. Retrying in 5 seconds... ({tries})")
                     time.sleep(5)
                     tries += 1

@@ -14,6 +14,7 @@ class FinBERTNews(object):
         self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert").to(self.device)
 
         self.saved_news = {}
+        self.saved_news_indices = {}
         self.last_news = []
         self.last_sentiment = 0
 
@@ -24,7 +25,8 @@ class FinBERTNews(object):
                 news_entity = self.alpaca_api.get_news(symbol=symbols,
                                                        start=start_date.isoformat(),
                                                        end=end_date.isoformat(),
-                                                       limit=limit)
+                                                       limit=limit,
+                                                       sort="asc")
                 return news_entity
             except ConnectionError as e:
                 print(f"Error getting news: '{e}'. Retrying in 5 seconds... ({tries})")
@@ -41,9 +43,17 @@ class FinBERTNews(object):
 
             for symbol in news_dict["symbols"]:
                 news_obj = {"headline": news_dict["headline"], "timestamp": news_dict["updated_at"]}
+
                 if symbol not in self.saved_news:
+                    self.saved_news_indices[symbol] = {}
+                    self.saved_news_indices[symbol][news_dict["updated_at"][0:4]] = 0
+                    self.saved_news_indices[symbol][news_dict["updated_at"][0:7]] = 0
                     self.saved_news[symbol] = [news_obj]
                 elif news_obj not in self.saved_news[symbol]:
+                    if news_dict["updated_at"][0:4] not in self.saved_news_indices[symbol]:
+                        self.saved_news_indices[symbol][news_dict["updated_at"][0:4]] = len(self.saved_news[symbol])
+                    if news_dict["updated_at"][0:7] not in self.saved_news_indices[symbol]:
+                        self.saved_news_indices[symbol][news_dict["updated_at"][0:7]] = len(self.saved_news[symbol])
                     self.saved_news[symbol].append(news_obj)
 
         print("Finbert: Cached {0} news involving {1} with a total of {2} unique symbols".format(len(news_entity), symbols, len(self.saved_news)))
@@ -74,7 +84,16 @@ class FinBERTNews(object):
     def get_saved_sentiment(self, symbol, start_date, end_date):
         news = []
         if symbol in self.saved_news:
-            for news_obj in self.saved_news[symbol]:
+            year_key = str(start_date.year)
+            month_key = start_date.isoformat()[0:7]
+            start_index = len(self.saved_news[symbol])
+            if month_key in self.saved_news_indices[symbol]:
+                start_index = self.saved_news_indices[symbol][month_key]
+            elif year_key in self.saved_news_indices[symbol]:
+                start_index = self.saved_news_indices[symbol][year_key]
+
+            for i in range(start_index, len(self.saved_news[symbol])):
+                news_obj = self.saved_news[symbol][i]
                 news_date = dt.datetime(year=int(news_obj["timestamp"][0:4]),
                                         month=int(news_obj["timestamp"][5:7]),
                                         day=int(news_obj["timestamp"][8:10]),
@@ -84,4 +103,6 @@ class FinBERTNews(object):
                                         tzinfo=start_date.tzinfo)
                 if start_date <= news_date <= end_date:
                     news.append(news_obj["headline"])
+                if news_date > end_date:
+                    break
         return self.estimate_sentiment(news)

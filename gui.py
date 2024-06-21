@@ -60,7 +60,7 @@ class JsonEditorApp:
         self.create_label_entry(self.profile_frame, "Profile Name:", 1, 40, "name")
         self.create_label_entry(self.profile_frame, "Public Key:", 2, 40, "public_key")
         self.create_label_entry(self.profile_frame, "Secret Key:", 3, 40, "secret_key")
-        self.create_label_entry(self.profile_frame, "Backtest Days:", 4, 10, "backtest_days")
+        self.create_label_entry(self.profile_frame, "Batch Size:", 4, 10, "batch_size")
         self.create_label_entry(self.profile_frame, "Profit Window:", 5, 10, "profit_window")
         self.create_label_entry(self.profile_frame, "Interval:", 6, 10, "interval")
         self.create_label_entry(self.profile_frame, "Cash Limit:", 7, 10, "cash_limit")
@@ -196,7 +196,7 @@ class JsonEditorApp:
 
         profile_settings = [
             "name", "public_key", "secret_key",
-            "backtest_days", "profit_window", "interval",
+            "batch_size", "profit_window", "interval",
             "cash_limit", "fitness"
         ]
 
@@ -270,7 +270,7 @@ class JsonEditorApp:
             "name": self.get_attribute("name_entry", "str"),
             "public_key": self.get_attribute("public_key_entry", "str"),
             "secret_key": self.get_attribute("secret_key_entry", "str"),
-            "backtest_days": self.get_attribute("backtest_days_entry", "int"),
+            "batch_size": self.get_attribute("batch_size_entry", "int"),
             "profit_window": self.get_attribute("profit_window_entry", "int"),
             "interval": self.get_attribute("interval_entry", "int"),
             "cash_limit": self.get_attribute("cash_limit_entry", "float"),
@@ -322,7 +322,7 @@ class JsonEditorApp:
         profile["name"] = self.get_attribute("name_entry", "str")
         profile["public_key"] = self.get_attribute("public_key_entry", "str")
         profile["secret_key"] = self.get_attribute("secret_key_entry", "str")
-        profile["backtest_days"] = self.get_attribute("backtest_days_entry", "int")
+        profile["batch_size"] = self.get_attribute("batch_size_entry", "int")
         profile["profit_window"] = self.get_attribute("profit_window_entry", "int")
         profile["interval"] = self.get_attribute("interval_entry", "int")
         profile["cash_limit"] = self.get_attribute("cash_limit_entry", "float")

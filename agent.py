@@ -150,6 +150,7 @@ class Training(Agent):
         self.start_cash = 100000.0
         self.bars = bars
         self.sentiments = sentiments
+        self.batch_index = 0
         self.genome_file_path = os.path.join(self.genome_path, self.stock["genome_filename"])
         self.population_file_path = os.path.join(self.population_path, self.stock["population_filename"])
 
@@ -160,8 +161,19 @@ class Training(Agent):
         # self.pool doesn't work: cant pickle Pool(). Separate class doesn't work: leaks memory
         pool = Pool(processes=self.settings["processes"])
         jobs = []
+
+        if isinstance(self.bars[self.batch_index], int):
+            sub_index = self.bars[self.batch_index]
+            print(f"Evaluating genomes on substitute batch {sub_index}")
+            bars = self.bars[sub_index]
+            sentiments = self.sentiments[sub_index]
+        else:
+            print(f"Evaluating genomes on batch {self.batch_index}")
+            bars = self.bars[self.batch_index]
+            sentiments = self.sentiments[self.batch_index]
+
         for genome_id, genome in genomes:
-            jobs.append(pool.apply_async(eval_genome, (self.bars, self.sentiments, self.start_cash,
+            jobs.append(pool.apply_async(eval_genome, (bars, sentiments, self.start_cash,
                                                        genome, self.config, self.stock["cash_at_risk"],
                                                        self.settings["log_training"], self.session["profit_window"],
                                                        self.session["fitness_multipliers"], self.stock["shorting"])))
@@ -174,7 +186,7 @@ class Training(Agent):
                 self.best_genome = genome
 
         if best_log is not None and self.settings["log_training"]:
-            plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], best_log, 15)
+            plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], best_log, 30, True)
         pool.close()
         pool.join()
         pool.terminate()
@@ -183,6 +195,9 @@ class Training(Agent):
         if 0 < self.settings["gen_stagger"] <= self.consecutive_gens:
             self.consecutive_gens = 0
             self.running = False
+        self.batch_index += 1
+        if self.batch_index >= len(self.bars):
+            self.batch_index = 0
 
     def run(self):
         self.running = True
@@ -238,6 +253,8 @@ class Trading(Agent):
         print(f"{self.trader.profile['name']} {self.stock['symbol']}: Updated network")
 
     def run(self):
+        if self.running:
+            return
         print(f"{self.trader.profile['name']} {self.stock['symbol']}: Starting trading")
         self.running = True
         cum_price = 0
@@ -247,6 +264,7 @@ class Trading(Agent):
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+
             if self.trader.get_market_status():
                 candles, prev_close = self.trader.scraper.get_latest_candles(self.stock["symbol"], interval=str(self.trader.profile["interval"]) + "m")
                 latest = candles[-1]
@@ -265,7 +283,8 @@ class Trading(Agent):
                 position = self.trader.schwab_api.get_position(self.stock["symbol"])
                 position_qty = position["longQuantity"]
                 sentiment = self.trader.finbert.get_api_sentiment(self.stock["symbol"], now_date - dt.timedelta(days=2), now_date)
-                inputs = [position["longOpenProfitLoss"],
+                avg_price = position["averagePrice"] if "averagePrice" in position else 1
+                inputs = [position["longOpenProfitLoss"] / avg_price,
                           self.rel_change(prev_data["open"], latest["open"]),
                           self.rel_change(prev_data["high"], latest["high"]),
                           self.rel_change(prev_data["low"], latest["low"]),
@@ -274,18 +293,11 @@ class Trading(Agent):
                           self.rel_change(prev_data["vwap"], latest["vwap"]),
                           sentiment
                           ]
-                '''if position["longQuantity"] > 0:
-                    position_qty = position["longQuantity"]
-                    inputs[8] = 1
-                else:
-                    position_qty = position["shortQuantity"]
-                    inputs[8] = -1'''
 
                 outputs = self.net.activate(inputs)
 
                 qty_percent = (outputs[1] + 1) * 0.5
 
-                asset = self.trader.alpaca_api.get_asset(symbol=self.stock["symbol"])
                 if outputs[0] > 0.5:  # Buy
                     account = self.trader.schwab_api.get_account()
                     unsettled_cash = account["currentBalances"]["unsettledCash"]

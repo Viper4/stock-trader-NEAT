@@ -4,13 +4,15 @@
       "name": "1m 1pw Profile",
       "public_key": "PKHSGZJ9CBQPWGLS63YP",
       "secret_key": "NBZQMDH1JflJTiUnt4BUHezhwmEKCfpVju2BBblf",
-      "backtest_days": 356,
+      "batch_size": 274,
+      "batches": 4,
       "profit_window": 1,
       "interval": 1,
       "cash_limit": 20000.0,
+      "short_limit": 0.0,
       "fitness_multipliers": {
-        "average": 1,
-        "total":  0.1,
+        "average": 0.5,
+        "total":  0.05,
         "risk": 100
       },
       "stocks": [
@@ -76,69 +78,6 @@
           "training_filename": "1m-data-AMD.gz",
           "trading": true,
           "shorting": true
-        },
-        {
-          "symbol": "AMZN",
-          "cash_at_risk": 0.15,
-          "population_filename": "1m-1pw-population-AMZN.gz",
-          "genome_filename": "1m-1pw-genome-AMZN.gz",
-          "training_filename": "1m-data-AMZN.gz",
-          "trading": false,
-          "shorting": true
-        },
-        {
-          "symbol": "AAPL",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-AAPL.gz",
-          "genome_filename": "1m-1pw-genome-AAPL.gz",
-          "training_filename": "1m-data-AAPL.gz",
-          "trading": false,
-          "shorting": true
-        },
-        {
-          "symbol": "INTC",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-INTC.gz",
-          "genome_filename": "1m-1pw-genome-INTC.gz",
-          "training_filename": "1m-data-INTC.gz",
-          "trading": false,
-          "shorting": true
-        },
-        {
-          "symbol": "SOUN",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-SOUN.gz",
-          "genome_filename": "1m-1pw-genome-SOUN.gz",
-          "training_filename": "1m-data-SOUN.gz",
-          "trading": false,
-          "shorting": true
-        },
-        {
-          "symbol": "DIS",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-DIS.gz",
-          "genome_filename": "1m-1pw-genome-DIS.gz",
-          "training_filename": "1m-data-DIS.gz",
-          "trading": false,
-          "shorting": true
-        },
-        {
-          "symbol": "QCOM",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-QCOM.gz",
-          "genome_filename": "1m-1pw-genome-QCOM.gz",
-          "training_filename": "1m-data-QCOM.gz",
-          "trading": false,
-          "shorting": true
-        },
-        {
-          "symbol": "CVNA",
-          "cash_at_risk": 0.25,
-          "population_filename": "1m-1pw-population-CVNA.gz",
-          "genome_filename": "1m-1pw-genome-CVNA.gz",
-          "training_filename": "1m-data-CVNA.gz",
-          "trading": false,
-          "shorting": true
         }
       ]
     }
@@ -147,8 +86,8 @@
   "save_path": "C:\\Users\\vpr16\\PythonProjects\\StockTraderNEAT\\Saves",
   "training_reset": 3,
   "gen_stagger": 8,
-  "processes": 8,
-  "print_stats": true,
+  "processes": 10,
+  "print_stats": false,
   "log_training": false,
   "visualize": false
 }
