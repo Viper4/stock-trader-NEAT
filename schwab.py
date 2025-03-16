@@ -56,12 +56,10 @@ class Schwab:
                     user_agents.append(line.strip())
         options.add_argument(f"user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.3")
 
-        service = Service(executable_path="C:\\Users\\vpr16\\PythonProjects\\StockTraderNEAT\\edgedriver_win64\\msedgedriver.exe")
+        service = Service(executable_path="C:\\Users\\vpr16\\PythonProjects\\StockTraderNEATShort\\edgedriver_win64\\msedgedriver.exe")
         driver = webdriver.Edge(options, service)
         auth_url = f"https://api.schwabapi.com/v1/oauth/authorize?client_id={self.credentials['public_key']}&redirect_uri=https://127.0.0.1"
 
-        #print(auth_url)
-        #returned_link = input("Enter code link: ")
         driver.get(auth_url)
 
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "loginIdInput")))
@@ -176,11 +174,14 @@ class Schwab:
                     return position
         return {
             "longQuantity": 0,
+            "shortQuantity": 0,
             "instrument":
             {
                 "symbol": symbol,
             },
             "longOpenProfitLoss": 0,
+            "shortOpenProfitLoss": 0,
+            "averagePrice": 0
         }
 
     def submit_order(self, symbol, quantity, side):

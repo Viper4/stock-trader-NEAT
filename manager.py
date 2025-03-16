@@ -1,6 +1,5 @@
 import json
-#import short_agent as agent
-import agent
+import short_agent as agent
 import time
 import datetime as dt
 import pytz
@@ -12,9 +11,10 @@ import threading
 import alpaca_trade_api as alpaca
 import alpaca_trade_api.entity
 from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit
-from requests.exceptions import ConnectionError as RequestsConnectionError, HTTPError, RequestException
+from requests.exceptions import ConnectionError as RequestsConnectionError
 from urllib3.exceptions import ProtocolError
 import subprocess
+import numpy as np
 
 
 class Manager(object):
@@ -23,7 +23,7 @@ class Manager(object):
         self.settings = settings
         self.finbert = finbert
         self.sessions = {}
-        self.log_path = self.settings["save_path"] + "\\Logs"
+        self.log_path = self.settings["save_path"] + "\\Logs\\"
         saving.SaveSystem.make_dir(self.log_path)
 
     @staticmethod
@@ -53,7 +53,7 @@ class Manager(object):
                     adjustment="all").df.tz_convert("US/Eastern")
                 bars_df = bars_df.between_time("9:30", "16:00")
                 return bars_df.reset_index().to_dict("records")
-            except (RequestsConnectionError, HTTPError, RequestException, ProtocolError) as e:
+            except (RequestsConnectionError, ProtocolError) as e:
                 Manager.check_internet_connection()
                 print(f"Error getting bars: '{e}'. Retrying in 5 seconds... ({tries})")
                 tries += 1
@@ -74,28 +74,71 @@ class Manager(object):
         return settings, alpaca_api
 
     @staticmethod
-    def update_net(for_agent, genome, alpaca_api, interval, profile_name):
+    def update_net(for_agent, genome, alpaca_api, interval, profile_name, k_period, d_period, rsi_period):
+        k_period = (k_period * 24 * 60) / interval
+        d_period = (d_period * 24 * 60) / interval
+        rsi_period = (rsi_period * 24 * 60) / interval
+        alpha = 2 / (d_period + 1)
+        prev_ema = None
+
         for_agent.net = agent.neat.nn.RecurrentNetwork.create(genome, for_agent.config)
 
-        # Preparing the network with past 30 days data
+        # Preparing the network with past 20 days data
         now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-        bars = for_agent.trader.get_bars(for_agent.stock["symbol"], alpaca_api, interval, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
-        for i in range(1, len(bars)):
-            bar = bars[i]
-            prev_bar = bars[i - 1]
-            backtest_date = bars[i]["timestamp"].to_pydatetime()
-            sentiment = for_agent.trader.finbert.get_saved_sentiment(for_agent.stock["symbol"],
-                                                                 backtest_date - dt.timedelta(days=2),
-                                                                 backtest_date)
-            inputs = [0,  # plpc
-                      for_agent.rel_change(prev_bar["open"], bar["open"]),
-                      for_agent.rel_change(prev_bar["high"], bar["high"]),
-                      for_agent.rel_change(prev_bar["low"], bar["low"]),
-                      for_agent.rel_change(prev_bar["close"], bar["close"]),
-                      for_agent.rel_change(prev_bar["volume"], bar["volume"]),
-                      for_agent.rel_change(prev_bar["vwap"], bar["vwap"]),
-                      sentiment,
-                      ]
+        stock_bars = for_agent.trader.get_bars(for_agent.stock["symbol"], alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16))
+        sp500_bars = for_agent.trader.get_bars("SPY", alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16))
+        nasdaq_bars = for_agent.trader.get_bars("QQQ", alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16))
+        for i in range(1, len(stock_bars)):
+            stock_bar = stock_bars[i]
+            sp500_bar = sp500_bars[i]
+            nasdaq_bar = nasdaq_bars[i]
+            prev_stock_bar = stock_bars[i - 1]
+            prev_sp500_bar = sp500_bars[i - 1]
+            prev_nasdaq_bar = nasdaq_bars[i - 1]
+            backtest_date = stock_bars[i]["timestamp"].to_pydatetime()
+            stock_sentiment = for_agent.trader.finbert.get_saved_sentiment(for_agent.stock["symbol"],
+                                                                           backtest_date - dt.timedelta(days=2),
+                                                                           backtest_date)
+            sp500_sentiment = for_agent.trader.finbert.get_saved_sentiment("SPY",
+                                                                           backtest_date - dt.timedelta(days=2),
+                                                                           backtest_date)
+            nasdaq_sentiment = for_agent.trader.finbert.get_saved_sentiment("QQQ",
+                                                                            backtest_date - dt.timedelta(days=2),
+                                                                            backtest_date)
+
+            k_percent = for_agent.calculate_k_percent(stock_bars[i - min(k_period, i):i])
+
+            # %D = EMA(%K, N) or SMA(%K, N)
+            ema = for_agent.calculate_ema(stock_bar["close"], alpha, prev_ema)
+            norm_ema = 2 * ((ema - stock_bar["close"]) / stock_bar["close"])
+            prev_ema = ema
+            k_sma = for_agent.calculate_sma(stock_bars[i - min(k_period, i):i])
+            norm_k_sma = 2 * ((k_sma - stock_bar["close"]) / stock_bar["close"])
+            d_sma = for_agent.calculate_sma(stock_bars[i - min(d_period, i):i])
+            norm_d_sma = 2 * ((d_sma - stock_bar["close"]) / stock_bar["close"])
+
+            rsi = for_agent.calculate_rsi(stock_bars[i - min(rsi_period, i):i])
+
+            inputs = [1,  # -1 = short, 1 = long
+                      0,  # plpc
+                      for_agent.rel_change(prev_stock_bar["open"], stock_bar["open"]),
+                      for_agent.rel_change(prev_stock_bar["high"], stock_bar["high"]),
+                      for_agent.rel_change(prev_stock_bar["low"], stock_bar["low"]),
+                      for_agent.rel_change(prev_stock_bar["close"], stock_bar["close"]),
+                      for_agent.rel_change(prev_stock_bar["volume"], stock_bar["volume"]),
+                      for_agent.rel_change(prev_stock_bar["vwap"], stock_bar["vwap"]),
+                      stock_sentiment,  # -1 = negative, 0 = neutral, 1 = positive
+                      for_agent.rel_change(prev_sp500_bar["close"], sp500_bar["close"]),
+                      for_agent.rel_change(prev_sp500_bar["volume"], sp500_bar["volume"]),
+                      sp500_sentiment,
+                      for_agent.rel_change(prev_nasdaq_bar["close"], nasdaq_bar["close"]),
+                      for_agent.rel_change(prev_nasdaq_bar["volume"], nasdaq_bar["volume"]),
+                      nasdaq_sentiment,
+                      k_percent,
+                      norm_ema,
+                      norm_k_sma,
+                      norm_d_sma,
+                      rsi]
             for_agent.net.activate(inputs)
         print(f"{profile_name} {for_agent.stock['symbol']}: Updated network")
 
@@ -150,6 +193,9 @@ class Trainer(Manager):
             "batch_size": profile["batch_size"],
             "batches": profile["batches"],
             "interval": profile["interval"],
+            "k_period": profile["k_period"],
+            "d_period": profile["d_period"],
+            "rsi_period": profile["rsi_period"],
             "profit_window": profile["profit_window"],
             "fitness_multipliers": profile["fitness_multipliers"],
             "short_limit": profile["short_limit"]
@@ -173,7 +219,7 @@ class Trainer(Manager):
             self.finbert.save_news(self.symbols, earliest_date, end_date)
         print(f" {symbol}: Generating sentiments for {len(bars)} bars from {start_date} to {end_date}")
 
-        sentiments = [0]
+        sentiments = [0]  # Don't use the first sentiment in training (relative change so start at index 1)
 
         for i in range(1, len(bars)):
             backtest_date = bars[i]["timestamp"].to_pydatetime()
@@ -195,14 +241,58 @@ class Trainer(Manager):
             start_date = now_date - dt.timedelta(days=session["batch_size"])
 
             session["agents"].clear()
+            sp500_bars = []  # Batches of sp500 bars
+            nasdaq_bars = []  # Batches of nasdaq bars
+            sp500_sentiments = []
+            nasdaq_sentiments = []
+
+            # TODO: Repeated code with if statements. Figure out how to condense them to make this cleaner
+            for i in range(session["batches"]):
+                time_delta = dt.timedelta(days=i * session["batch_size"])
+
+                sp500_file_path = os.path.join(self.training_path, str(session["interval"]) + "m-data-SPY" + str(i) + ".gz")
+                if not regenerate and os.path.exists(sp500_file_path):
+                    backtest_start, backtest_end, batch_sp500_sentiments = saving.SaveSystem.load_data(sp500_file_path)
+                    batch_sp500_bars = self.get_bars("SPY", session["alpaca_api"], session["interval"], backtest_start,
+                                                     backtest_end)
+                    if len(batch_sp500_bars) != len(batch_sp500_sentiments):
+                        print(f" SPY{i}: Loaded {len(batch_sp500_bars)} bars but have {len(batch_sp500_sentiments)} sentiments. Regenerating data")
+                        batch_sp500_bars, batch_sp500_sentiments = self.generate_data("SPY", session, earliest_date - time_delta,
+                                                              start_date - time_delta, end_date - time_delta, sp500_file_path,
+                                                              save_news)
+                    else:
+                        print(f" SPY{i}: Loaded {len(batch_sp500_bars)} bars and sentiments from {batch_sp500_bars[0]['timestamp']} to {batch_sp500_bars[-1]['timestamp']}")
+                else:
+                    batch_sp500_bars, batch_sp500_sentiments = self.generate_data("SPY", session, earliest_date - time_delta, start_date - time_delta, end_date - time_delta, sp500_file_path, save_news)
+
+                nasdaq_file_path = os.path.join(self.training_path, str(session["interval"]) + "m-data-QQQ" + str(i) + ".gz")
+                if not regenerate and os.path.exists(nasdaq_file_path):
+                    backtest_start, backtest_end, batch_nasdaq_sentiments = saving.SaveSystem.load_data(nasdaq_file_path)
+                    batch_nasdaq_bars = self.get_bars("QQQ", session["alpaca_api"], session["interval"], backtest_start,
+                                                      backtest_end)
+                    if len(batch_nasdaq_bars) != len(batch_nasdaq_sentiments):
+                        print(f" QQQ{i}: Loaded {len(batch_nasdaq_bars)} bars but have {len(batch_nasdaq_sentiments)} sentiments. Regenerating data")
+                        batch_nasdaq_bars, batch_nasdaq_sentiments = self.generate_data("QQQ", session, earliest_date - time_delta,
+                                                              start_date - time_delta, end_date - time_delta, nasdaq_file_path,
+                                                              save_news)
+                    else:
+                        print(f" QQQ{i}: Loaded {len(batch_nasdaq_bars)} bars and sentiments from {batch_nasdaq_bars[0]['timestamp']} to {batch_nasdaq_bars[-1]['timestamp']}")
+                else:
+                    batch_nasdaq_bars, batch_nasdaq_sentiments = self.generate_data("QQQ", session, earliest_date - time_delta, start_date - time_delta, end_date - time_delta, nasdaq_file_path, save_news)
+
+                sp500_bars.append(batch_sp500_bars)
+                sp500_sentiments.append(batch_sp500_sentiments)
+                nasdaq_bars.append(batch_nasdaq_bars)
+                nasdaq_sentiments.append(batch_nasdaq_sentiments)
+
             for stock in session["stocks"]:
                 if stock["training_filename"] is None:
                     print(" No training data filename provided for " + stock["symbol"])
                     exit(0)
 
                 training_file_path = os.path.join(self.training_path, stock["training_filename"])
-                all_bars = []
-                all_sentiments = []
+                stock_bars = []  # Batches of stock bars
+                stock_sentiments = []
                 for i in range(session["batches"]):
                     file_path = training_file_path.replace(".gz", f"{i}.gz")
                     time_delta = dt.timedelta(days=i * session["batch_size"])
@@ -218,15 +308,17 @@ class Trainer(Manager):
                     else:
                         bars, sentiments = self.generate_data(stock["symbol"], session, earliest_date - time_delta, start_date - time_delta, end_date - time_delta, file_path, save_news)
                     if bars is None:
-                        for j in reversed(range(len(all_bars))):
-                            if not isinstance(all_bars[j], int):
+                        for j in reversed(range(len(stock_bars))):
+                            if not isinstance(stock_bars[j], int):
                                 bars, sentiments = j, j
                                 print(f" {stock['symbol']}{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}, using {stock['symbol']}{j} data")
                                 break
-                    all_bars.append(bars)
-                    all_sentiments.append(sentiments)
+                    stock_bars.append(bars)
+                    stock_sentiments.append(sentiments)
 
-                session["agents"][stock["symbol"]] = agent.Training(self.settings, session, stock, all_bars, all_sentiments)
+                session["agents"][stock["symbol"]] = agent.Training(self.settings, session, stock, 
+                                                                    stock_bars, sp500_bars, nasdaq_bars,
+                                                                    stock_sentiments, sp500_sentiments, nasdaq_sentiments)
 
         print("Trainer: Created {0} training agents\n".format(self.symbols))
 
@@ -284,7 +376,6 @@ class Trader(Manager):
         self.agents = {}
         self.logs = {}
         self.clock = [None, 0]
-        self.positions = [None, 0]
 
     def update_profile(self, market_status):
         self.settings, self.alpaca_api = self.get_settings_and_alpaca(0)
@@ -321,7 +412,9 @@ class Trader(Manager):
                     else:
                         try:
                             best_genome = saving.SaveSystem.load_data(os.path.join(self.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
-                            self.update_net(self.agents[stock["symbol"]], best_genome, self.alpaca_api, self.profile["interval"], self.profile["name"])
+                            self.update_net(self.agents[stock["symbol"]], best_genome, self.alpaca_api,
+                                            self.profile["interval"], self.profile["name"],
+                                            self.profile["k_period"], self.profile["d_period"], self.profile["rsi_period"])
                         except FileNotFoundError:
                             print(f" No genome file found for {stock['genome_filename']}")
                 else:
@@ -365,11 +458,12 @@ class Trader(Manager):
                     for symbol in self.agents:
                         trainer_agent = self.trainer.sessions[self.settings["profiles"][0]["name"]]["agents"][symbol]
                         if trainer_agent.best_genome is not None:
-                            self.update_net(self.agents[symbol], trainer_agent.best_genome, self.alpaca_api, self.profile["interval"], self.profile["name"])
+                            self.update_net(self.agents[symbol], trainer_agent.best_genome, self.alpaca_api,
+                                            self.profile["interval"], self.profile["name"],
+                                            self.profile["k_period"], self.profile["d_period"], self.profile["rsi_period"])
 
                 for symbol in self.agents:
                     threading.Thread(target=self.agents[symbol].run).start()
-                self.consecutive_days = 0
                 next_close = self.clock[0].next_close
                 wait_time = (next_close - now_date).total_seconds()
                 print(f"Market closes in {wait_time / 3600} hours")
@@ -414,9 +508,9 @@ class Trader(Manager):
                         else:
                             previous_logs[symbol] = self.logs[symbol]
                         threading.Thread(target=plot.plot_log, args=(self.alpaca_api, symbol, self.logs[symbol], self.profile["interval"])).start()
-                        self.logs[symbol].clear()
                 saving.SaveSystem.save_data(previous_logs, os.path.join(self.log_path, f"{self.profile['name']}.gz"))
-
+                for symbol in self.logs:
+                    self.logs[symbol].clear()
                 next_open = self.clock[0].next_open
                 wait_time = (next_open - now_date).total_seconds()
                 print(f"\nMarket opens in {wait_time / 3600} hours\n-----")
@@ -431,7 +525,6 @@ class Trader(Manager):
 class PaperTrader(Manager):
     def __init__(self, settings, finbert):
         super().__init__(settings, finbert)
-        self.trainer = Trainer(settings, finbert)
         self.scraper = cs.Scraper()
         self.training_thread = None
         self.consecutive_days = 0
@@ -448,12 +541,29 @@ class PaperTrader(Manager):
                 "short_limit": profile["short_limit"],
                 "stocks": profile["stocks"],
                 "interval": profile["interval"],
+                "k_period": profile["k_period"],
+                "d_period": profile["d_period"],
+                "rsi_period": profile["rsi_period"],
                 "agents": {},
                 "logs": {},
                 "clock": [None, 0],
                 "positions": [None, 0],
                 "alpaca_api_account": [None, 0]
             }
+
+            print(profile["name"])
+            starting_unsettled = (float(input(" Enter starting unsettled cash: ")), int(input(" Enter pending days: ")))
+            account = self.get_api_account(self.sessions[profile["name"]])
+            self.sessions[profile["name"]]["settled_cash"] = float(account.cash)
+            self.sessions[profile["name"]]["unsettled_cash"] = 0.0
+            self.sessions[profile["name"]]["pending_sales"].clear()
+
+            if starting_unsettled[0] > 0:
+                self.sessions[profile["name"]]["unsettled_cash"] = starting_unsettled[0]
+                self.sessions[profile["name"]]["settled_cash"] -= self.sessions[profile["name"]]["unsettled_cash"]
+                self.sessions[profile["name"]]["pending_sales"].append((self.sessions[profile["name"]]["unsettled_cash"], starting_unsettled[1]))
+
+        self.trainer = Trainer(settings, finbert)
 
         self.create_agents()
 
@@ -479,10 +589,15 @@ class PaperTrader(Manager):
                 else:
                     try:
                         best_genome = saving.SaveSystem.load_data(os.path.join(session["agents"][stock["symbol"]].genome_path, stock["genome_filename"]))
-                        self.update_net(session["agents"][stock["symbol"]], best_genome, session["alpaca_api"], session["interval"], profile_name)
+                        self.update_net(session["agents"][stock["symbol"]], best_genome, session["alpaca_api"],
+                                        session["interval"], profile_name,
+                                        session["k_period"], session["d_period"], session["rsi_period"])
                     except FileNotFoundError:
                         print(f" No genome file found for {stock['genome_filename']}")
             print(f" Created {', '.join(session['agents'].keys())} paper trading agents\n")
+
+            for symbol in session['agents']:
+                threading.Thread(target=session['agents'][symbol].run).start()
 
     @staticmethod
     def get_market_status(session):
@@ -493,7 +608,7 @@ class PaperTrader(Manager):
                     session["clock"][0] = session["alpaca_api"].get_clock()
                     session["clock"][1] = time.time()
                     return session["clock"][0].is_open
-                except (RequestsConnectionError, HTTPError, RequestException, ProtocolError) as e:
+                except (RequestsConnectionError, ProtocolError) as e:
                     Manager.check_internet_connection()
                     print(f"Error getting clock: '{e}'. Retrying in 5 seconds... ({tries})")
                     time.sleep(5)
@@ -509,7 +624,7 @@ class PaperTrader(Manager):
                     session["positions"][0] = session["alpaca_api"].list_positions()
                     session["positions"][1] = time.time()
                     return session["positions"][0]
-                except (RequestsConnectionError, HTTPError, RequestException, ProtocolError) as e:
+                except (RequestsConnectionError, ProtocolError) as e:
                     Manager.check_internet_connection()
                     print(f"Error listing positions: '{e}'. Retrying in 5 seconds... ({tries})")
         return session["positions"][0]
@@ -539,7 +654,7 @@ class PaperTrader(Manager):
                     session["alpaca_api_account"][0] = session["alpaca_api"].get_account()
                     session["alpaca_api_account"][1] = time.time()
                     return session["alpaca_api_account"][0]
-                except (RequestsConnectionError, HTTPError, RequestException, ProtocolError) as e:
+                except (RequestsConnectionError, ProtocolError) as e:
                     Manager.check_internet_connection()
                     print(f"Error getting account: '{e}'. Retrying in 5 seconds... ({tries})")
         return session["alpaca_api_account"][0]
@@ -547,20 +662,6 @@ class PaperTrader(Manager):
     def start(self):
         self.running = True
         self.consecutive_days = 0
-        for profile_name in self.sessions:
-            print(profile_name)
-            session = self.sessions[profile_name]
-            starting_unsettled = (float(input(" Enter starting unsettled cash: ")), int(input(" Enter pending days: ")))
-            #starting_unsettled = (0, 0)
-            account = self.get_api_account(session)
-            session["settled_cash"] = float(account.cash)
-            session["unsettled_cash"] = 0.0
-            session["pending_sales"].clear()
-
-            if starting_unsettled[0] > 0:
-                session["unsettled_cash"] = starting_unsettled[0]
-                session["settled_cash"] -= session["unsettled_cash"]
-                session["pending_sales"].append((session["unsettled_cash"], starting_unsettled[1]))
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
@@ -577,16 +678,19 @@ class PaperTrader(Manager):
                         for symbol in session["agents"]:
                             trainer_agent = self.trainer.sessions[profile_name]["agents"][symbol]
                             if trainer_agent.best_genome is not None:
-                                self.update_net(session["agents"][symbol], trainer_agent.best_genome, session["alpaca_api"], session["interval"], profile_name)
+                                self.update_net(session["agents"][symbol], trainer_agent.best_genome, session["alpaca_api"],
+                                                session["interval"], profile_name,
+                                                session["k_period"], session["d_period"], session["rsi_period"])
 
                 for session in self.sessions.values():
                     for j in reversed(range(len(session["pending_sales"]))):
-                        sale_price, sale_day, is_short = session["pending_sales"][j]
+                        sale_price, sale_day = session["pending_sales"][j]
                         if self.consecutive_days - sale_day > 1:
                             session["settled_cash"] += sale_price
-                            if not is_short:
-                                session["unsettled_cash"] -= sale_price
+                            session["unsettled_cash"] -= sale_price
                             session["pending_sales"].pop(j)
+                    for symbol in session["agents"]:
+                        threading.Thread(target=session["agents"][symbol].run).start()
 
                 next_close = self.sessions[first_profile_name]["clock"][0].next_close
                 wait_time = (next_close - now_date).total_seconds()
@@ -617,12 +721,13 @@ class PaperTrader(Manager):
                     for symbol in session["logs"]:
                         if len(session["logs"][symbol]) > 0:
                             if symbol in previous_logs:
-                                previous_logs[symbol].extend(session["logs"]["symbol"])
+                                previous_logs[symbol].extend(session["logs"][symbol])
                             else:
-                                previous_logs[symbol] = session["logs"]["symbol"]
+                                previous_logs[symbol] = session["logs"][symbol]
                             threading.Thread(target=plot.plot_log, args=(session["alpaca_api"], symbol, session["logs"][symbol], session["interval"])).start()
-                            session["logs"][symbol].clear()
                     saving.SaveSystem.save_data(previous_logs, os.path.join(self.log_path, f"{profile_name} (Paper).gz"))
+                    for symbol in session["logs"]:
+                        session["logs"][symbol].clear()
                 next_open = self.sessions[first_profile_name]["clock"][0].next_open
                 wait_time = (next_open - now_date).total_seconds()
                 print(f"\nMarket opens in {wait_time / 3600} hours\n-----")
@@ -684,10 +789,12 @@ class Validator(Manager):
                     else:
                         try:
                             best_genome = saving.SaveSystem.load_data(os.path.join(session["agents"][stock["symbol"]].genome_path, stock["genome_filename"]))
-                            bars = self.get_bars(stock["symbol"], session["alpaca_api"], session["interval"], start_date, end_date)
-                            print(f"Validating over {len(bars)} bars from {bars[0]['timestamp']} to {bars[-1]['timestamp']}...")
+                            stock_bars = self.get_bars(stock["symbol"], session["alpaca_api"], session["interval"], start_date, end_date)
+                            print(f"Validating over {len(stock_bars)} bars from {stock_bars[0]['timestamp']} to {stock_bars[-1]['timestamp']}...")
                             asset = session["alpaca_api"].get_asset(symbol=stock["symbol"])
-                            session["agents"][stock["symbol"]].validate(bars, best_genome, stock["shorting"], asset, session["short_limit"])
+                            session["agents"][stock["symbol"]].validate(stock_bars,
+                                                                        best_genome, stock["shorting"], asset, session["short_limit"],
+                                                                        session["k_period"], session["d_period"], session["rsi_period"])
 
                         except FileNotFoundError:
                             print(f" No genome file found for {stock['genome_filename']}")

@@ -33,7 +33,7 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
             action["unsettled_cash"] = action["liquid_cash"]
         if "type" not in action:
             action["type"] = "long"
-        text = f"{i} {action['type']} {action['side']} {round(action['quantity'], 2)} ${round(action['price'], 2)}<br>Cash S|U: {round(action['settled_cash'], 1)}|{round(action['unsettled_cash'], 1)}"
+        text = f"{i} {action['type']} {action['side'][0]} {round(action['quantity'], 2)} ${round(action['price'], 2)}<br> S|U: {round(action['settled_cash'], 1)}|{round(action['unsettled_cash'], 1)}"
         color = "green"
         if action["type"] == "long":
             if action["side"] == "Sell":

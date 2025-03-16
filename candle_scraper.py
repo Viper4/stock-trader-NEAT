@@ -18,7 +18,7 @@ class Scraper(object):
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br"
         }
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval={interval}"
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval={interval}&range=1d"
 
         tries = 1
         while True:

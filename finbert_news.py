@@ -10,7 +10,7 @@ class FinBERTNews(object):
         self.alpaca_api = alpaca_api
 
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")  # Divides text by whitespace
+        self.tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
         self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert").to(self.device)
 
         self.saved_news = {}
