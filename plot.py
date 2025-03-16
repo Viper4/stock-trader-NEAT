@@ -4,8 +4,7 @@ import time
 import datetime as dt
 import saving
 import os
-import manager
-
+from base_manager import Manager
 
 def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
     log_start = log[0]["datetime"]
@@ -103,7 +102,7 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
 
 
 if __name__ == "__main__":
-    settings, alpaca_api = manager.Manager.get_settings_and_alpaca(0)
+    settings, alpaca_api = Manager.get_settings_and_alpaca(0)
     log_path = f"{settings['save_path']}\\Logs"
     filename = input("Enter file name: ")
     logs = saving.SaveSystem.load_data(os.path.join(log_path, f"{filename}.gz"))

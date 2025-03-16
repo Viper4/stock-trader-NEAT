@@ -2,8 +2,8 @@
   "profiles": [
     {
       "name": "1m 5pw Profile Short",
-      "public_key": "",
-      "secret_key": "",
+      "public_key": "PKIQGRDTI7JBAIHD3C86",
+      "secret_key": "AOzVWc6gXeD6YBQTlvGUACGiSsEhgl7SAHvmf341",
       "batch_size": 183,
       "batches": 4,
       "profit_window": 5,
@@ -11,6 +11,7 @@
       "k_period": 14,
       "d_period": 3,
       "rsi_period": 14,
+      "start_cash": 100000.0,
       "cash_limit": 999999999.0,
       "short_limit": 50000.0,
       "fitness_multipliers": {
