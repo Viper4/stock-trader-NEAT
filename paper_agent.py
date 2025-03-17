@@ -102,12 +102,9 @@ class PaperTrading(Agent):
 
                 # %D = EMA(%K, N) or SMA(%K, N)
                 ema = self.calculate_ema(stock_latest["close"], alpha, prev_ema)
-                norm_ema = 2 * ((ema - stock_latest["close"]) / stock_latest["close"])
                 prev_ema = ema
                 k_sma = Agent.calculate_sma(stock_candles[last_index - min(k_period, last_index):last_index])
-                norm_k_sma = 2 * ((k_sma - stock_latest["close"]) / stock_latest["close"])
                 d_sma = Agent.calculate_sma(stock_candles[last_index - min(d_period, last_index):last_index])
-                norm_d_sma = 2 * ((d_sma - stock_latest["close"]) / stock_latest["close"])
 
                 rsi = self.calculate_rsi(stock_candles[last_index - min(rsi_period, last_index):last_index])
 
@@ -127,9 +124,9 @@ class PaperTrading(Agent):
                           self.rel_change(prev_nasdaq_candle["volume"], nasdaq_latest["volume"]),
                           nasdaq_sentiment,
                           k_percent,
-                          norm_ema,
-                          norm_k_sma,
-                          norm_d_sma,
+                          ema,
+                          k_sma,
+                          d_sma,
                           rsi]
 
                 if self.stock["shorting"] and position_qty < 0:

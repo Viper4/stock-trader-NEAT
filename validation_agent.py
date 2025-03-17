@@ -16,8 +16,8 @@ class Validation(Agent):
         start_time = time.time()
         net = nn.RecurrentNetwork.create(genome, self.config)
         start_date = stock_bars[0]["timestamp"].date()
-        settled_cash = start_cash
-        start_equity = start_cash
+        settled_cash = float(start_cash)
+        start_equity = float(start_cash)
         unsettled_cash = 0.0
         pending_sales = []
         profit_sum = 0.0
@@ -74,16 +74,10 @@ class Validation(Agent):
                                                                 backtest_date)
 
             k_percent = Agent.calculate_k_percent(stock_bars[i - min(bar_k_period, i):i])
-
-            # %D = EMA(%K, N) or SMA(%K, N)
             ema = Agent.calculate_ema(stock_bar["close"], alpha, prev_ema)
-            norm_ema = 2 * ((ema - stock_bar["close"]) / stock_bar["close"])
             prev_ema = ema
             k_sma = Agent.calculate_sma(stock_bars[i - min(bar_k_period, i):i])
-            norm_k_sma = 2 * ((k_sma - stock_bar["close"]) / stock_bar["close"])
             d_sma = Agent.calculate_sma(stock_bars[i - min(bar_d_period, i):i])
-            norm_d_sma = 2 * ((d_sma - stock_bar["close"]) / stock_bar["close"])
-
             rsi = Agent.calculate_rsi(stock_bars[i - min(bar_rsi_period, i):i])
 
             inputs = [1,  # -1 = short, 1 = long
@@ -102,9 +96,9 @@ class Validation(Agent):
                       Agent.rel_change(prev_nasdaq_bar["volume"], nasdaq_bar["volume"]),
                       nasdaq_sentiment,
                       k_percent,
-                      norm_ema,
-                      norm_k_sma,
-                      norm_d_sma,
+                      ema,
+                      k_sma,
+                      d_sma,
                       rsi]
             if shorting and shares < 0:
                 inputs[0] = -1

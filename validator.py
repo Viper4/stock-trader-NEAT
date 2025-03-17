@@ -21,7 +21,10 @@ class Validator(Manager):
                 "stocks": profile["stocks"],
                 "interval": profile["interval"],
                 "profit_window": profile["profit_window"],
-                "short_limit": profile["short_limit"]
+                "short_limit": profile["short_limit"],
+                "k_period": profile["k_period"],
+                "d_period": profile["d_period"],
+                "rsi_period": profile["rsi_period"]
             }
 
             for stock in profile["stocks"]:
@@ -60,9 +63,11 @@ class Validator(Manager):
                             best_genome = saving.SaveSystem.load_data(os.path.join(session["agents"][stock["symbol"]].genome_path, stock["genome_filename"]))
                             start_cash = input(" Enter starting cash: ")
                             stock_bars = self.get_bars(stock["symbol"], session["alpaca_api"], session["interval"], start_date, end_date)
+                            sp500_bars = self.get_bars("SPY", session["alpaca_api"], session["interval"], start_date, end_date)
+                            nasdaq_bars = self.get_bars("QQQ", session["alpaca_api"], session["interval"], start_date, end_date)
                             print(f"Validating over {len(stock_bars)} bars from {stock_bars[0]['timestamp']} to {stock_bars[-1]['timestamp']}...")
                             asset = session["alpaca_api"].get_asset(symbol=stock["symbol"])
-                            session["agents"][stock["symbol"]].validate(stock_bars,
+                            session["agents"][stock["symbol"]].validate(stock_bars, sp500_bars, nasdaq_bars,
                                                                         best_genome, stock["shorting"], asset, session["short_limit"],
                                                                         session["k_period"], session["d_period"], session["rsi_period"],
                                                                         start_cash)

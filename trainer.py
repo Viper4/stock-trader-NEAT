@@ -64,7 +64,8 @@ class Trainer(Manager):
             "rsi_period": profile["rsi_period"],
             "profit_window": profile["profit_window"],
             "fitness_multipliers": profile["fitness_multipliers"],
-            "short_limit": profile["short_limit"]
+            "short_limit": profile["short_limit"],
+            "start_cash": profile["start_cash"],
         }
 
         update_agents = False
@@ -75,12 +76,6 @@ class Trainer(Manager):
 
         if not no_agents and update_agents:
             self.create_agents(False, True)
-
-    def calculate_ema_gpu(self, close_price, prev_ema, alpha):
-        close_price = torch.tensor(close_price, dtype=torch.float32)
-        prev_ema = torch.tensor(prev_ema, dtype=torch.float32)
-        ema = close_price * alpha + prev_ema * (1 - alpha)
-        return ema.cpu().item()  # Bring back to CPU
 
     def generate_data(self, symbol, session, earliest_date, start_date, end_date, file_path, save_news, indicators):
         bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], start_date, end_date)
@@ -117,16 +112,9 @@ class Trainer(Manager):
 
                 # Indicators
                 k_percent_data.append(Training.calculate_k_percent(bars[i - min(bar_k_period, i):i]))
-
-                ema = Training.calculate_ema(bars[i]["close"], alpha, prev_ema)
-                ema_data.append(2 * ((ema - bars[i]["close"]) / bars[i]["close"]))  # Normalize
-
-                k_sma = Training.calculate_sma(bars[i - min(bar_k_period, i):i])
-                k_sma_data.append(2 * ((k_sma - bars[i]["close"]) / bars[i]["close"]))
-
-                d_sma = Training.calculate_sma(bars[i - min(bar_d_period, i):i])
-                d_sma_data.append(2 * ((d_sma - bars[i]["close"]) / bars[i]["close"]))
-
+                ema_data.append(Training.calculate_ema(bars[i]["close"], alpha, prev_ema))
+                k_sma_data.append(Training.calculate_sma(bars[i - min(bar_k_period, i):i]))
+                d_sma_data.append(Training.calculate_sma(bars[i - min(bar_d_period, i):i]))
                 rsi_data.append(Training.calculate_rsi(bars[i - min(bar_rsi_period, i):i]))
 
             indicator_data = {

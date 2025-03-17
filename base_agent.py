@@ -3,7 +3,7 @@ import os
 import saving
 import numpy as np
 import torch
-import cupy as cp
+#import cupy as cp
 
 
 class Agent:
@@ -86,13 +86,15 @@ class Agent:
         """
         if prev_ema is None:
             prev_ema = close_price
-        return close_price * alpha + prev_ema * (1 - alpha)
+        ema = close_price * alpha + prev_ema * (1 - alpha)
+        return 2 * ((ema - close_price) / close_price)  # Normalize to [-1, 1]
 
     @staticmethod
     def calculate_ema_gpu(close_price, alpha, prev_ema):
         close_price = torch.tensor(close_price, dtype=torch.float32)
         prev_ema = torch.tensor(prev_ema, dtype=torch.float32)
-        return close_price * alpha + prev_ema * (1 - alpha)
+        ema = close_price * alpha + prev_ema * (1 - alpha)
+        return (2 * ((ema - close_price) / close_price)).cpu().item()  # Normalize to [-1, 1]
 
     @staticmethod
     def calculate_sma(bars):
@@ -101,12 +103,14 @@ class Agent:
             return 0
         for i in range(len(bars)):
             total += bars[i]["close"]
-        return total / len(bars)
+        sma = total / len(bars)
+        return 2 * ((sma - bars[-1]["close"]) / bars[-1]["close"])  # Normalize to [-1, 1]
 
     @staticmethod
     def calculate_sma_gpu(bars):
-        close_prices = cp.array([bar["close"] for bar in bars])  # Convert to cupy array
-        return cp.mean(close_prices).get()  # Bring back to CPU
+        #close_prices = cp.array([bar["close"] for bar in bars])  # Convert to cupy array
+        #return cp.mean(close_prices).get()  # Bring back to CPU
+        pass
 
     @staticmethod
     def calculate_rsi(bars):
@@ -132,8 +136,11 @@ class Agent:
             rsi = 100
         else:
             rsi = 100 - (100 / (1 + avg_gain / avg_loss))
-        return 2 * ((rsi - 50) / 50)  # Scale between -1 and 1
+        return 2 * ((rsi - 50) / 50)  # Normalize to [-1, 1]
 
     @staticmethod
     def calculate_rsi_gpu(bars):
+        #changes = cp.array([bars[i]["close"]-bars[i-1]["close"] for i in range(1, len(bars))])
+        #gain = cp.sum(changes)
         pass
+

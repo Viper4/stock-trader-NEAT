@@ -107,13 +107,9 @@ class Manager(object):
 
             # %D = EMA(%K, N) or SMA(%K, N)
             ema = for_agent.calculate_ema(stock_bar["close"], alpha, prev_ema)
-            norm_ema = 2 * ((ema - stock_bar["close"]) / stock_bar["close"])
             prev_ema = ema
             k_sma = for_agent.calculate_sma(stock_bars[i - min(k_period, i):i])
-            norm_k_sma = 2 * ((k_sma - stock_bar["close"]) / stock_bar["close"])
             d_sma = for_agent.calculate_sma(stock_bars[i - min(d_period, i):i])
-            norm_d_sma = 2 * ((d_sma - stock_bar["close"]) / stock_bar["close"])
-
             rsi = for_agent.calculate_rsi(stock_bars[i - min(rsi_period, i):i])
 
             inputs = [1,  # -1 = short, 1 = long
@@ -132,9 +128,9 @@ class Manager(object):
                       for_agent.rel_change(prev_nasdaq_bar["volume"], nasdaq_bar["volume"]),
                       nasdaq_sentiment,
                       k_percent,
-                      norm_ema,
-                      norm_k_sma,
-                      norm_d_sma,
+                      ema,
+                      k_sma,
+                      d_sma,
                       rsi]
             for_agent.net.activate(inputs)
         print(f"{profile_name} {for_agent.stock['symbol']}: Updated network")
