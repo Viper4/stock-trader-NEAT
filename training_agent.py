@@ -27,18 +27,16 @@ def eval_genome(stock_bars, sp500_bars, nasdaq_bars,
     consecutive_days = 1
     log = []
     portfolio_values = [start_equity]
+    sp500_index = 0
+    nasdaq_index = 0
 
     # Start at 1 to have previous bar for relative change
     num_bars = len(stock_bars)
     for i in range(1, num_bars):
         stock_bar = stock_bars[i]
-        sp500_bar = sp500_bars[i]
-        nasdaq_bar = nasdaq_bars[i]
         prev_stock_bar = stock_bars[i-1]
-        prev_sp500_bar = sp500_bars[i-1]
-        prev_nasdaq_bar = nasdaq_bars[i-1]
-        prev_date = prev_stock_bar["timestamp"].date()
         date = stock_bar["timestamp"].date()
+        prev_date = prev_stock_bar["timestamp"].date()
         if date != prev_date:  # Check pending sales to settle cash after 1 day of sale
             consecutive_days += 1
             for j in reversed(range(len(pending_sales))):
@@ -47,6 +45,22 @@ def eval_genome(stock_bars, sp500_bars, nasdaq_bars,
                     settled_cash += sale_price
                     unsettled_cash -= sale_price
                     pending_sales.pop(j)
+
+        # Dealing with mismatch in length of bars for sp500 and nasdaq
+        if sp500_index + 1 < len(sp500_bars):
+            sp500_date = sp500_bars[sp500_index + 1]["timestamp"].date()
+            if sp500_date <= date:
+                sp500_index += 1
+
+        if nasdaq_index + 1 < len(nasdaq_bars):
+            nasdaq_date = nasdaq_bars[nasdaq_index + 1]["timestamp"].date()
+            if nasdaq_date <= date:
+                nasdaq_index += 1
+
+        sp500_bar = sp500_bars[sp500_index]
+        nasdaq_bar = nasdaq_bars[nasdaq_index]
+        prev_sp500_bar = sp500_bars[min(0, sp500_index - 1)]
+        prev_nasdaq_bar = nasdaq_bars[min(0, nasdaq_index - 1)]
 
         inputs = [1,  # -1 = short, 1 = long
                   Agent.rel_change(cost, stock_bar["close"] * shares),  # plpc
@@ -59,10 +73,10 @@ def eval_genome(stock_bars, sp500_bars, nasdaq_bars,
                   stock_sentiments[i],  # -1 = negative, 0 = neutral, 1 = positive
                   Agent.rel_change(prev_sp500_bar["close"], sp500_bar["close"]),
                   Agent.rel_change(prev_sp500_bar["volume"], sp500_bar["volume"]),
-                  sp500_sentiments[i],
+                  sp500_sentiments[sp500_index],
                   Agent.rel_change(prev_nasdaq_bar["close"], nasdaq_bar["close"]),
                   Agent.rel_change(prev_nasdaq_bar["volume"], nasdaq_bar["volume"]),
-                  nasdaq_sentiments[i],
+                  nasdaq_sentiments[nasdaq_index],
                   indicator_data["k_percent"][i],
                   indicator_data["ema"][i],
                   indicator_data["k_sma"][i],

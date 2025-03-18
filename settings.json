@@ -21,6 +21,56 @@
       },
       "stocks": [
         {
+          "symbol": "INTC",
+          "cash_at_risk": 0.15,
+          "population_filename": "Short-5pw-population-INTC.gz",
+          "genome_filename": "Short-5pw-genome-INTC.gz",
+          "training_filename": "1m-data-INTC.gz",
+          "trading": false,
+          "shorting": true,
+          "transaction_fee": 0.001
+        },
+        {
+          "symbol": "COIN",
+          "cash_at_risk": 0.15,
+          "population_filename": "Short-5pw-population-COIN.gz",
+          "genome_filename": "Short-5pw-genome-COIN.gz",
+          "training_filename": "1m-data-COIN.gz",
+          "trading": true,
+          "shorting": true,
+          "transaction_fee": 0.001
+        },
+        {
+          "symbol": "NVDA",
+          "cash_at_risk": 0.15,
+          "population_filename": "Short-5pw-population-NVDA.gz",
+          "genome_filename": "Short-5pw-genome-NVDA.gz",
+          "training_filename": "1m-data-NVDA.gz",
+          "trading": true,
+          "shorting": false,
+          "transaction_fee": 0.001
+        },
+        {
+          "symbol": "TSLA",
+          "cash_at_risk": 0.15,
+          "population_filename": "Short-5pw-population-TSLA.gz",
+          "genome_filename": "Short-5pw-genome-TSLA.gz",
+          "training_filename": "1m-data-TSLA.gz",
+          "trading": true,
+          "shorting": true,
+          "transaction_fee": 0.001
+        },
+        {
+          "symbol": "UBER",
+          "cash_at_risk": 0.15,
+          "population_filename": "Short-5pw-population-UBER.gz",
+          "genome_filename": "Short-5pw-genome-UBER.gz",
+          "training_filename": "1m-data-UBER.gz",
+          "trading": false,
+          "shorting": true,
+          "transaction_fee": 0.001
+        },
+        {
           "symbol": "DXYZ",
           "cash_at_risk": 0.15,
           "population_filename": "Short-5pw-population-DXYZ.gz",
@@ -56,56 +106,6 @@
           "population_filename": "Short-5pw-population-AAPL.gz",
           "genome_filename": "Short-5pw-genome-AAPL.gz",
           "training_filename": "1m-data-AAPL.gz",
-          "trading": false,
-          "shorting": true,
-          "transaction_fee": 0.001
-        },
-        {
-          "symbol": "NVDA",
-          "cash_at_risk": 0.15,
-          "population_filename": "Short-5pw-population-NVDA.gz",
-          "genome_filename": "Short-5pw-genome-NVDA.gz",
-          "training_filename": "1m-data-NVDA.gz",
-          "trading": true,
-          "shorting": false,
-          "transaction_fee": 0.001
-        },
-        {
-          "symbol": "TSLA",
-          "cash_at_risk": 0.15,
-          "population_filename": "Short-5pw-population-TSLA.gz",
-          "genome_filename": "Short-5pw-genome-TSLA.gz",
-          "training_filename": "1m-data-TSLA.gz",
-          "trading": true,
-          "shorting": true,
-          "transaction_fee": 0.001
-        },
-        {
-          "symbol": "UBER",
-          "cash_at_risk": 0.15,
-          "population_filename": "Short-5pw-population-UBER.gz",
-          "genome_filename": "Short-5pw-genome-UBER.gz",
-          "training_filename": "1m-data-UBER.gz",
-          "trading": false,
-          "shorting": true,
-          "transaction_fee": 0.001
-        },
-        {
-          "symbol": "COIN",
-          "cash_at_risk": 0.15,
-          "population_filename": "Short-5pw-population-COIN.gz",
-          "genome_filename": "Short-5pw-genome-COIN.gz",
-          "training_filename": "1m-data-COIN.gz",
-          "trading": true,
-          "shorting": true,
-          "transaction_fee": 0.001
-        },
-        {
-          "symbol": "INTC",
-          "cash_at_risk": 0.15,
-          "population_filename": "Short-5pw-population-INTC.gz",
-          "genome_filename": "Short-5pw-genome-INTC.gz",
-          "training_filename": "1m-data-INTC.gz",
           "trading": false,
           "shorting": true,
           "transaction_fee": 0.001
