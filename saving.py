@@ -28,7 +28,7 @@ class SaveSystem(BaseReporter):
             self.save_data(best_genome, self.g_path)
 
         if self.consecutive_gens >= self.p_interval:
-            self.save_data((self.current_generation, config, population, species_set, random.getstate()), self.p_path)
+            self.save_data((self.current_generation + 1, config, population, species_set, random.getstate()), self.p_path)
             self.consecutive_gens = 0
 
     @staticmethod

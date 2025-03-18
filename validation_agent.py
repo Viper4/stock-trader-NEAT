@@ -114,7 +114,7 @@ class Validation(Agent):
                       k_sma,
                       d_sma,
                       rsi]
-            if shorting and shares < 0:
+            if shorting and asset.shortable and shares < 0:
                 inputs[0] = -1
                 inputs[1] = Agent.rel_change(stock_bar["close"] * abs(shares), cost)
 

@@ -1,4 +1,5 @@
 import neat
+#import recurrent_cuda
 import time
 import os
 from multiprocessing import Pool
@@ -9,11 +10,9 @@ import plot
 from base_agent import Agent
 
 
-def eval_genome(stock_bars, sp500_bars, nasdaq_bars,
-                stock_sentiments, sp500_sentiments, nasdaq_sentiments,
-                start_cash, genome, config, cash_at_risk, log_training, profit_window,
-                fitness_multipliers, shorting, shortable, fractionable, short_limit,
-                transaction_fee, indicator_data):
+def eval_genome(arg):
+    stock_bars, sp500_bars, nasdaq_bars, stock_sentiments, sp500_sentiments, nasdaq_sentiments, start_cash, genome, config, cash_at_risk, log_training, profit_window, fitness_multipliers, short, fractionable, short_limit, transaction_fee, indicator_data = arg
+    #net = recurrent_cuda.RecurrentNetwork.create(genome, config)
     net = neat.nn.RecurrentNetwork.create(genome, config)
     start_date = stock_bars[0]["timestamp"].date()
     settled_cash = start_cash
@@ -83,7 +82,7 @@ def eval_genome(stock_bars, sp500_bars, nasdaq_bars,
                   indicator_data["d_sma"][i],
                   indicator_data["rsi"][i]
                   ]
-        if shorting and shares < 0:
+        if short and shares < 0:
             inputs[0] = -1
             inputs[1] = Agent.rel_change(stock_bar["close"] * abs(shares), cost)
 
@@ -91,7 +90,7 @@ def eval_genome(stock_bars, sp500_bars, nasdaq_bars,
 
         qty_percent = (outputs[1] + 1) * 0.5
         if outputs[0] > 0.5:  # Buy
-            if shorting and shortable and shares < 0:
+            if short and shares < 0:
                 quantity = qty_percent * abs(shares)
                 quantity = round(quantity)  # Shorts don't allow fractional qty
                 price = quantity * stock_bar["close"] * (1 - transaction_fee)
@@ -134,7 +133,7 @@ def eval_genome(stock_bars, sp500_bars, nasdaq_bars,
                                   "datetime": stock_bar["timestamp"].to_pydatetime()}
                         log.append(action)
         elif outputs[0] < -0.5:  # Sell
-            if shorting and shortable and shares <= 0:
+            if short and shares <= 0:
                 quantity = qty_percent * (short_limit - cost) * cash_at_risk / stock_bar["close"]
                 quantity = round(quantity)  # Shorts don't allow fractional qty
                 price = quantity * stock_bar["close"] * (1 - transaction_fee)
@@ -217,10 +216,6 @@ class Training(Agent):
         while not self.running:
             time.sleep(1)
 
-        # self.pool doesn't work: cant pickle Pool(). Separate class doesn't work: leaks memory
-        pool = Pool(processes=self.settings["processes"])
-        jobs = []
-
         if isinstance(self.stock_bars[self.batch_index], int):
             sub_index = self.stock_bars[self.batch_index]
             print(f"Evaluating genomes on substitute batch {sub_index}")
@@ -241,50 +236,68 @@ class Training(Agent):
             b_nasdaq_sentiments = self.nasdaq_sentiments[self.batch_index]
             b_indicator_data = self.indicator_data[self.batch_index]
 
+        pool = Pool(processes=self.settings["processes"])
+        args = []
         for genome_id, genome in genomes:
-            jobs.append(pool.apply_async(eval_genome, (b_stock_bars, b_sp500_bars, b_nasdaq_bars,
-                                                       b_stock_sentiments, b_sp500_sentiments, b_nasdaq_sentiments,
-                                                       self.session["start_cash"], genome, self.config, self.stock["cash_at_risk"],
-                                                       self.settings["log_training"], self.session["profit_window"],
-                                                       self.session["fitness_multipliers"], self.stock["shorting"],
-                                                       self.shortable, self.fractionable, self.session["short_limit"],
-                                                       self.stock["transaction_fee"],
-                                                       b_indicator_data)))
+            args.append(
+                (
+                    b_stock_bars,
+                    b_sp500_bars,
+                    b_nasdaq_bars,
+                    b_stock_sentiments,
+                    b_sp500_sentiments,
+                    b_nasdaq_sentiments,
+                    self.session["start_cash"],
+                    genome,
+                    self.config,
+                    self.stock["cash_at_risk"],
+                    self.settings["log_training"],
+                    self.session["profit_window"],
+                    self.session["fitness_multipliers"],
+                    self.stock["shorting"] and self.shortable,
+                    self.fractionable,
+                    self.session["short_limit"],
+                    self.stock["transaction_fee"],
+                    b_indicator_data
+                )
+            )
+
+        # Use map_async to send each tuple of arguments
+        results_async = pool.map_async(eval_genome, args)
+
+        # Wait for the results
+        results = results_async.get()
 
         best_log = None
         best_genome_id = -1
-        for i in range(len(jobs)):
-            # Genome's fitness based on total fitness over all batches
-            job, (genome_id, genome) = jobs[i], genomes[i]
-            batch_fitness, log = job.get()
-            if genome_id not in self.cum_fitness:
-                self.cum_fitness[genome_id] = []
+        for i, (batch_fitness, log) in enumerate(results):
+            genome_id, genome = genomes[i]
+            self.cum_fitness.setdefault(genome_id, []).append(batch_fitness)
             if len(self.cum_fitness[genome_id]) >= self.session["batches"]:
                 self.cum_fitness[genome_id].pop(0)
-            self.cum_fitness[genome_id].append(batch_fitness)
+
             genome.fitness = sum(self.cum_fitness[genome_id])
+
             if self.best_genome is None or genome.fitness > self.best_genome.fitness:
                 best_log = log
                 self.best_genome = genome
-
-            if self.best_genome == genome:
                 best_genome_id = genome_id
 
         if self.best_genome is not None and best_genome_id in self.cum_fitness:
             print(f"Fitness across batches: {self.cum_fitness[best_genome_id]} - id {best_genome_id}")
         if best_log is not None and self.settings["log_training"]:
             plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], best_log, 30, True)
+
         pool.close()
         pool.join()
         pool.terminate()
-
         self.consecutive_gens += 1
+
         if 0 < self.settings["gen_stagger"] <= self.consecutive_gens:
             self.consecutive_gens = 0
             self.running = False
-        self.batch_index += 1
-        if self.batch_index >= len(self.stock_bars):
-            self.batch_index = 0
+
+        self.batch_index = (self.batch_index + 1) % len(self.stock_bars)
 
     def run(self):
         if self.running:
