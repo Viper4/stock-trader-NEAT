@@ -7,7 +7,7 @@ import os
 import saving
 import alpaca_trade_api as alpaca
 from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit
-import subprocess
+import requests
 
 
 class Manager(object):
@@ -24,9 +24,13 @@ class Manager(object):
         tries = 0
         while True:
             try:
-                subprocess.check_output(["ping", "-c", "1", "8.8.8.8"])
-                break
-            except subprocess.CalledProcessError:
+                # Try to send a request to a reliable host (e.g., Google)
+                response = requests.get("https://www.google.com", timeout=5)
+                if response.status_code == 200:
+                    break
+                else:
+                    print("Unable to reach the internet (status code: " + str(response.status_code) + f") ({tries})")
+            except (requests.ConnectionError, requests.Timeout) as e:
                 print(f"No internet connection. ({tries})")
                 time.sleep(5)
                 tries += 1
