@@ -29,6 +29,7 @@ class Trader(Manager):
 
     def update_profile(self, market_status):
         self.settings, self.alpaca_api = self.get_settings_and_alpaca(0)
+
         self.profile = self.settings["profiles"][0]
         print(f"Trader: Updating {self.profile['name']} profile")
         if market_status:

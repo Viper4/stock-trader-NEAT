@@ -97,41 +97,15 @@ class Agent:
         return (2 * ((ema - close_price) / close_price)).cpu().item()  # Normalize to [-1, 1]
 
     @staticmethod
-    def calculate_sma(bars):
-        total = 0
-        if len(bars) == 0:
-            return 0
-        for i in range(len(bars)):
-            total += bars[i]["close"]
-        sma = total / len(bars)
-        return 2 * ((sma - bars[-1]["close"]) / bars[-1]["close"])  # Normalize to [-1, 1]
-
-    @staticmethod
-    def calculate_sma_gpu(bars):
-        #close_prices = cp.array([bar["close"] for bar in bars])  # Convert to cupy array
-        #return cp.mean(close_prices).get()  # Bring back to CPU
-        pass
-
-    @staticmethod
-    def calculate_rsi(bars):
+    def calculate_rsi(gain, loss, num_bars):
         """
         Relative Strength Index indicator
         RS = Average Gain / Average Loss
         RSI = 100 - (100 / (1 + RS))
         """
-        if len(bars) <= 1:
-            return 0
-        gain = 0
-        loss = 0
-        for i in range(1, len(bars)):
-            change = bars[i]["close"] - bars[i - 1]["close"]
-            if change > 0:
-                gain += change
-            elif change < 0:
-                loss += abs(change)
 
-        avg_gain = gain / (len(bars) - 1)
-        avg_loss = loss / (len(bars) - 1)
+        avg_gain = gain / num_bars
+        avg_loss = loss / num_bars
         if avg_loss == 0:
             rsi = 100
         else:

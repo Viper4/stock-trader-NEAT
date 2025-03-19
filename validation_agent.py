@@ -35,18 +35,29 @@ class Validation(Agent):
         max_profit = (-999999, -999999)
         max_date = None
 
-        prev_ema = None
+        prev_d_ema = None
+        prev_k_ema = None
 
         bar_k_period = self.days_to_bars(k_period, self.session["interval"])
         bar_d_period = self.days_to_bars(d_period, self.session["interval"])
         bar_rsi_period = self.days_to_bars(rsi_period, self.session["interval"])
-        alpha = 2 / (bar_d_period + 1)
+        d_alpha = 2 / (bar_d_period + 1)
+        k_alpha = 2 / (bar_k_period + 1)
+
+        gain = 0
+        loss = 0
 
         # Start at 1 to have previous bar for relative change
         num_bars = len(stock_bars)
         sp500_index = 0
         nasdaq_index = 0
+
         for i in range(1, num_bars):
+            if i % 1000 == 0:
+                elapsed = time.time() - start_time
+                eta = (elapsed / i) * (num_bars - i)
+                print(f" {self.stock['symbol']}: {i}/{num_bars} ({str(elapsed):.2}s elapsed {str(eta):.2}s estimated rd_emaining)")
+
             stock_bar = stock_bars[i]
             prev_stock_bar = stock_bars[i - 1]
             prev_date = prev_stock_bar["timestamp"].date()
@@ -88,11 +99,27 @@ class Validation(Agent):
                                                                 backtest_date)
 
             k_percent = Agent.calculate_k_percent(stock_bars[i - min(bar_k_period, i):i])
-            ema = Agent.calculate_ema(stock_bar["close"], alpha, prev_ema)
-            prev_ema = ema
-            k_sma = Agent.calculate_sma(stock_bars[i - min(bar_k_period, i):i])
-            d_sma = Agent.calculate_sma(stock_bars[i - min(bar_d_period, i):i])
-            rsi = Agent.calculate_rsi(stock_bars[i - min(bar_rsi_period, i):i])
+            d_ema = Agent.calculate_ema(stock_bar["close"], d_alpha, prev_d_ema)
+            prev_d_ema = d_ema
+            k_ema = Agent.calculate_ema(stock_bar["close"], k_alpha, prev_k_ema)
+            prev_k_ema = k_ema
+
+            # Calculate RSI
+            change = stock_bar["close"] - prev_stock_bar["close"]
+            if change > 0:
+                gain += change
+            else:
+                loss += abs(change)
+
+            # Remove old data
+            start_rsi_index = i - min(bar_rsi_period, i)
+            if (i - start_rsi_index) + 1 >= bar_rsi_period:
+                start_change = stock_bars[start_rsi_index]["close"] - stock_bars[start_rsi_index - 1]["close"]
+                if start_change > 0:
+                    gain -= change
+                else:
+                    loss -= abs(change)
+            rsi = Agent.calculate_rsi(gain, loss, (i - start_rsi_index) + 1)
 
             inputs = [1,  # -1 = short, 1 = long
                       Agent.rel_change(cost, stock_bar["close"] * shares),  # plpc
@@ -110,9 +137,8 @@ class Validation(Agent):
                       Agent.rel_change(prev_nasdaq_bar["volume"], nasdaq_bar["volume"]),
                       nasdaq_sentiment,
                       k_percent,
-                      ema,
-                      k_sma,
-                      d_sma,
+                      d_ema,
+                      k_ema,
                       rsi]
             if shorting and asset.shortable and shares < 0:
                 inputs[0] = -1
@@ -226,7 +252,7 @@ class Validation(Agent):
 
         avg_profit = profit_sum / num_windows
         stock_change = stock_bars[-1]['close'] - stock_bars[0]['close']
-        print(f"Simulation finished in {str(time.time() - start_time)} seconds over {consecutive_days} trading days and {num_windows} profit windows"
+        print(f"Simulation finished in {str(time.time() - start_time):.2}s over {consecutive_days} trading days and {num_windows} profit windows"
               f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / stock_bars[0]['close']), 4)}%"
               f"\n Total profit: ${round(profit_sum, 2)} {round(100 * (profit_sum / start_cash), 4)}%"
               f"\n Average {self.session['profit_window']} day profit: ${round(avg_profit, 2)} {round(avg_profit / start_cash, 4)}%"
@@ -266,10 +292,9 @@ class Validation(Agent):
                             print(f" |NASDAQ Volume: {action[key][13]}")
                             print(f" |NASDAQ Sentiment: {action[key][14]}")
                             print(f" |%K: {action[key][15]}")
-                            print(f" |{k_period}-day EMA: {action[key][16]}")
-                            print(f" |{k_period}-day SMA: {action[key][17]}")
-                            print(f" |{d_period}-day SMA: {action[key][18]}")
-                            print(f" |{rsi_period}-day RSI: {action[key][19]}")
+                            print(f" |{d_period}-day EMA: {action[key][16]}")
+                            print(f" |{k_period}-day EMA: {action[key][17]}")
+                            print(f" |{rsi_period}-day RSI: {action[key][18]}")
                         elif key == "outputs":
                             print("-Outputs")
                             print(f" |Buy/Sell: {action[key][0]}")

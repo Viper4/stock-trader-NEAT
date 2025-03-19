@@ -6,6 +6,7 @@ import alpaca_trade_api as alpaca
 from alpaca_trade_api.rest import URL
 from base_manager import Manager
 from validation_agent import Validation
+from multiprocessing import Pool
 
 
 class Validator(Manager):
@@ -53,7 +54,10 @@ class Validator(Manager):
                                    day=int(input("Enter end day: ")),
                                    hour=16, tzinfo=pytz.timezone("US/Eastern"))
 
-            self.finbert.save_news(list(session["agents"].keys()), start_date, end_date)
+            stock_bars = {}
+            genomes = {}
+            start_cashes = {}
+            shorting = {}
             for stock in session["stocks"]:
                 if input(f"Run simulation for {stock['symbol']}? (y/n): ") == "y":
                     if stock["genome_filename"] is None:
@@ -62,15 +66,36 @@ class Validator(Manager):
                         try:
                             best_genome = saving.SaveSystem.load_data(os.path.join(session["agents"][stock["symbol"]].genome_path, stock["genome_filename"]))
                             start_cash = input(" Enter starting cash: ")
-                            stock_bars = self.get_bars(stock["symbol"], session["alpaca_api"], session["interval"], start_date, end_date)
-                            sp500_bars = self.get_bars("SPY", session["alpaca_api"], session["interval"], start_date, end_date)
-                            nasdaq_bars = self.get_bars("QQQ", session["alpaca_api"], session["interval"], start_date, end_date)
-                            print(f"Validating over {len(stock_bars)} bars from {stock_bars[0]['timestamp']} to {stock_bars[-1]['timestamp']}...")
-                            asset = session["alpaca_api"].get_asset(symbol=stock["symbol"])
-                            session["agents"][stock["symbol"]].validate(stock_bars, sp500_bars, nasdaq_bars,
-                                                                        best_genome, stock["shorting"], asset, session["short_limit"],
-                                                                        session["k_period"], session["d_period"], session["rsi_period"],
-                                                                        start_cash)
-
+                            stock_bars[stock["symbol"]] = self.get_bars(stock["symbol"], session["alpaca_api"], session["interval"], start_date, end_date)
+                            genomes[stock["symbol"]] = best_genome
+                            start_cashes[stock["symbol"]] = start_cash
+                            shorting[stock["symbol"]] = stock["shorting"]
                         except FileNotFoundError:
                             print(f" No genome file found for {stock['genome_filename']}")
+
+            simulations = len(stock_bars)
+            if simulations == 0:
+                print("No simulations selected")
+                continue
+            print(f"Validating {simulations} simulations...")
+            pool = Pool(processes=min(simulations, self.settings["processes"]))
+
+            self.finbert.save_news(list(session["agents"].keys()), start_date, end_date)
+            sp500_bars = self.get_bars("SPY", session["alpaca_api"], session["interval"], start_date, end_date)
+            nasdaq_bars = self.get_bars("QQQ", session["alpaca_api"], session["interval"], start_date, end_date)
+
+            for symbol in stock_bars:
+                print(f"Validating over {len(stock_bars)} bars from {stock_bars[0]['timestamp']} to {stock_bars[-1]['timestamp']}...")
+                asset = session["alpaca_api"].get_asset(symbol=symbol)
+                pool.apply_async(session["agents"][symbol].validate,
+                                 (stock_bars[symbol],
+                                  sp500_bars, nasdaq_bars,
+                                  genomes[symbol],
+                                  shorting[symbol],
+                                  asset,
+                                  session["short_limit"],
+                                  session["k_period"], session["d_period"], session["rsi_period"],
+                                  start_cashes[symbol]))
+
+            pool.close()
+            pool.join()

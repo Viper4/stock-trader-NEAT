@@ -26,11 +26,16 @@ class PaperTrading(Agent):
         prev_nasdaq_candle = None
 
         max_period = max(self.session["k_period"], self.session["d_period"], self.session["rsi_period"])
-        k_period = int((self.session["k_period"] * 6.5 * 60) / self.session["interval"])
-        d_period = int((self.session["d_period"] * 6.5 * 60) / self.session["interval"])
-        rsi_period = int((self.session["rsi_period"] * 6.5 * 60) / self.session["interval"])
-        alpha = 2 / (d_period + 1)
-        prev_ema = None
+        k_period = self.days_to_bars(self.session["k_period"], self.session["interval"])
+        d_period = self.days_to_bars(self.session["d_period"], self.session["interval"])
+        rsi_period = self.days_to_bars(self.session["rsi_period"], self.session["interval"])
+        d_alpha = 2 / (d_period + 1)
+        prev_d_ema = None
+        k_alpha = 2 / (k_period + 1)
+        prev_k_ema = None
+        
+        gain = 0
+        loss = 0
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
@@ -52,7 +57,7 @@ class PaperTrading(Agent):
                     prev_stock_candle["vwap"] = (prev_stock_candle["high"] + prev_stock_candle["low"] + prev_stock_candle["close"]) / 3
 
                 # SP500 candles for today
-                sp500_candles, prev_sp500_close = self.scraper.get_latest_candles("SPY", interval=str(
+                sp500_candles, prev_sp500_close = self.scraper.get_stock_latests("SPY", interval=str(
                     self.session["interval"]) + "m")
                 sp500_latest = sp500_candles[-1]
 
@@ -66,7 +71,7 @@ class PaperTrading(Agent):
                                                  prev_sp500_candle["close"]) / 3
 
                 # NASDAQ candles for today
-                nasdaq_candles, prev_nasdaq_close = self.scraper.get_latest_candles("QQQ", interval=str(
+                nasdaq_candles, prev_nasdaq_close = self.scraper.get_stock_latests("QQQ", interval=str(
                     self.session["interval"]) + "m")
                 nasdaq_latest = nasdaq_candles[-1]
 
@@ -100,13 +105,29 @@ class PaperTrading(Agent):
                 last_index = len(stock_bars) - 1
                 k_percent = self.calculate_k_percent(stock_bars[last_index - min(k_period, last_index):last_index])
 
-                # %D = EMA(%K, N) or SMA(%K, N)
-                ema = self.calculate_ema(stock_latest["close"], alpha, prev_ema)
-                prev_ema = ema
-                k_sma = Agent.calculate_sma(stock_candles[last_index - min(k_period, last_index):last_index])
-                d_sma = Agent.calculate_sma(stock_candles[last_index - min(d_period, last_index):last_index])
+                # %D = d_ema(%K, N) or SMA(%K, N)
+                d_ema = self.calculate_ema(stock_latest["close"], d_alpha, prev_d_ema)
+                prev_d_ema = d_ema
+                k_ema = self.calculate_ema(stock_latest["close"], k_alpha, prev_k_ema)
+                prev_k_ema = k_ema
 
-                rsi = self.calculate_rsi(stock_candles[last_index - min(rsi_period, last_index):last_index])
+                change = stock_latest["close"] - prev_stock_candle["close"]
+                if change > 0:
+                    gain += change
+                else:
+                    loss += abs(change)
+
+                # Remove old data
+                i = len(stock_candles) - 1
+                start_rsi_index = i - min(rsi_period, i)
+                if (i - start_rsi_index) + 1 >= rsi_period:
+                    start_change = stock_bars[start_rsi_index]["close"] - stock_bars[start_rsi_index - 1]["close"]
+                    if start_change > 0:
+                        gain -= change
+                    else:
+                        loss -= abs(change)
+
+                rsi = self.calculate_rsi(gain, loss, (i - start_rsi_index) + 1)
 
                 inputs = [1,  # -1 = shorting, 1 = longing
                           float(position.unrealized_plpc),  # profit/loss percent
@@ -124,9 +145,8 @@ class PaperTrading(Agent):
                           self.rel_change(prev_nasdaq_candle["volume"], nasdaq_latest["volume"]),
                           nasdaq_sentiment,
                           k_percent,
-                          ema,
-                          k_sma,
-                          d_sma,
+                          d_ema,
+                          k_ema,
                           rsi]
 
                 if self.stock["shorting"] and position_qty < 0:

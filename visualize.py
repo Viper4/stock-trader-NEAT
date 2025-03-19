@@ -2,6 +2,10 @@ import warnings
 import graphviz
 import matplotlib.pyplot as plt
 import numpy as np
+import saving
+import neat
+import os
+import json
 
 
 def plot_stats(statistics, ylog=False, view=False, filename='avg_fitness.svg'):
@@ -178,3 +182,35 @@ def draw_net(config, genome, view=False, filename=None, node_names=None, show_di
     dot.render(filename, view=view)
 
     return dot
+
+
+if __name__ == "__main__":
+    local_dir = os.path.dirname(__file__)
+    settings_path = os.path.join(local_dir, "settings.json")
+    with open(settings_path) as file:
+        settings = json.load(file)
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, settings["config_path"])
+    file_name = input("Enter file name of genome: ")
+    genome = saving.SaveSystem.load_data("Saves/Genomes/" + file_name + ".gz")
+    node_names = {-19: 'Position',
+                  -18: 'PLPC',
+                  -17: 'Open%',
+                  -16: 'High%',
+                  -15: 'Low%',
+                  -14: 'Close%',
+                  -13: 'Vol%',
+                  -12: "VWAP%",
+                  -11: 'Stock Sent',
+                  -10: 'SPY Close%',
+                  -9: 'SPY Vol%',
+                  -8: 'SPY Sent',
+                  -7: 'QQQ Close%',
+                  -6: 'QQQ Vol%',
+                  -5: 'QQQ Sent',
+                  -4: 'K%',
+                  -3: 'EMA D',
+                  -2: 'EMA K',
+                  -1: 'RSI',
+                  0: 'Buy/Sell',
+                  1: 'Quantity'}
+    draw_net(config, genome, view=True, node_names=node_names, show_disabled=False)

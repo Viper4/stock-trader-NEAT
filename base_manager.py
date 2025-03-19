@@ -7,8 +7,6 @@ import os
 import saving
 import alpaca_trade_api as alpaca
 from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit
-from requests.exceptions import ConnectionError as RequestsConnectionError
-from urllib3.exceptions import ProtocolError
 import subprocess
 
 
@@ -45,10 +43,11 @@ class Manager(object):
                     end=end.isoformat(),
                     limit=500000,
                     sort="asc",
-                    adjustment="all").df.tz_convert("US/Eastern")
+                    adjustment="all").df
+                bars_df = bars_df.tz_convert("US/Eastern")
                 bars_df = bars_df.between_time("9:30", "16:00")
                 return bars_df.reset_index().to_dict("records")
-            except (RequestsConnectionError, ProtocolError) as e:
+            except Exception as e:
                 Manager.check_internet_connection()
                 print(f"Error getting bars: '{e}'. Retrying in 5 seconds... ({tries})")
                 tries += 1
@@ -73,7 +72,8 @@ class Manager(object):
         k_period = for_agent.days_to_bars(k_period, interval)
         d_period = for_agent.days_to_bars(d_period, interval)
         rsi_period = for_agent.days_to_bars(rsi_period, interval)
-        alpha = 2 / (d_period + 1)
+        d_alpha = 2 / (d_period + 1)
+        k_alpha = 2 / (k_period + 1)
 
         for_agent.net = nn.RecurrentNetwork.create(genome, for_agent.config)
 
@@ -83,7 +83,11 @@ class Manager(object):
         sp500_bars = for_agent.trader.get_bars("SPY", alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16))
         nasdaq_bars = for_agent.trader.get_bars("QQQ", alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16))
 
-        prev_ema = stock_bars[0]["close"]
+        prev_d_ema = stock_bars[0]["close"]
+        prev_k_ema = stock_bars[0]["close"]
+
+        gain = 0
+        loss = 0
 
         for i in range(1, len(stock_bars)):
             stock_bar = stock_bars[i]
@@ -106,11 +110,27 @@ class Manager(object):
             k_percent = for_agent.calculate_k_percent(stock_bars[i - min(k_period, i):i])
 
             # %D = EMA(%K, N) or SMA(%K, N)
-            ema = for_agent.calculate_ema(stock_bar["close"], alpha, prev_ema)
-            prev_ema = ema
-            k_sma = for_agent.calculate_sma(stock_bars[i - min(k_period, i):i])
-            d_sma = for_agent.calculate_sma(stock_bars[i - min(d_period, i):i])
-            rsi = for_agent.calculate_rsi(stock_bars[i - min(rsi_period, i):i])
+            d_ema = for_agent.calculate_ema(stock_bar["close"], d_alpha, prev_d_ema)
+            prev_d_ema = d_ema
+            k_ema = for_agent.calculate_ema(stock_bar["close"], k_alpha, prev_k_ema)
+            prev_k_ema = k_ema
+
+            change = stock_bar["close"] - prev_stock_bar["close"]
+            if change > 0:
+                gain += change
+            else:
+                loss += abs(change)
+
+            # Remove old data
+            start_rsi_index = i - min(rsi_period, i)
+            if (i - start_rsi_index) + 1 >= rsi_period:
+                start_change = stock_bars[start_rsi_index]["close"] - stock_bars[start_rsi_index - 1]["close"]
+                if start_change > 0:
+                    gain -= change
+                else:
+                    loss -= abs(change)
+
+            rsi = for_agent.calculate_rsi(gain, loss, (i - start_rsi_index) + 1)
 
             inputs = [1,  # -1 = short, 1 = long
                       0,  # plpc
@@ -128,9 +148,8 @@ class Manager(object):
                       for_agent.rel_change(prev_nasdaq_bar["volume"], nasdaq_bar["volume"]),
                       nasdaq_sentiment,
                       k_percent,
-                      ema,
-                      k_sma,
-                      d_sma,
+                      d_ema,
+                      k_ema,
                       rsi]
             for_agent.net.activate(inputs)
         print(f"{profile_name} {for_agent.stock['symbol']}: Updated network")

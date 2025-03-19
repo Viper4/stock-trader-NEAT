@@ -21,11 +21,11 @@
       },
       "stocks": [
         {
-          "symbol": "INTC",
+          "symbol": "FNGA",
           "cash_at_risk": 0.15,
-          "population_filename": "Short-5pw-population-INTC.gz",
-          "genome_filename": "Short-5pw-genome-INTC.gz",
-          "training_filename": "1m-data-INTC.gz",
+          "population_filename": "Short-5pw-population-FNGA.gz",
+          "genome_filename": "Short-5pw-genome-FNGA.gz",
+          "training_filename": "1m-data-FNGA.gz",
           "trading": false,
           "shorting": true,
           "transaction_fee": 0.001
@@ -81,11 +81,11 @@
           "transaction_fee": 0.001
         },
         {
-          "symbol": "FNGA",
+          "symbol": "INTC",
           "cash_at_risk": 0.15,
-          "population_filename": "Short-5pw-population-FNGA.gz",
-          "genome_filename": "Short-5pw-genome-FNGA.gz",
-          "training_filename": "1m-data-FNGA.gz",
+          "population_filename": "Short-5pw-population-INTC.gz",
+          "genome_filename": "Short-5pw-genome-INTC.gz",
+          "training_filename": "1m-data-INTC.gz",
           "trading": false,
           "shorting": true,
           "transaction_fee": 0.001

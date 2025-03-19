@@ -27,8 +27,13 @@ class Trading(Agent):
         k_period = self.days_to_bars(self.trader.profile["k_period"], self.trader.profile["interval"])
         d_period = self.days_to_bars(self.trader.profile["d_period"], self.trader.profile["interval"])
         rsi_period = self.days_to_bars(self.trader.profile["rsi_period"], self.trader.profile["interval"])
-        alpha = 2 / (d_period + 1)
-        prev_ema = None
+        d_alpha = 2 / (d_period + 1)
+        prev_d_ema = None
+        k_alpha = 2 / (k_period + 1)
+        prev_k_ema = None
+
+        gain = 0
+        loss = 0
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
@@ -88,13 +93,29 @@ class Trading(Agent):
                 last_index = len(stock_bars) - 1
                 k_percent = self.calculate_k_percent(stock_bars[last_index - min(k_period, last_index):last_index])
 
-                # %D = EMA(%K, N) or SMA(%K, N)
-                ema = self.calculate_ema(stock_latest["close"], alpha, prev_ema)
-                prev_ema = ema
-                k_sma = Agent.calculate_sma(stock_bars[last_index - min(k_period, last_index):last_index])
-                d_sma = Agent.calculate_sma(stock_candles[last_index - min(d_period, last_index):last_index])
+                d_ema = self.calculate_ema(stock_latest["close"], d_alpha, prev_d_ema)
+                prev_d_ema = d_ema
+                k_ema = self.calculate_ema(stock_latest["close"], k_alpha, prev_k_ema)
+                prev_k_ema = k_ema
 
-                rsi = self.calculate_rsi(stock_candles[last_index - min(rsi_period, last_index):last_index])
+                # Calculate RSI
+                change = stock_latest["close"] - prev_stock_candle["close"]
+                if change > 0:
+                    gain += change
+                else:
+                    loss += abs(change)
+
+                # Remove old data
+                i = len(stock_candles) - 1
+                start_rsi_index = i - min(rsi_period, i)
+                if (i - start_rsi_index) + 1 >= rsi_period:
+                    start_change = stock_bars[start_rsi_index]["close"] - stock_bars[start_rsi_index - 1]["close"]
+                    if start_change > 0:
+                        gain -= change
+                    else:
+                        loss -= abs(change)
+
+                rsi = self.calculate_rsi(gain, loss, (i - start_rsi_index) + 1)
 
                 inputs = [0,  # -1 = shorting, 1 = longing
                           0,  # profit/loss percent
@@ -112,9 +133,8 @@ class Trading(Agent):
                           self.rel_change(prev_nasdaq_candle["volume"], nasdaq_latest["volume"]),
                           nasdaq_sentiment,
                           k_percent,
-                          ema,
-                          k_sma,
-                          d_sma,
+                          d_ema,
+                          k_ema,
                           rsi]
 
                 if "shortQuantity" in position and position["shortQuantity"] > 0:

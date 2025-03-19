@@ -3,6 +3,7 @@ import numpy as np
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import datetime as dt
+from base_manager import Manager
 
 
 class FinBERTNews(object):
@@ -26,9 +27,11 @@ class FinBERTNews(object):
                                                        start=start_date.isoformat(),
                                                        end=end_date.isoformat(),
                                                        limit=limit,
-                                                       sort="asc")
+                                                       sort="asc",
+                                                       )
                 return news_entity
-            except ConnectionError as e:
+            except Exception as e:
+                Manager.check_internet_connection()
                 print(f"Error getting news: '{e}'. Retrying in 5 seconds... ({tries})")
                 tries += 1
                 time.sleep(5)
@@ -50,10 +53,15 @@ class FinBERTNews(object):
                     self.saved_news_indices[symbol][news_dict["updated_at"][0:7]] = 0
                     self.saved_news[symbol] = [news_obj]
                 elif news_obj not in self.saved_news[symbol]:
+                    # Year
                     if news_dict["updated_at"][0:4] not in self.saved_news_indices[symbol]:
                         self.saved_news_indices[symbol][news_dict["updated_at"][0:4]] = len(self.saved_news[symbol])
+                    # Month
                     if news_dict["updated_at"][0:7] not in self.saved_news_indices[symbol]:
                         self.saved_news_indices[symbol][news_dict["updated_at"][0:7]] = len(self.saved_news[symbol])
+                    # Day
+                    if news_dict["updated_at"][0:10] not in self.saved_news_indices[symbol]:
+                        self.saved_news_indices[symbol][news_dict["updated_at"][0:10]] = len(self.saved_news[symbol])
                     self.saved_news[symbol].append(news_obj)
 
         print("Finbert: Cached {0} news involving {1} with a total of {2} unique symbols".format(len(news_entity), symbols, len(self.saved_news)))
@@ -84,10 +92,13 @@ class FinBERTNews(object):
     def get_saved_sentiment(self, symbol, start_date, end_date):
         news = []
         if symbol in self.saved_news:
-            year_key = str(start_date.year)
-            month_key = start_date.isoformat()[0:7]
+            day_key = start_date.isoformat()[0:10]
+            month_key = day_key[0:7]
+            year_key = day_key[0:4]
             start_index = len(self.saved_news[symbol])
-            if month_key in self.saved_news_indices[symbol]:
+            if day_key in self.saved_news_indices[symbol]:
+                start_index = self.saved_news_indices[symbol][day_key]
+            elif month_key in self.saved_news_indices[symbol]:
                 start_index = self.saved_news_indices[symbol][month_key]
             elif year_key in self.saved_news_indices[symbol]:
                 start_index = self.saved_news_indices[symbol][year_key]

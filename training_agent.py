@@ -77,9 +77,8 @@ def eval_genome(arg):
                   Agent.rel_change(prev_nasdaq_bar["volume"], nasdaq_bar["volume"]),
                   nasdaq_sentiments[nasdaq_index],
                   indicator_data["k_percent"][i],
-                  indicator_data["ema"][i],
-                  indicator_data["k_sma"][i],
-                  indicator_data["d_sma"][i],
+                  indicator_data["d_ema"][i],
+                  indicator_data["k_ema"][i],
                   indicator_data["rsi"][i]
                   ]
         if short and shares < 0:
@@ -283,7 +282,7 @@ class Training(Agent):
                 self.best_genome = genome
                 best_genome_id = genome_id
 
-        if self.best_genome is not None and best_genome_id in self.cum_fitness:
+        if best_genome_id in self.cum_fitness:
             print(f"Fitness across batches: {self.cum_fitness[best_genome_id]} - id {best_genome_id}")
         if best_log is not None and self.settings["log_training"]:
             plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], best_log, 30, True)
@@ -323,5 +322,23 @@ class Training(Agent):
         self.started = True
 
     def plot(self):
-        node_names = {-9: 'plpc', -8: 'O%', -7: 'H%', -6: 'L%', -5: 'C%', -4: 'V%', -3: 'vwap%', -2: "sentiment", -1: 'buy/sell', 0: 'amount'}
+        node_names = {-18: 'Position',
+                      -17: 'PLPC',
+                      -16: 'Open%',
+                      -15: 'High%',
+                      -14: 'Low%',
+                      -13: 'Close%',
+                      -12: 'Vol%',
+                      -11: "VWAP%",
+                      -10: 'Stock Sent',
+                      -9: 'SPY Close%',
+                      -8: 'SPY Vol%',
+                      -7: 'SPY Sent',
+                      -6: 'QQQ Close%',
+                      -5: 'QQQ Vol%',
+                      -4: 'QQQ Sent',
+                      -3: 'K%',
+                      -2: 'EMA D',
+                      -1: 'EMA K',
+                      0: 'RSI'}
         visualize.draw_net(self.config, self.best_genome, view=True, node_names=node_names, show_disabled=False)

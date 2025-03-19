@@ -6,7 +6,7 @@ import alpaca_trade_api as alpaca
 from alpaca_trade_api.rest import URL
 from base_manager import Manager
 from training_agent import Training
-import torch
+from multiprocessing import Pool
 
 
 class Trainer(Manager):
@@ -22,6 +22,7 @@ class Trainer(Manager):
         self.largest_backtest = 0
         self.largest_batch_size = 0
         self.one_agent = False
+        self.processes = settings["processes"]
 
         for profile in settings["profiles"]:
             alpaca_api = alpaca.REST(profile["public_key"], profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
@@ -65,7 +66,7 @@ class Trainer(Manager):
             "profit_window": profile["profit_window"],
             "fitness_multipliers": profile["fitness_multipliers"],
             "short_limit": profile["short_limit"],
-            "start_cash": profile["start_cash"],
+            "start_cash": profile["start_cash"]
         }
 
         update_agents = False
@@ -77,32 +78,45 @@ class Trainer(Manager):
         if not no_agents and update_agents:
             self.create_agents(False, True)
 
-    def generate_data(self, symbol, session, earliest_date, start_date, end_date, file_path, save_news, indicators):
+    def load_data(self, symbol, i, session, file_path):
+        data = saving.SaveSystem.load_data(file_path)
+        if len(data) == 4:
+            backtest_start, backtest_end, b_sentiments, b_indicators = data
+            b_bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], backtest_start, backtest_end)
+            print(f" {symbol}{i}: Loaded {len(b_bars)} bars, sentiments, and indicator data from {b_bars[0]['timestamp']} to {b_bars[-1]['timestamp']}")
+            return b_bars, b_sentiments, b_indicators
+        else:
+            backtest_start, backtest_end, b_sentiments = data
+            b_bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], backtest_start, backtest_end)
+            print(f" {symbol}{i}: Loaded {len(b_bars)} bars and sentiments from {b_bars[0]['timestamp']} to {b_bars[-1]['timestamp']}")
+            return b_bars, b_sentiments, None
+
+    def generate_data(self, symbol, i, session, start_date, end_date, file_path, indicators):
         bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], start_date, end_date)
         if len(bars) == 0:
-            if indicators:
-                return None, None, None
-            else:
-                return None, None
-
-        if save_news or len(self.finbert.saved_news) == 0:
-            self.finbert.save_news(self.symbols, earliest_date, end_date)
+            return None
 
         sentiments = [0]  # We skip first sentiment in training (due to relative change we must start at index 1)
 
         if indicators:
-            print(f" {symbol}: Generating sentiments and indicator data for {len(bars)} bars from {start_date} to {end_date}")
+            print(f" {symbol}{i}: Generating sentiments and indicator data for {len(bars)} bars from {start_date} to {end_date}")
 
             bar_k_period = Training.days_to_bars(session["k_period"], session["interval"])
             bar_d_period = Training.days_to_bars(session["d_period"], session["interval"])
             bar_rsi_period = Training.days_to_bars(session["rsi_period"], session["interval"])
             k_percent_data = [0]
-            ema_data = [0]
-            k_sma_data = [0]
-            d_sma_data = [0]
+            d_ema_data = [0]
+            k_ema_data = [0]
             rsi_data = [0]
-            alpha = 2 / (bar_d_period + 1)
-            prev_ema = bars[0]["close"]
+            d_alpha = 2 / (bar_d_period + 1)
+            k_alpha = 2 / (bar_k_period + 1)
+            prev_d_ema = bars[0]["close"]
+            prev_k_ema = bars[0]["close"]
+
+            gain = 0
+            loss = 0
+
+            start_time = time.time()
 
             for i in range(1, len(bars)):
                 # Sentiments
@@ -112,18 +126,36 @@ class Trainer(Manager):
 
                 # Indicators
                 k_percent_data.append(Training.calculate_k_percent(bars[i - min(bar_k_period, i):i]))
-                ema_data.append(Training.calculate_ema(bars[i]["close"], alpha, prev_ema))
-                k_sma_data.append(Training.calculate_sma(bars[i - min(bar_k_period, i):i]))
-                d_sma_data.append(Training.calculate_sma(bars[i - min(bar_d_period, i):i]))
-                rsi_data.append(Training.calculate_rsi(bars[i - min(bar_rsi_period, i):i]))
+                d_ema_data.append(Training.calculate_ema(bars[i]["close"], d_alpha, prev_d_ema))
+                prev_d_ema = d_ema_data[-1]
+                k_ema_data.append(Training.calculate_ema(bars[i]["close"], k_alpha, prev_k_ema))
+                prev_k_ema = k_ema_data[-1]
+
+                # Calculate RSI
+                change = bars[i]["close"] - bars[i - 1]["close"]
+                if change > 0:
+                    gain += change
+                else:
+                    loss += abs(change)
+
+                # Remove old data
+                start_rsi_index = i - min(bar_rsi_period, i)
+                if (i - start_rsi_index) + 1 >= bar_rsi_period:
+                    start_change = bars[start_rsi_index]["close"] - bars[start_rsi_index - 1]["close"]
+                    if start_change > 0:
+                        gain -= change
+                    else:
+                        loss -= abs(change)
+
+                rsi_data.append(Training.calculate_rsi(gain, loss, (i - start_rsi_index) + 1))
 
             indicator_data = {
                 "k_percent": k_percent_data,
-                "ema": ema_data,
-                "k_sma": k_sma_data,
-                "d_sma": d_sma_data,
+                "d_ema": d_ema_data,
+                "k_ema": k_ema_data,
                 "rsi": rsi_data
             }
+            print(f" {symbol}{i}: Finished generating data in {str(time.time() - start_time):.2}s")
             saving.SaveSystem.save_data((start_date, end_date, sentiments, indicator_data), file_path)
             return bars, sentiments, indicator_data
         else:
@@ -134,7 +166,7 @@ class Trainer(Manager):
                 sentiments.append(sentiment)
 
             saving.SaveSystem.save_data((start_date, end_date, sentiments), file_path)
-            return bars, sentiments
+            return bars, sentiments, None
 
     def create_agents(self, regenerate=False, save_news=False):
         print("Trainer: Creating agents")
@@ -142,102 +174,127 @@ class Trainer(Manager):
         earliest_date = now_date - dt.timedelta(days=self.largest_backtest * self.largest_batch_size)
         end_date = now_date - dt.timedelta(minutes=16)  # Cant get recent 15 minute data with free alpaca acc
 
+        if save_news:
+            print("save1")
+            self.finbert.save_news(self.symbols, earliest_date, end_date)
+
         for profile_name in self.sessions:
             print(profile_name)
             session = self.sessions[profile_name]
             start_date = now_date - dt.timedelta(days=session["batch_size"])
 
             session["agents"].clear()
-            sp500_bars = []  # Each item is one batch's bars
-            nasdaq_bars = []
-            sp500_sentiments = []  # Each item is one batch's sentiments
-            nasdaq_sentiments = []
 
-            # TODO: Repeated code with if statements. Figure out how to condense them to make this cleaner
+            pool = Pool(processes=self.processes)
+            jobs = []
+            stock_bars = {"SPY": [], "QQQ": []}
+            stock_sentiments = {"SPY": [], "QQQ": []}
+            stock_indicators = {"SPY": [], "QQQ": []}
+
             for i in range(session["batches"]):
                 time_delta = dt.timedelta(days=i * session["batch_size"])
+                if i >= len(stock_bars["SPY"]):
+                    stock_bars["SPY"].append([])
+                    stock_sentiments["SPY"].append([])
+                    stock_indicators["SPY"].append([])
+
+                    stock_bars["QQQ"].append([])
+                    stock_sentiments["QQQ"].append([])
+                    stock_indicators["QQQ"].append([])
 
                 sp500_file_path = os.path.join(self.training_path, str(session["interval"]) + "m-data-SPY" + str(i) + ".gz")
                 if not regenerate and os.path.exists(sp500_file_path):
-                    backtest_start, backtest_end, b_sp500_sentiments = saving.SaveSystem.load_data(sp500_file_path)
-                    b_sp500_bars = self.get_bars("SPY", session["alpaca_api"], session["interval"], backtest_start,
-                                                 backtest_end)
-                    if len(b_sp500_bars) != len(b_sp500_sentiments):
-                        print(f" SPY{i}: Loaded {len(b_sp500_bars)} bars but have {len(b_sp500_sentiments)} sentiments. Regenerating data")
-                        b_sp500_bars, b_sp500_sentiments = self.generate_data("SPY", session, earliest_date - time_delta,
-                                                                              start_date - time_delta, end_date - time_delta,
-                                                                              sp500_file_path, save_news, False)
-                    else:
-                        print(f" SPY{i}: Loaded {len(b_sp500_bars)} bars and sentiments from {b_sp500_bars[0]['timestamp']} to {b_sp500_bars[-1]['timestamp']}")
+                    jobs.append((i, "SPY",
+                                 pool.apply_async(self.load_data,
+                                                  ("SPY", i, session, sp500_file_path))))
                 else:
-                    b_sp500_bars, b_sp500_sentiments = self.generate_data("SPY", session, earliest_date - time_delta,
-                                                                          start_date - time_delta, end_date - time_delta,
-                                                                          sp500_file_path, save_news, False)
+                    if len(self.finbert.saved_news) == 0:
+                        self.finbert.save_news(self.symbols, earliest_date, end_date)
+                    jobs.append((i, "SPY",
+                                 pool.apply_async(self.generate_data, ("SPY", i, session,
+                                                                       start_date - time_delta,
+                                                                       end_date - time_delta,
+                                                                       sp500_file_path, False))))
 
                 nasdaq_file_path = os.path.join(self.training_path, str(session["interval"]) + "m-data-QQQ" + str(i) + ".gz")
                 if not regenerate and os.path.exists(nasdaq_file_path):
-                    backtest_start, backtest_end, b_nasdaq_sentiments = saving.SaveSystem.load_data(nasdaq_file_path)
-                    b_nasdaq_bars = self.get_bars("QQQ", session["alpaca_api"], session["interval"], backtest_start,
-                                                  backtest_end)
-                    if len(b_nasdaq_bars) != len(b_nasdaq_sentiments):
-                        print(f" QQQ{i}: Loaded {len(b_nasdaq_bars)} bars but have {len(b_nasdaq_sentiments)} sentiments. Regenerating data")
-                        b_nasdaq_bars, b_nasdaq_sentiments = self.generate_data("QQQ", session, earliest_date - time_delta,
-                                                                                start_date - time_delta, end_date - time_delta,
-                                                                                nasdaq_file_path, save_news, False)
-                    else:
-                        print(f" QQQ{i}: Loaded {len(b_nasdaq_bars)} bars and sentiments from {b_nasdaq_bars[0]['timestamp']} to {b_nasdaq_bars[-1]['timestamp']}")
+                    jobs.append((i, "QQQ",
+                                 pool.apply_async(self.load_data,
+                                                  ("QQQ", i, session, nasdaq_file_path))))
                 else:
-                    b_nasdaq_bars, b_nasdaq_sentiments = self.generate_data("QQQ", session, earliest_date - time_delta,
-                                                                            start_date - time_delta, end_date - time_delta,
-                                                                            nasdaq_file_path, save_news, False)
-
-                sp500_bars.append(b_sp500_bars)
-                sp500_sentiments.append(b_sp500_sentiments)
-                nasdaq_bars.append(b_nasdaq_bars)
-                nasdaq_sentiments.append(b_nasdaq_sentiments)
+                    if len(self.finbert.saved_news) == 0:
+                        self.finbert.save_news(self.symbols, earliest_date, end_date)
+                    jobs.append((i, "QQQ",
+                                 pool.apply_async(self.generate_data, ("QQQ", i, session,
+                                                                       start_date - time_delta,
+                                                                       end_date - time_delta,
+                                                                       nasdaq_file_path, False))))
 
             for stock in session["stocks"]:
-                if stock["training_filename"] is None:
-                    print(" No training data filename provided for " + stock["symbol"])
-                    exit(0)
+                symbol = stock["symbol"]
 
+                if stock["training_filename"] is None:
+                    print(" No training data filename provided for " + symbol)
+                    exit(0)
+                
                 training_file_path = os.path.join(self.training_path, stock["training_filename"])
-                stock_bars = []  # Each item is one batch's bars
-                stock_sentiments = []  # Each item is one batch's sentiments
-                indicator_data = []  # Each item is one batch's indicator data
                 for i in range(session["batches"]):
                     file_path = training_file_path.replace(".gz", f"{i}.gz")
                     time_delta = dt.timedelta(days=i * session["batch_size"])
 
-                    if not regenerate and os.path.exists(file_path):
-                        backtest_start, backtest_end, b_sentiments, b_indicators = saving.SaveSystem.load_data(file_path)
-                        b_bars = self.get_bars(stock["symbol"], session["alpaca_api"], session["interval"], backtest_start, backtest_end)
-                        if len(b_bars) != len(b_sentiments):
-                            print(f" {stock['symbol']}{i}: Mismatch in data length (bars: {len(b_bars)}, sent: {len(b_sentiments)}, ind: {len(b_indicators['k_percent'])}). Regenerating data")
-                            b_bars, b_sentiments, b_indicators = self.generate_data(stock["symbol"], session, earliest_date - time_delta,
-                                                                                    start_date - time_delta, end_date - time_delta,
-                                                                                    file_path, save_news, True)
-                        else:
-                            print(f" {stock['symbol']}{i}: Loaded {len(b_bars)} bars, sentiments, and indicator data from {b_bars[0]['timestamp']} to {b_bars[-1]['timestamp']}")
-                    else:
-                        b_bars, b_sentiments, b_indicators = self.generate_data(stock["symbol"], session, earliest_date - time_delta,
-                                                                                start_date - time_delta, end_date - time_delta,
-                                                                                file_path, save_news, True)
-                    if b_bars is None:
-                        for j in reversed(range(len(stock_bars))):
-                            if not isinstance(stock_bars[j], int):
-                                b_bars, b_sentiments = j, j
-                                b_indicators = j
-                                print(f" {stock['symbol']}{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}, using {stock['symbol']}{j} data")
-                                break
-                    stock_bars.append(b_bars)
-                    stock_sentiments.append(b_sentiments)
-                    indicator_data.append(b_indicators)
+                    if symbol not in stock_bars:
+                        stock_bars[symbol] = []
+                        stock_sentiments[symbol] = []
+                        stock_indicators[symbol] = []
 
-                session["agents"][stock["symbol"]] = Training(self.settings, session, stock,
-                                                              stock_bars, sp500_bars, nasdaq_bars,
-                                                              stock_sentiments, sp500_sentiments, nasdaq_sentiments,
-                                                              indicator_data)
+                    stock_bars[symbol].append([])
+                    stock_sentiments[symbol].append([])
+                    stock_indicators[symbol].append([])
+
+                    if not regenerate and os.path.exists(file_path):
+                        jobs.append((i, symbol,
+                                     pool.apply_async(self.load_data,
+                                                      (symbol, i, session, file_path))))
+                    else:
+                        if len(self.finbert.saved_news) == 0:
+                            self.finbert.save_news(self.symbols, earliest_date, end_date)
+                        jobs.append((i, symbol,
+                                     pool.apply_async(self.generate_data,
+                                                      (symbol, i, session,
+                                                       start_date - time_delta,
+                                                       end_date - time_delta,
+                                                       file_path, True))))
+
+            for job in jobs:
+                i, symbol, async_result = job
+                result = async_result.get()
+                time_delta = dt.timedelta(days=i * session["batch_size"])
+
+                if result is None:
+                    found_data = False
+                    for j in range(i, 0, -1):
+                        if stock_bars[symbol][j] != [] and not isinstance(stock_bars[symbol][j], int):
+                            stock_bars[symbol][i], stock_sentiments[symbol][i], stock_indicators[symbol][i] = j, j, j
+                            print(f" {symbol}{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}, using {symbol}{j} data")
+                            found_data = True
+                            break
+                    if not found_data:
+                        stock_bars[symbol][i], stock_sentiments[symbol][i], stock_indicators[symbol][i] = 0, 0, 0
+                        print(f" {symbol}{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}, using {symbol}0 data")
+                else:
+                    stock_bars[symbol][i], stock_sentiments[symbol][i], stock_indicators[symbol][i] = result
+
+            pool.close()
+            pool.join()
+            pool.terminate()
+
+            for stock in session["stocks"]:
+                symbol = stock["symbol"]
+                if stock_indicators[symbol][0] is not None:
+                    session["agents"][symbol] = Training(self.settings, session, stock,
+                                                         stock_bars[symbol], stock_bars["SPY"], stock_bars["QQQ"],
+                                                         stock_sentiments[symbol], stock_sentiments["SPY"], stock_sentiments["QQQ"],
+                                                         stock_indicators[symbol])
 
         print("Trainer: Created {0} training agents\n".format(self.symbols))
 
@@ -246,7 +303,7 @@ class Trainer(Manager):
         self.running = True
         if self.cycles >= self.settings["training_reset"]:
             self.cycles = 0
-            self.create_agents(True)
+            self.create_agents(True, True)
 
         if self.one_agent:
             first_session = self.sessions[next(iter(self.sessions))]
