@@ -15,8 +15,7 @@ class Agent:
 
         if self.settings["processes"] >= os.cpu_count():
             print("Using " + str(self.settings["processes"]) + " workers to train but system only has " + str(os.cpu_count()) + " cores.")
-            if input("Proceed? (y/n): ") != "y":
-                exit(0)
+            self.settings["processes"] = os.cpu_count()
 
         self.population_path = self.settings["save_path"] + "\\Populations"
         saving.SaveSystem.make_dir(self.population_path)
@@ -25,7 +24,6 @@ class Agent:
         saving.SaveSystem.make_dir(self.genome_path)
 
         self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
-        self.alphas = {}
 
     @staticmethod
     def rel_change(a, b):

@@ -79,23 +79,67 @@ class Validator(Manager):
                 continue
             print(f"Validating {simulations} simulations...")
             pool = Pool(processes=min(simulations, self.settings["processes"]))
+            jobs = []
 
             self.finbert.save_news(list(session["agents"].keys()), start_date, end_date)
             sp500_bars = self.get_bars("SPY", session["alpaca_api"], session["interval"], start_date, end_date)
             nasdaq_bars = self.get_bars("QQQ", session["alpaca_api"], session["interval"], start_date, end_date)
 
             for symbol in stock_bars:
-                print(f"Validating over {len(stock_bars)} bars from {stock_bars[0]['timestamp']} to {stock_bars[-1]['timestamp']}...")
+                print(f"Validating over {len(stock_bars[symbol])} bars from {stock_bars[symbol][0]['timestamp']} to {stock_bars[symbol][-1]['timestamp']}...")
                 asset = session["alpaca_api"].get_asset(symbol=symbol)
-                pool.apply_async(session["agents"][symbol].validate,
+                jobs.append((symbol, pool.apply_async(session["agents"][symbol].validate,
                                  (stock_bars[symbol],
                                   sp500_bars, nasdaq_bars,
                                   genomes[symbol],
-                                  shorting[symbol],
-                                  asset,
+                                  shorting[symbol] and asset.shortable,
+                                  asset.fractionable,
                                   session["short_limit"],
                                   session["k_period"], session["d_period"], session["rsi_period"],
-                                  start_cashes[symbol]))
+                                  start_cashes[symbol]))))
+
+            for job in jobs:
+                symbol, async_result = job
+                log = async_result.get()
+                while True:
+                    user_input = input(f"{symbol}: Enter action index or exit: ")
+                    if user_input == "exit":
+                        break
+                    else:
+                        i = int(user_input)
+                        if len(log) > i >= 0:
+                            print("Action at " + str(i))
+                            action = log[i]
+                            for key in action:
+                                if key == "inputs":
+                                    print("-Inputs")
+                                    print(f" |Short/Long: {action[key][0]}")
+                                    print(f" |PLPC: {action[key][1]}")
+                                    print(f" |Open: {action[key][2]}")
+                                    print(f" |High: {action[key][3]}")
+                                    print(f" |Low: {action[key][4]}")
+                                    print(f" |Close: {action[key][5]}")
+                                    print(f" |Volume: {action[key][6]}")
+                                    print(f" |VWAP: {action[key][7]}")
+                                    print(f" |{symbol} Sentiment: {action[key][8]}")
+                                    print(f" |S&P 500 Close: {action[key][9]}")
+                                    print(f" |S&P 500 Volume: {action[key][10]}")
+                                    print(f" |S&P 500 Sentiment: {action[key][11]}")
+                                    print(f" |NASDAQ Close: {action[key][12]}")
+                                    print(f" |NASDAQ Volume: {action[key][13]}")
+                                    print(f" |NASDAQ Sentiment: {action[key][14]}")
+                                    print(f" |%K: {action[key][15]}")
+                                    print(f" |{session['d_period']}-day EMA: {action[key][16]}")
+                                    print(f" |{session['k_period']}-day EMA: {action[key][17]}")
+                                    print(f" |{session['rsi_period']}-day RSI: {action[key][18]}")
+                                elif key == "outputs":
+                                    print("-Outputs")
+                                    print(f" |Buy/Sell: {action[key][0]}")
+                                    print(f" |Quantity: {action[key][1]}")
+                                else:
+                                    print(f"-{key}: {action[key]}")
+                        else:
+                            print("Index not in range of log")
 
             pool.close()
             pool.join()

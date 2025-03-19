@@ -107,7 +107,7 @@ def eval_genome(arg):
 
                     # TODO: REMOVE THIS LATER. Using this to incentivize shorting
                     if profit > 0:
-                        profit *= 1.5
+                        profit *= 2
                     settled_cash += profit
 
                     if log_training:

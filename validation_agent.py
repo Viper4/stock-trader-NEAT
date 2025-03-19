@@ -11,7 +11,7 @@ class Validation(Agent):
         self.finbert = finbert
 
     def validate(self, stock_bars, sp500_bars, nasdaq_bars,
-                 genome, shorting, asset, short_limit,
+                 genome, can_short, fractionable, short_limit,
                  k_period, d_period, rsi_period, start_cash):
         start_time = time.time()
         net = nn.RecurrentNetwork.create(genome, self.config)
@@ -56,7 +56,7 @@ class Validation(Agent):
             if i % 1000 == 0:
                 elapsed = time.time() - start_time
                 eta = (elapsed / i) * (num_bars - i)
-                print(f" {self.stock['symbol']}: {i}/{num_bars} ({str(elapsed):.2}s elapsed {str(eta):.2}s estimated rd_emaining)")
+                print(f" {self.stock['symbol']}: {i}/{num_bars} ({elapsed:.2f}s elapsed {eta:.2f}s remaining)")
 
             stock_bar = stock_bars[i]
             prev_stock_bar = stock_bars[i - 1]
@@ -140,7 +140,7 @@ class Validation(Agent):
                       d_ema,
                       k_ema,
                       rsi]
-            if shorting and asset.shortable and shares < 0:
+            if can_short and shares < 0:
                 inputs[0] = -1
                 inputs[1] = Agent.rel_change(stock_bar["close"] * abs(shares), cost)
 
@@ -148,7 +148,7 @@ class Validation(Agent):
 
             qty_percent = (outputs[1] + 1) * 0.5
             if outputs[0] > 0.5:  # Buy
-                if shorting and asset.shortable and shares < 0:
+                if can_short and shares < 0:
                     quantity = qty_percent * abs(shares)
                     quantity = round(quantity)  # Shorts don't allow fractional qty
                     price = quantity * stock_bar["close"] * (1 - self.stock["transaction_fee"])
@@ -174,7 +174,7 @@ class Validation(Agent):
                         log.append(action)
                 else:
                     quantity = qty_percent * settled_cash * self.stock["cash_at_risk"] / stock_bar["close"]
-                    if not asset.fractionable:
+                    if not fractionable:
                         quantity = round(quantity)
                     price = quantity * stock_bar["close"]
                     if price >= 1:  # Alpaca doesn't allow trades under $1
@@ -189,7 +189,7 @@ class Validation(Agent):
                         log.append(action)
                         long_buys += 1
             elif outputs[0] < -0.5:  # Sell
-                if shorting and asset.shortable and shares <= 0:
+                if can_short and shares <= 0:
                     quantity = qty_percent * (short_limit - cost) * self.stock["cash_at_risk"] / stock_bar["close"]
                     quantity = round(quantity)  # Shorts don't allow fractional qty
                     price = quantity * stock_bar["close"] * (1 - self.stock["transaction_fee"])
@@ -206,7 +206,7 @@ class Validation(Agent):
                             short_sells += 1
                 elif shares > 0:
                     quantity = qty_percent * shares
-                    if not asset.fractionable:
+                    if not fractionable:
                         quantity = round(quantity)
                     price = quantity * stock_bar["close"] * (1 - self.stock["transaction_fee"])
                     if price >= 1:
@@ -252,10 +252,10 @@ class Validation(Agent):
 
         avg_profit = profit_sum / num_windows
         stock_change = stock_bars[-1]['close'] - stock_bars[0]['close']
-        print(f"Simulation finished in {str(time.time() - start_time):.2}s over {consecutive_days} trading days and {num_windows} profit windows"
+        print(f"{stock_bars[0]['symbol']} simulation finished in {(time.time() - start_time):.2f}s over {consecutive_days} trading days and {num_windows} profit windows"
               f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / stock_bars[0]['close']), 4)}%"
-              f"\n Total profit: ${round(profit_sum, 2)} {round(100 * (profit_sum / start_cash), 4)}%"
-              f"\n Average {self.session['profit_window']} day profit: ${round(avg_profit, 2)} {round(avg_profit / start_cash, 4)}%"
+              f"\n Total profit: ${round(profit_sum, 2)} {round(100 * (profit_sum / float(start_cash)), 4)}%"
+              f"\n Average {self.session['profit_window']} day profit: ${round(avg_profit, 2)} {round(avg_profit / float(start_cash), 4)}%"
               f"\n Min profit: ${round(min_profit[0], 2)} {round(min_profit[1], 4)}% on {min_date}"
               f"\n Max profit: ${round(max_profit[0], 2)} {round(max_profit[1], 4)}% on {max_date}"
               f"\n Total short buys: {short_buys}"
@@ -264,42 +264,5 @@ class Validation(Agent):
               f"\n Total long sells: {long_sells}"
               f"\n Average actions/day: {len(log) / consecutive_days}")
         plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], log, self.session["interval"])
-        while True:
-            user_input = input("Enter action index or exit: ")
-            if user_input == "exit":
-                return
-            else:
-                i = int(user_input)
-                if len(log) > i >= 0:
-                    print("Action at " + str(i))
-                    action = log[i]
-                    for key in action:
-                        if key == "inputs":
-                            print("-Inputs")
-                            print(f" |Short/Long: {action[key][0]}")
-                            print(f" |PLPC: {action[key][1]}")
-                            print(f" |Open: {action[key][2]}")
-                            print(f" |High: {action[key][3]}")
-                            print(f" |Low: {action[key][4]}")
-                            print(f" |Close: {action[key][5]}")
-                            print(f" |Volume: {action[key][6]}")
-                            print(f" |VWAP: {action[key][7]}")
-                            print(f" |{stock_bars[0]['symbol']} Sentiment: {action[key][8]}")
-                            print(f" |S&P 500 Close: {action[key][9]}")
-                            print(f" |S&P 500 Volume: {action[key][10]}")
-                            print(f" |S&P 500 Sentiment: {action[key][11]}")
-                            print(f" |NASDAQ Close: {action[key][12]}")
-                            print(f" |NASDAQ Volume: {action[key][13]}")
-                            print(f" |NASDAQ Sentiment: {action[key][14]}")
-                            print(f" |%K: {action[key][15]}")
-                            print(f" |{d_period}-day EMA: {action[key][16]}")
-                            print(f" |{k_period}-day EMA: {action[key][17]}")
-                            print(f" |{rsi_period}-day RSI: {action[key][18]}")
-                        elif key == "outputs":
-                            print("-Outputs")
-                            print(f" |Buy/Sell: {action[key][0]}")
-                            print(f" |Quantity: {action[key][1]}")
-                        else:
-                            print(f"-{key}: {action[key]}")
-                else:
-                    print("Index not in range of log")
+        return log
+

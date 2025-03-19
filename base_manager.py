@@ -36,7 +36,7 @@ class Manager(object):
                 tries += 1
 
     @staticmethod
-    def get_bars(symbol, alpaca_api, interval, start, end):
+    def get_bars(symbol, alpaca_api, interval, start, end, limit=500000):
         tries = 1
         while True:
             try:
@@ -45,7 +45,7 @@ class Manager(object):
                     timeframe=TimeFrame(interval, TimeFrameUnit.Minute),
                     start=start.isoformat(),
                     end=end.isoformat(),
-                    limit=500000,
+                    limit=limit,
                     sort="asc",
                     adjustment="all").df
                 bars_df = bars_df.tz_convert("US/Eastern")

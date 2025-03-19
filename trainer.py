@@ -155,7 +155,7 @@ class Trainer(Manager):
                 "k_ema": k_ema_data,
                 "rsi": rsi_data
             }
-            print(f" {symbol}{i}: Finished generating data in {str(time.time() - start_time):.2}s")
+            print(f" {symbol}{i}: Finished generating data in {(time.time() - start_time):.2f}s")
             saving.SaveSystem.save_data((start_date, end_date, sentiments, indicator_data), file_path)
             return bars, sentiments, indicator_data
         else:
@@ -208,6 +208,11 @@ class Trainer(Manager):
                                  pool.apply_async(self.load_data,
                                                   ("SPY", i, session, sp500_file_path))))
                 else:
+                    one_bar = self.get_bars("SPY", session["alpaca_api"], session["interval"],
+                                            start_date - time_delta, end_date - time_delta, 1)
+                    if len(one_bar) == 0:
+                        jobs.append((i, "SPY", None))
+                        continue
                     if len(self.finbert.saved_news) == 0:
                         self.finbert.save_news(self.symbols, earliest_date, end_date)
                     jobs.append((i, "SPY",
@@ -222,6 +227,11 @@ class Trainer(Manager):
                                  pool.apply_async(self.load_data,
                                                   ("QQQ", i, session, nasdaq_file_path))))
                 else:
+                    one_bar = self.get_bars("QQQ", session["alpaca_api"], session["interval"],
+                                            start_date - time_delta, end_date - time_delta, 1)
+                    if len(one_bar) == 0:
+                        jobs.append((i, "QQQ", None))
+                        continue
                     if len(self.finbert.saved_news) == 0:
                         self.finbert.save_news(self.symbols, earliest_date, end_date)
                     jobs.append((i, "QQQ",
@@ -256,6 +266,11 @@ class Trainer(Manager):
                                      pool.apply_async(self.load_data,
                                                       (symbol, i, session, file_path))))
                     else:
+                        one_bar = self.get_bars(symbol, session["alpaca_api"], session["interval"],
+                                                start_date - time_delta, end_date - time_delta, 1)
+                        if len(one_bar) == 0:
+                            jobs.append((i, symbol, None))
+                            continue
                         if len(self.finbert.saved_news) == 0:
                             self.finbert.save_news(self.symbols, earliest_date, end_date)
                         jobs.append((i, symbol,
@@ -267,7 +282,10 @@ class Trainer(Manager):
 
             for job in jobs:
                 i, symbol, async_result = job
-                result = async_result.get()
+                if async_result is None:
+                    result = None
+                else:
+                    result = async_result.get()
                 time_delta = dt.timedelta(days=i * session["batch_size"])
 
                 if result is None:
