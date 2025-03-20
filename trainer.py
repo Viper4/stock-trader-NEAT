@@ -4,11 +4,11 @@ import os
 import torch.cuda
 import saving
 import alpaca_trade_api as alpaca
-from alpaca_trade_api.rest import URL
 from base_manager import Manager
 from training_agent import Training
 from training_agent_gpu import TrainingGPU
 from multiprocessing import Pool
+from alpaca_trade_api.rest import URL, TimeFrameUnit
 
 
 class Trainer(Manager):
@@ -106,6 +106,7 @@ class Trainer(Manager):
             return None
 
         sentiments = [0]  # We skip first sentiment in training (due to relative change we must start at index 1)
+        start_time = time.time()
 
         if indicators:
             print(f" {symbol}{i}: Generating sentiments and indicator data for {len(bars)} bars from {start_date} to {end_date}")
@@ -125,38 +126,36 @@ class Trainer(Manager):
             gain = 0
             loss = 0
 
-            start_time = time.time()
-
-            for i in range(1, len(bars)):
+            for j in range(1, len(bars)):
                 # Sentiments
-                backtest_date = bars[i]["timestamp"].to_pydatetime()
+                backtest_date = bars[j]["timestamp"].to_pydatetime()
                 sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=2), backtest_date)
                 sentiments.append(sentiment)
 
                 # Indicators
-                k_percent_data.append(Training.calculate_k_percent(bars[i - min(bar_k_period, i):i]))
-                d_ema_data.append(Training.calculate_ema(bars[i]["close"], d_alpha, prev_d_ema))
+                k_percent_data.append(Training.calculate_k_percent(bars[j - min(bar_k_period, j):j]))
+                d_ema_data.append(Training.calculate_ema(bars[j]["close"], d_alpha, prev_d_ema))
                 prev_d_ema = d_ema_data[-1]
-                k_ema_data.append(Training.calculate_ema(bars[i]["close"], k_alpha, prev_k_ema))
+                k_ema_data.append(Training.calculate_ema(bars[j]["close"], k_alpha, prev_k_ema))
                 prev_k_ema = k_ema_data[-1]
 
                 # Calculate RSI
-                change = bars[i]["close"] - bars[i - 1]["close"]
+                change = bars[i]["close"] - bars[j - 1]["close"]
                 if change > 0:
                     gain += change
                 else:
                     loss += abs(change)
 
                 # Remove old data
-                start_rsi_index = i - min(bar_rsi_period, i)
-                if (i - start_rsi_index) + 1 >= bar_rsi_period:
+                start_rsi_index = j - min(bar_rsi_period, j)
+                if (j - start_rsi_index) + 1 >= bar_rsi_period:
                     start_change = bars[start_rsi_index]["close"] - bars[start_rsi_index - 1]["close"]
                     if start_change > 0:
                         gain -= change
                     else:
                         loss -= abs(change)
 
-                rsi_data.append(Training.calculate_rsi(gain, loss, (i - start_rsi_index) + 1))
+                rsi_data.append(Training.calculate_rsi(gain, loss, (j - start_rsi_index) + 1))
 
             indicator_data = {
                 "k_percent": k_percent_data,
@@ -168,12 +167,13 @@ class Trainer(Manager):
             saving.SaveSystem.save_data((start_date, end_date, sentiments, indicator_data), file_path)
             return bars, sentiments, indicator_data
         else:
-            print(f" {symbol}: Generating sentiments for {len(bars)} bars from {start_date} to {end_date}")
-            for i in range(1, len(bars)):
-                backtest_date = bars[i]["timestamp"].to_pydatetime()
+            print(f" {symbol}{i}: Generating sentiments for {len(bars)} bars from {start_date} to {end_date}")
+            for j in range(1, len(bars)):
+                backtest_date = bars[j]["timestamp"].to_pydatetime()
                 sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=2), backtest_date)
                 sentiments.append(sentiment)
 
+            print(f" {symbol}{i}: Finished generating data in {(time.time() - start_time):.2f}s")
             saving.SaveSystem.save_data((start_date, end_date, sentiments), file_path)
             return bars, sentiments, None
 
@@ -217,10 +217,10 @@ class Trainer(Manager):
                                  pool.apply_async(self.load_data,
                                                   ("SPY", i, session, sp500_file_path))))
                 else:
-                    one_bar = self.get_bars("SPY", session["alpaca_api"], session["interval"],
+                    test_bars = self.get_bars("SPY", session["alpaca_api"], 1,
                                             start_date - time_delta, end_date - time_delta,
-                                            1, self.gpu_training)
-                    if len(one_bar) == 0:
+                                            100, self.gpu_training, TimeFrameUnit.Hour, "desc")
+                    if len(test_bars) == 0:
                         jobs.append((i, "SPY", None))
                         continue
                     if len(self.finbert.saved_news) == 0:
@@ -237,10 +237,10 @@ class Trainer(Manager):
                                  pool.apply_async(self.load_data,
                                                   ("QQQ", i, session, nasdaq_file_path))))
                 else:
-                    one_bar = self.get_bars("QQQ", session["alpaca_api"], session["interval"],
+                    test_bars = self.get_bars("QQQ", session["alpaca_api"], 1,
                                             start_date - time_delta, end_date - time_delta,
-                                            1, self.gpu_training)
-                    if len(one_bar) == 0:
+                                            100, self.gpu_training, TimeFrameUnit.Hour, "desc")
+                    if len(test_bars) == 0:
                         jobs.append((i, "QQQ", None))
                         continue
                     if len(self.finbert.saved_news) == 0:
@@ -277,10 +277,10 @@ class Trainer(Manager):
                                      pool.apply_async(self.load_data,
                                                       (symbol, i, session, file_path))))
                     else:
-                        one_bar = self.get_bars(symbol, session["alpaca_api"], session["interval"],
+                        test_bars = self.get_bars(symbol, session["alpaca_api"], 1,
                                                 start_date - time_delta, end_date - time_delta,
-                                                1, self.gpu_training)
-                        if len(one_bar) == 0:
+                                                100, self.gpu_training, TimeFrameUnit.Hour, "desc")
+                        if len(test_bars) == 0:
                             jobs.append((i, symbol, None))
                             continue
                         if len(self.finbert.saved_news) == 0:

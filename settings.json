@@ -4,7 +4,7 @@
       "name": "1m 5pw Profile Short",
       "public_key": "PKIQGRDTI7JBAIHD3C86",
       "secret_key": "AOzVWc6gXeD6YBQTlvGUACGiSsEhgl7SAHvmf341",
-      "data_batch_size": 183,
+      "data_batch_size": 243,
       "data_batches": 4,
       "profit_window": 5,
       "interval": 1,
