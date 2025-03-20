@@ -1,5 +1,4 @@
 import neat
-#import recurrent_cuda
 import time
 import os
 from multiprocessing import Pool
@@ -8,24 +7,29 @@ import saving
 import visualize
 import plot
 from base_agent import Agent
+from data_structures import Queue
 
 
-def eval_genome(arg):
-    stock_bars, sp500_bars, nasdaq_bars, stock_sentiments, sp500_sentiments, nasdaq_sentiments, start_cash, genome, config, cash_at_risk, log_training, profit_window, fitness_multipliers, short, fractionable, short_limit, transaction_fee, indicator_data = arg
-    #net = recurrent_cuda.RecurrentNetwork.create(genome, config)
+def eval_genome(args):
+    (stock_bars, sp500_bars, nasdaq_bars,
+     stock_sentiments, sp500_sentiments, nasdaq_sentiments,
+     start_cash, genome, config, cash_at_risk, log_training, profit_window, fitness_multipliers,
+     short, fractionable, short_limit, transaction_fee,
+     indicator_data) = args
     net = neat.nn.RecurrentNetwork.create(genome, config)
     start_date = stock_bars[0]["timestamp"].date()
     settled_cash = start_cash
     unsettled_cash = 0
-    pending_sales = []
+    pending_sales = Queue()
     start_equity = start_cash
+    running_max_equity = start_equity
+    max_drawdown = 0.0
     profit_sum = 0.0
     num_windows = 0
     shares = 0.0
     cost = 0.0
     consecutive_days = 1
     log = []
-    portfolio_values = [start_equity]
     sp500_index = 0
     nasdaq_index = 0
 
@@ -36,14 +40,16 @@ def eval_genome(arg):
         prev_stock_bar = stock_bars[i-1]
         date = stock_bar["timestamp"].date()
         prev_date = prev_stock_bar["timestamp"].date()
-        if date != prev_date:  # Check pending sales to settle cash after 1 day of sale
+        if date != prev_date:
             consecutive_days += 1
-            for j in reversed(range(len(pending_sales))):
-                sale_price, sale_day = pending_sales[j]
+            while not pending_sales.is_empty():
+                sale_price, sale_day = pending_sales.head.value
                 if consecutive_days - sale_day > 1:
                     settled_cash += sale_price
                     unsettled_cash -= sale_price
-                    pending_sales.pop(j)
+                    pending_sales.dequeue()
+                else:
+                    break
 
         # Dealing with mismatch in length of bars for sp500 and nasdaq
         if sp500_index + 1 < len(sp500_bars):
@@ -163,7 +169,7 @@ def eval_genome(arg):
                         cost = avg_cost * shares
                         profit = price - (avg_cost * quantity)
                     unsettled_cash += price
-                    pending_sales.append((price, consecutive_days))
+                    pending_sales.enqueue((price, consecutive_days))
 
                     if log_training:
                         action = {"side": "Sell", "type": "long", "quantity": quantity, "price": stock_bar["close"],
@@ -180,11 +186,13 @@ def eval_genome(arg):
             num_windows += 1
             start_equity = equity
             start_date = date
-            portfolio_values.append(equity)
+            if equity > running_max_equity:
+                running_max_equity = equity
+            max_drawdown = max(running_max_equity - equity, max_drawdown)
 
     avg_factor = (profit_sum / num_windows) * fitness_multipliers["average"]
     total_factor = profit_sum * fitness_multipliers["total"]
-    risk_factor = Agent.max_drawdown(portfolio_values) * fitness_multipliers["risk"]
+    risk_factor = max_drawdown * fitness_multipliers["risk"]
     return avg_factor + total_factor - risk_factor, log
 
 
@@ -204,7 +212,7 @@ class Training(Agent):
         self.sp500_sentiments = sp500_sentiments
         self.nasdaq_sentiments = nasdaq_sentiments
         self.indicator_data = indicator_data
-        self.batch_index = 0
+        self.data_batch_index = 0
         self.genome_file_path = os.path.join(self.genome_path, self.stock["genome_filename"])
         self.population_file_path = os.path.join(self.population_path, self.stock["population_filename"])
         self.shortable = True
@@ -215,9 +223,9 @@ class Training(Agent):
         while not self.running:
             time.sleep(1)
 
-        if isinstance(self.stock_bars[self.batch_index], int):
-            sub_index = self.stock_bars[self.batch_index]
-            print(f"Evaluating genomes on substitute batch {sub_index}")
+        if isinstance(self.stock_bars[self.data_batch_index], int):
+            sub_index = self.stock_bars[self.data_batch_index]
+            print(f"Evaluating genomes on substitute data batch {sub_index}")
             b_stock_bars = self.stock_bars[sub_index]
             b_sp500_bars = self.sp500_bars[sub_index]
             b_nasdaq_bars = self.nasdaq_bars[sub_index]
@@ -226,14 +234,14 @@ class Training(Agent):
             b_nasdaq_sentiments = self.nasdaq_sentiments[sub_index]
             b_indicator_data = self.indicator_data[sub_index]
         else:
-            print(f"Evaluating genomes on batch {self.batch_index}")
-            b_stock_bars = self.stock_bars[self.batch_index]
-            b_sp500_bars = self.sp500_bars[self.batch_index]
-            b_nasdaq_bars = self.nasdaq_bars[self.batch_index]
-            b_stock_sentiments = self.stock_sentiments[self.batch_index]
-            b_sp500_sentiments = self.sp500_sentiments[self.batch_index]
-            b_nasdaq_sentiments = self.nasdaq_sentiments[self.batch_index]
-            b_indicator_data = self.indicator_data[self.batch_index]
+            print(f"Evaluating genomes on data batch {self.data_batch_index}")
+            b_stock_bars = self.stock_bars[self.data_batch_index]
+            b_sp500_bars = self.sp500_bars[self.data_batch_index]
+            b_nasdaq_bars = self.nasdaq_bars[self.data_batch_index]
+            b_stock_sentiments = self.stock_sentiments[self.data_batch_index]
+            b_sp500_sentiments = self.sp500_sentiments[self.data_batch_index]
+            b_nasdaq_sentiments = self.nasdaq_sentiments[self.data_batch_index]
+            b_indicator_data = self.indicator_data[self.data_batch_index]
 
         pool = Pool(processes=self.settings["processes"])
         args = []
@@ -269,10 +277,10 @@ class Training(Agent):
 
         best_log = None
         best_genome_id = -1
-        for i, (batch_fitness, log) in enumerate(results):
+        for i, (fitness, log) in enumerate(results):
             genome_id, genome = genomes[i]
-            self.cum_fitness.setdefault(genome_id, []).append(batch_fitness)
-            if len(self.cum_fitness[genome_id]) >= self.session["batches"]:
+            self.cum_fitness.setdefault(genome_id, []).append(fitness)
+            if len(self.cum_fitness[genome_id]) >= self.session["data_batches"]:
                 self.cum_fitness[genome_id].pop(0)
 
             genome.fitness = sum(self.cum_fitness[genome_id])
@@ -283,7 +291,7 @@ class Training(Agent):
                 best_genome_id = genome_id
 
         if best_genome_id in self.cum_fitness:
-            print(f"Fitness across batches: {self.cum_fitness[best_genome_id]} - id {best_genome_id}")
+            print(f"Fitness across data batches: {self.cum_fitness[best_genome_id]} - id {best_genome_id}")
         if best_log is not None and self.settings["log_training"]:
             plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], best_log, 30, True)
 
@@ -296,7 +304,7 @@ class Training(Agent):
             self.consecutive_gens = 0
             self.running = False
 
-        self.batch_index = (self.batch_index + 1) % len(self.stock_bars)
+        self.data_batch_index = (self.data_batch_index + 1) % len(self.stock_bars)
 
     def run(self):
         if self.running:

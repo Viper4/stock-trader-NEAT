@@ -80,8 +80,7 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
         end=end_time.isoformat(),
         limit=500000,
         sort="asc",
-        adjustment="all").df.tz_convert("US/Eastern")
-    bars_df = bars_df.between_time("9:30", "16:00")
+        adjustment="all").df.tz_convert("US/Eastern").between_time("9:30", "16:00")
 
     if print_profit:
         last_bar = bars_df.iloc[-1]

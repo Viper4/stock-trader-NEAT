@@ -4,8 +4,8 @@
       "name": "1m 5pw Profile Short",
       "public_key": "PKIQGRDTI7JBAIHD3C86",
       "secret_key": "AOzVWc6gXeD6YBQTlvGUACGiSsEhgl7SAHvmf341",
-      "batch_size": 183,
-      "batches": 4,
+      "data_batch_size": 183,
+      "data_batches": 4,
       "profit_window": 5,
       "interval": 1,
       "k_period": 14,
@@ -17,9 +17,19 @@
       "fitness_multipliers": {
         "average": 0.5,
         "total": 0.5,
-        "risk": 10.0
+        "risk": 0.25
       },
       "stocks": [
+        {
+          "symbol": "META",
+          "cash_at_risk": 0.15,
+          "population_filename": "Short-5pw-population-META.gz",
+          "genome_filename": "Short-5pw-genome-META.gz",
+          "training_filename": "1m-data-META.gz",
+          "trading": false,
+          "shorting": true,
+          "transaction_fee": 0.001
+        },
         {
           "symbol": "FNGA",
           "cash_at_risk": 0.15,
@@ -71,16 +81,6 @@
           "transaction_fee": 0.025
         },
         {
-          "symbol": "META",
-          "cash_at_risk": 0.15,
-          "population_filename": "Short-5pw-population-META.gz",
-          "genome_filename": "Short-5pw-genome-META.gz",
-          "training_filename": "1m-data-META.gz",
-          "trading": false,
-          "shorting": true,
-          "transaction_fee": 0.001
-        },
-        {
           "symbol": "INTC",
           "cash_at_risk": 0.15,
           "population_filename": "Short-5pw-population-INTC.gz",
@@ -98,6 +98,7 @@
   "training_reset": 3,
   "gen_stagger": 8,
   "processes": 16,
+  "gpu": false,
   "print_stats": true,
   "log_training": false,
   "visualize": false

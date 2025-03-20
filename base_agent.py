@@ -3,7 +3,6 @@ import os
 import saving
 import numpy as np
 import torch
-#import cupy as cp
 
 
 class Agent:

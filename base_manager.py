@@ -36,7 +36,7 @@ class Manager(object):
                 tries += 1
 
     @staticmethod
-    def get_bars(symbol, alpaca_api, interval, start, end, limit=500000):
+    def get_bars(symbol, alpaca_api, interval, start, end, limit, df):
         tries = 1
         while True:
             try:
@@ -47,10 +47,11 @@ class Manager(object):
                     end=end.isoformat(),
                     limit=limit,
                     sort="asc",
-                    adjustment="all").df
-                bars_df = bars_df.tz_convert("US/Eastern")
-                bars_df = bars_df.between_time("9:30", "16:00")
-                return bars_df.reset_index().to_dict("records")
+                    adjustment="all").df.tz_convert("US/Eastern").between_time("9:30", "16:00")
+                if df:
+                    return bars_df
+                else:
+                    return bars_df.reset_index().to_dict("records")
             except Exception as e:
                 Manager.check_internet_connection()
                 print(f"Error getting bars: '{e}'. Retrying in 5 seconds... ({tries})")
@@ -83,9 +84,9 @@ class Manager(object):
 
         # Preparing the network with past 20 days data
         now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-        stock_bars = for_agent.trader.get_bars(for_agent.stock["symbol"], alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16))
-        sp500_bars = for_agent.trader.get_bars("SPY", alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16))
-        nasdaq_bars = for_agent.trader.get_bars("QQQ", alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16))
+        stock_bars = for_agent.trader.get_bars(for_agent.stock["symbol"], alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16), 500000, False)
+        sp500_bars = for_agent.trader.get_bars("SPY", alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16), 500000, False)
+        nasdaq_bars = for_agent.trader.get_bars("QQQ", alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16), 500000, False)
 
         prev_d_ema = stock_bars[0]["close"]
         prev_k_ema = stock_bars[0]["close"]

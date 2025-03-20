@@ -14,6 +14,7 @@ from urllib3.exceptions import ProtocolError
 from base_manager import Manager
 from trainer import Trainer
 from paper_agent import PaperTrading
+from data_structures import Queue
 
 
 class PaperTrader(Manager):
@@ -30,7 +31,7 @@ class PaperTrader(Manager):
                 "alpaca_api": alpaca_api,
                 "settled_cash": 0.0,
                 "unsettled_cash": 0.0,
-                "pending_sales": [],
+                "pending_sales": Queue(),
                 "cash_limit": profile["cash_limit"],
                 "short_limit": profile["short_limit"],
                 "stocks": profile["stocks"],
@@ -50,12 +51,11 @@ class PaperTrader(Manager):
             account = self.get_api_account(self.sessions[profile["name"]])
             self.sessions[profile["name"]]["settled_cash"] = float(account.cash)
             self.sessions[profile["name"]]["unsettled_cash"] = 0.0
-            self.sessions[profile["name"]]["pending_sales"].clear()
 
             if starting_unsettled[0] > 0:
                 self.sessions[profile["name"]]["unsettled_cash"] = starting_unsettled[0]
                 self.sessions[profile["name"]]["settled_cash"] -= self.sessions[profile["name"]]["unsettled_cash"]
-                self.sessions[profile["name"]]["pending_sales"].append((self.sessions[profile["name"]]["unsettled_cash"], starting_unsettled[1]))
+                self.sessions[profile["name"]]["pending_sales"].enqueue((self.sessions[profile["name"]]["unsettled_cash"], starting_unsettled[1]))
 
         self.trainer = Trainer(settings, finbert)
 
@@ -177,12 +177,14 @@ class PaperTrader(Manager):
                                                 session["k_period"], session["d_period"], session["rsi_period"])
 
                 for session in self.sessions.values():
-                    for j in reversed(range(len(session["pending_sales"]))):
-                        sale_price, sale_day = session["pending_sales"][j]
+                    while not session["pending_sales"].is_empty():
+                        sale_price, sale_day = session["pending_sales"].head.value
                         if self.consecutive_days - sale_day > 1:
                             session["settled_cash"] += sale_price
                             session["unsettled_cash"] -= sale_price
-                            session["pending_sales"].pop(j)
+                            session["pending_sales"].dequeue()
+                        else:
+                            break
                     for symbol in session["agents"]:
                         threading.Thread(target=session["agents"][symbol].run).start()
 

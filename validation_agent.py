@@ -3,6 +3,7 @@ import datetime as dt
 import time
 import plot
 from base_agent import Agent
+from data_structures import Queue
 
 
 class Validation(Agent):
@@ -19,7 +20,7 @@ class Validation(Agent):
         settled_cash = float(start_cash)
         start_equity = float(start_cash)
         unsettled_cash = 0.0
-        pending_sales = []
+        pending_sales = Queue()
         profit_sum = 0.0
         num_windows = 0
         shares = 0.0
@@ -64,12 +65,14 @@ class Validation(Agent):
             date = stock_bar["timestamp"].date()
             if date != prev_date:  # Check pending sales to settle cash after 1 day of sale
                 consecutive_days += 1
-                for j in reversed(range(len(pending_sales))):
-                    sale_price, sale_day = pending_sales[j]
-                    if consecutive_days - sale_day >= 1:
+                while not pending_sales.is_empty():
+                    sale_price, sale_day = pending_sales.head.value
+                    if consecutive_days - sale_day > 1:
                         settled_cash += sale_price
                         unsettled_cash -= sale_price
-                        pending_sales.pop(j)
+                        pending_sales.dequeue()
+                    else:
+                        break
 
             # Dealing with mismatch in length of bars for sp500 and nasdaq
             if sp500_index + 1 < len(sp500_bars):
@@ -231,7 +234,7 @@ class Validation(Agent):
                                       "datetime": stock_bar["timestamp"].to_pydatetime()}
                             log.append(action)
                         unsettled_cash += price
-                        pending_sales.append((price, consecutive_days))
+                        pending_sales.enqueue((price, consecutive_days))
                         long_sells += 1
             if i == num_bars - 1 or (date - start_date).days >= self.session["profit_window"]:
                 if shares < 0:

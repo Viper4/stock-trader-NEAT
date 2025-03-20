@@ -1,11 +1,13 @@
 import time
 import datetime as dt
 import os
+import torch.cuda
 import saving
 import alpaca_trade_api as alpaca
 from alpaca_trade_api.rest import URL
 from base_manager import Manager
 from training_agent import Training
+from training_agent_gpu import TrainingGPU
 from multiprocessing import Pool
 
 
@@ -20,9 +22,10 @@ class Trainer(Manager):
 
         self.symbols = []
         self.largest_backtest = 0
-        self.largest_batch_size = 0
+        self.largest_data_batch_size = 0
         self.one_agent = False
         self.processes = settings["processes"]
+        self.gpu_training = settings["gpu"] and torch.cuda.is_available()
 
         for profile in settings["profiles"]:
             alpaca_api = alpaca.REST(profile["public_key"], profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
@@ -34,11 +37,11 @@ class Trainer(Manager):
     def update_profile(self, profile, alpaca_api, no_agents=False):
         print(f"Trainer: Updating {profile['name']} profile")
 
-        if self.largest_backtest < profile["batch_size"]:
-            self.largest_backtest = profile["batch_size"]
+        if self.largest_backtest < profile["data_batch_size"]:
+            self.largest_backtest = profile["data_batch_size"]
 
-        if self.largest_batch_size < profile["batches"]:
-            self.largest_batch_size = profile["batches"]
+        if self.largest_data_batch_size < profile["data_batches"]:
+            self.largest_data_batch_size = profile["data_batches"]
 
         if len(self.settings["profiles"]) == 1 and len(profile["stocks"]) == 1 and self.settings["gen_stagger"] != 0:
             print(f"{profile['name']}: Only training 1 agent. Setting gen_stagger to 0.")
@@ -57,8 +60,8 @@ class Trainer(Manager):
             "agents": agents,
             "logs": logs,
             "stocks": profile["stocks"],
-            "batch_size": profile["batch_size"],
-            "batches": profile["batches"],
+            "data_batch_size": profile["data_batch_size"],
+            "data_batches": profile["data_batches"],
             "interval": profile["interval"],
             "k_period": profile["k_period"],
             "d_period": profile["d_period"],
@@ -82,17 +85,23 @@ class Trainer(Manager):
         data = saving.SaveSystem.load_data(file_path)
         if len(data) == 4:
             backtest_start, backtest_end, b_sentiments, b_indicators = data
-            b_bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], backtest_start, backtest_end)
-            print(f" {symbol}{i}: Loaded {len(b_bars)} bars, sentiments, and indicator data from {b_bars[0]['timestamp']} to {b_bars[-1]['timestamp']}")
+            b_bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], backtest_start, backtest_end, 500000, self.gpu_training)
+            if self.gpu_training:
+                print(f" {symbol}{i}: Loaded {len(b_bars)} bars, sentiments, and indicator data from {b_bars.index[0]} to {b_bars.index[-1]}")
+            else:
+                print(f" {symbol}{i}: Loaded {len(b_bars)} bars, sentiments, and indicator data from {b_bars[0]['timestamp']} to {b_bars[-1]['timestamp']}")
             return b_bars, b_sentiments, b_indicators
         else:
             backtest_start, backtest_end, b_sentiments = data
-            b_bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], backtest_start, backtest_end)
-            print(f" {symbol}{i}: Loaded {len(b_bars)} bars and sentiments from {b_bars[0]['timestamp']} to {b_bars[-1]['timestamp']}")
+            b_bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], backtest_start, backtest_end, 500000, self.gpu_training)
+            if self.gpu_training:
+                print(f" {symbol}{i}: Loaded {len(b_bars)} bars and sentiments from {b_bars.index[0]} to {b_bars.index[-1]}")
+            else:
+                print(f" {symbol}{i}: Loaded {len(b_bars)} bars and sentiments from {b_bars[0]['timestamp']} to {b_bars[-1]['timestamp']}")
             return b_bars, b_sentiments, None
 
     def generate_data(self, symbol, i, session, start_date, end_date, file_path, indicators):
-        bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], start_date, end_date)
+        bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], start_date, end_date, 500000, self.gpu_training)
         if len(bars) == 0:
             return None
 
@@ -171,7 +180,7 @@ class Trainer(Manager):
     def create_agents(self, regenerate=False, save_news=False):
         print("Trainer: Creating agents")
         now_date = dt.datetime.now(dt.timezone.utc)
-        earliest_date = now_date - dt.timedelta(days=self.largest_backtest * self.largest_batch_size)
+        earliest_date = now_date - dt.timedelta(days=self.largest_backtest * self.largest_data_batch_size)
         end_date = now_date - dt.timedelta(minutes=16)  # Cant get recent 15 minute data with free alpaca acc
 
         if save_news:
@@ -181,7 +190,7 @@ class Trainer(Manager):
         for profile_name in self.sessions:
             print(profile_name)
             session = self.sessions[profile_name]
-            start_date = now_date - dt.timedelta(days=session["batch_size"])
+            start_date = now_date - dt.timedelta(days=session["data_batch_size"])
 
             session["agents"].clear()
 
@@ -191,8 +200,8 @@ class Trainer(Manager):
             stock_sentiments = {"SPY": [], "QQQ": []}
             stock_indicators = {"SPY": [], "QQQ": []}
 
-            for i in range(session["batches"]):
-                time_delta = dt.timedelta(days=i * session["batch_size"])
+            for i in range(session["data_batches"]):
+                time_delta = dt.timedelta(days=i * session["data_batch_size"])
                 if i >= len(stock_bars["SPY"]):
                     stock_bars["SPY"].append([])
                     stock_sentiments["SPY"].append([])
@@ -209,7 +218,8 @@ class Trainer(Manager):
                                                   ("SPY", i, session, sp500_file_path))))
                 else:
                     one_bar = self.get_bars("SPY", session["alpaca_api"], session["interval"],
-                                            start_date - time_delta, end_date - time_delta, 1)
+                                            start_date - time_delta, end_date - time_delta,
+                                            1, self.gpu_training)
                     if len(one_bar) == 0:
                         jobs.append((i, "SPY", None))
                         continue
@@ -228,7 +238,8 @@ class Trainer(Manager):
                                                   ("QQQ", i, session, nasdaq_file_path))))
                 else:
                     one_bar = self.get_bars("QQQ", session["alpaca_api"], session["interval"],
-                                            start_date - time_delta, end_date - time_delta, 1)
+                                            start_date - time_delta, end_date - time_delta,
+                                            1, self.gpu_training)
                     if len(one_bar) == 0:
                         jobs.append((i, "QQQ", None))
                         continue
@@ -248,9 +259,9 @@ class Trainer(Manager):
                     exit(0)
                 
                 training_file_path = os.path.join(self.training_path, stock["training_filename"])
-                for i in range(session["batches"]):
+                for i in range(session["data_batches"]):
                     file_path = training_file_path.replace(".gz", f"{i}.gz")
-                    time_delta = dt.timedelta(days=i * session["batch_size"])
+                    time_delta = dt.timedelta(days=i * session["data_batch_size"])
 
                     if symbol not in stock_bars:
                         stock_bars[symbol] = []
@@ -267,7 +278,8 @@ class Trainer(Manager):
                                                       (symbol, i, session, file_path))))
                     else:
                         one_bar = self.get_bars(symbol, session["alpaca_api"], session["interval"],
-                                                start_date - time_delta, end_date - time_delta, 1)
+                                                start_date - time_delta, end_date - time_delta,
+                                                1, self.gpu_training)
                         if len(one_bar) == 0:
                             jobs.append((i, symbol, None))
                             continue
@@ -286,12 +298,12 @@ class Trainer(Manager):
                     result = None
                 else:
                     result = async_result.get()
-                time_delta = dt.timedelta(days=i * session["batch_size"])
+                time_delta = dt.timedelta(days=i * session["data_batch_size"])
 
                 if result is None:
                     found_data = False
-                    for j in range(i, 0, -1):
-                        if stock_bars[symbol][j] != [] and not isinstance(stock_bars[symbol][j], int):
+                    for j in reversed(range(i)):
+                        if not isinstance(stock_bars[symbol][j], int) and len(stock_bars[symbol][j]) != 0:
                             stock_bars[symbol][i], stock_sentiments[symbol][i], stock_indicators[symbol][i] = j, j, j
                             print(f" {symbol}{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}, using {symbol}{j} data")
                             found_data = True
@@ -309,12 +321,21 @@ class Trainer(Manager):
             for stock in session["stocks"]:
                 symbol = stock["symbol"]
                 if stock_indicators[symbol][0] is not None:
-                    session["agents"][symbol] = Training(self.settings, session, stock,
-                                                         stock_bars[symbol], stock_bars["SPY"], stock_bars["QQQ"],
-                                                         stock_sentiments[symbol], stock_sentiments["SPY"], stock_sentiments["QQQ"],
-                                                         stock_indicators[symbol])
+                    if self.gpu_training:
+                        session["agents"][symbol] = TrainingGPU(self.settings, session, stock,
+                                                                stock_bars[symbol], stock_bars["SPY"], stock_bars["QQQ"],
+                                                                stock_sentiments[symbol], stock_sentiments["SPY"], stock_sentiments["QQQ"],
+                                                                stock_indicators[symbol])
+                    else:
+                        session["agents"][symbol] = Training(self.settings, session, stock,
+                                                             stock_bars[symbol], stock_bars["SPY"], stock_bars["QQQ"],
+                                                             stock_sentiments[symbol], stock_sentiments["SPY"], stock_sentiments["QQQ"],
+                                                             stock_indicators[symbol])
 
-        print("Trainer: Created {0} training agents\n".format(self.symbols))
+        if self.gpu_training:
+            print(f"Trainer: Created {self.symbols} GPU training agents\n")
+        else:
+            print(f"Trainer: Created {self.symbols} CPU training agents\n")
 
     def start(self):
         print(f"Starting training... ({self.cycles})")

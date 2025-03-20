@@ -87,7 +87,13 @@ class Trading(Agent):
 
                 # Get historical data for momentum indicators
 
-                stock_bars = self.trader.get_bars(self.stock["symbol"], self.trader.alpaca_api, self.trader.profile["interval"], now_date - dt.timedelta(days=max_period + 1), now_date - dt.timedelta(days=1))
+                stock_bars = self.trader.get_bars(self.stock["symbol"],
+                                                  self.trader.alpaca_api,
+                                                  self.trader.profile["interval"],
+                                                  now_date - dt.timedelta(days=max_period + 1),
+                                                  now_date - dt.timedelta(days=1),
+                                                  500000,
+                                                  False)
                 stock_bars.append(stock_candles)  # Add today's data
 
                 last_index = len(stock_bars) - 1

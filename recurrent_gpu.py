@@ -1,40 +1,46 @@
 from neat.graphs import required_for_output
 from neat.six_util import itervalues, iteritems
-import torch
 
 
 class RecurrentNetwork(object):
-    def __init__(self, input_nodes, output_nodes, node_evals):
-        self.input_nodes = input_nodes
-        self.output_nodes = output_nodes
+    def __init__(self, inputs, outputs, node_evals):
+        self.input_nodes = inputs
+        self.output_nodes = outputs
         self.node_evals = node_evals
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        num_nodes = max(max(input_nodes, default=0), max(output_nodes, default=0), *(node for node, _, _, _, _, _ in node_evals)) + 1
+        self.values = [{}, {}]
+        for v in self.values:
+            for k in inputs + outputs:
+                v[k] = 0.0
 
-        self.values = torch.zeros((2, num_nodes), device=self.device)
+            for node, ignored_activation, ignored_aggregation, ignored_bias, ignored_response, links in self.node_evals:
+                v[node] = 0.0
+                for i, w in links:
+                    v[i] = 0.0
+        self.active = 0
+
+    def reset(self):
+        self.values = [dict((k, 0.0) for k in v) for v in self.values]
         self.active = 0
 
     def activate(self, inputs):
+        if len(self.input_nodes) != len(inputs):
+            raise RuntimeError("Expected {0:n} inputs, got {1:n}".format(len(self.input_nodes), len(inputs)))
+
         ivalues = self.values[self.active]
         ovalues = self.values[1 - self.active]
         self.active = 1 - self.active
 
-        # Set input values
-        input_tensor = torch.tensor(inputs, device=self.device, dtype=torch.float32)
-        ivalues[self.input_nodes] = input_tensor
-        ovalues[self.input_nodes] = input_tensor
+        for i, v in zip(self.input_nodes, inputs):
+            ivalues[i] = v
+            ovalues[i] = v
 
-        # Process nodes
-        for node, _, _, bias, response, links in self.node_evals:
-            indices, weights = zip(*links) if links else ([], [])
-            indices = torch.tensor(indices, device=self.device, dtype=torch.long)
-            weights = torch.tensor(weights, device=self.device, dtype=torch.float32)
+        for node, activation, aggregation, bias, response, links in self.node_evals:
+            node_inputs = [ivalues[i] * w for i, w in links]
+            s = aggregation(node_inputs)
+            ovalues[node] = activation(bias + response * s)
 
-            node_inputs = (ivalues[indices] * weights).sum()
-            ovalues[node] = torch.tanh(bias + response * node_inputs)
-
-        return ovalues[self.output_nodes].tolist()
+        return [ovalues[i] for i in self.output_nodes]
 
     @staticmethod
     def create(genome, config):

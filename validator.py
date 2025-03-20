@@ -66,7 +66,11 @@ class Validator(Manager):
                         try:
                             best_genome = saving.SaveSystem.load_data(os.path.join(session["agents"][stock["symbol"]].genome_path, stock["genome_filename"]))
                             start_cash = input(" Enter starting cash: ")
-                            stock_bars[stock["symbol"]] = self.get_bars(stock["symbol"], session["alpaca_api"], session["interval"], start_date, end_date)
+                            stock_bars[stock["symbol"]] = self.get_bars(stock["symbol"],
+                                                                        session["alpaca_api"],
+                                                                        session["interval"],
+                                                                        start_date, end_date,
+                                                                        500000, False)
                             genomes[stock["symbol"]] = best_genome
                             start_cashes[stock["symbol"]] = start_cash
                             shorting[stock["symbol"]] = stock["shorting"]
@@ -82,8 +86,8 @@ class Validator(Manager):
             jobs = []
 
             self.finbert.save_news(list(session["agents"].keys()), start_date, end_date)
-            sp500_bars = self.get_bars("SPY", session["alpaca_api"], session["interval"], start_date, end_date)
-            nasdaq_bars = self.get_bars("QQQ", session["alpaca_api"], session["interval"], start_date, end_date)
+            sp500_bars = self.get_bars("SPY", session["alpaca_api"], session["interval"], start_date, end_date, 500000, False)
+            nasdaq_bars = self.get_bars("QQQ", session["alpaca_api"], session["interval"], start_date, end_date, 500000, False)
 
             for symbol in stock_bars:
                 print(f"Validating over {len(stock_bars[symbol])} bars from {stock_bars[symbol][0]['timestamp']} to {stock_bars[symbol][-1]['timestamp']}...")
