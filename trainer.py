@@ -194,7 +194,7 @@ class Trainer(Manager):
 
             session["agents"].clear()
 
-            pool = Pool(processes=min(session["data_batches"], self.processes))
+            pool = Pool(processes=1)  # Cant use multiprocessing with cuda for sentiments
             jobs = []
             stock_bars = {"SPY": [], "QQQ": []}
             stock_sentiments = {"SPY": [], "QQQ": []}
