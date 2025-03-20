@@ -194,7 +194,7 @@ class Trainer(Manager):
 
             session["agents"].clear()
 
-            pool = Pool(processes=self.processes)
+            pool = Pool(processes=min(session["data_batches"], self.processes))
             jobs = []
             stock_bars = {"SPY": [], "QQQ": []}
             stock_sentiments = {"SPY": [], "QQQ": []}
