@@ -253,9 +253,10 @@ class Validation(Agent):
                 start_equity = equity
                 start_date = date
 
+        print(pending_sales.head)
         avg_profit = profit_sum / num_windows
         stock_change = stock_bars[-1]['close'] - stock_bars[0]['close']
-        print(f"{stock_bars[0]['symbol']} simulation finished in {(time.time() - start_time):.2f}s over {consecutive_days} trading days and {num_windows} profit windows"
+        print(f"{self.stock['symbol']} simulation finished in {(time.time() - start_time):.2f}s over {consecutive_days} trading days and {num_windows} profit windows"
               f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / stock_bars[0]['close']), 4)}%"
               f"\n Total profit: ${round(profit_sum, 2)} {round(100 * (profit_sum / float(start_cash)), 4)}%"
               f"\n Average {self.session['profit_window']} day profit: ${round(avg_profit, 2)} {round(avg_profit / float(start_cash), 4)}%"

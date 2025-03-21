@@ -194,7 +194,8 @@ class Trainer(Manager):
 
             session["agents"].clear()
 
-            pool = Pool(processes=1)  # Cant use multiprocessing with cuda for sentiments
+            #pool = Pool(min(session["data_batches"], self.processes))
+            pool = Pool(processes=1)  # Only 1 GPU while multiple CPUs trying to use it so cant have more than 1 process
             jobs = []
             stock_bars = {"SPY": [], "QQQ": []}
             stock_sentiments = {"SPY": [], "QQQ": []}

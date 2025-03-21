@@ -90,7 +90,7 @@ class Validator(Manager):
             nasdaq_bars = self.get_bars("QQQ", session["alpaca_api"], session["interval"], start_date, end_date, 500000, False)
 
             for symbol in stock_bars:
-                print(f"Validating over {len(stock_bars[symbol])} bars from {stock_bars[symbol][0]['timestamp']} to {stock_bars[symbol][-1]['timestamp']}...")
+                print(f"{symbol}: Validating over {len(stock_bars[symbol])} bars from {stock_bars[symbol][0]['timestamp']} to {stock_bars[symbol][-1]['timestamp']}...")
                 asset = session["alpaca_api"].get_asset(symbol=symbol)
                 jobs.append((symbol, pool.apply_async(session["agents"][symbol].validate,
                                  (stock_bars[symbol],
