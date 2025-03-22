@@ -284,7 +284,7 @@ class Training(Agent):
 
             genome.fitness = sum(self.cum_fitness[genome_id])
 
-            if self.best_genome is None or genome.fitness > self.best_genome.fitness:
+            if best_genome_id == -1 or genome.fitness > self.best_genome.fitness:
                 best_log = log
                 self.best_genome = genome
                 best_genome_id = genome_id

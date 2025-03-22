@@ -21,14 +21,14 @@
       },
       "stocks": [
         {
-          "symbol": "META",
+          "symbol": "DXYZ",
           "cash_at_risk": 0.15,
-          "population_filename": "Short-5pw-population-META.gz",
-          "genome_filename": "Short-5pw-genome-META.gz",
-          "training_filename": "1m-data-META.gz",
+          "population_filename": "Short-5pw-population-DXYZ.gz",
+          "genome_filename": "Short-5pw-genome-DXYZ.gz",
+          "training_filename": "1m-data-DXYZ.gz",
           "trading": false,
           "shorting": true,
-          "transaction_fee": 0.001
+          "transaction_fee": 0.025
         },
         {
           "symbol": "NVDA",
@@ -61,21 +61,21 @@
           "transaction_fee": 0.001
         },
         {
-          "symbol": "DXYZ",
-          "cash_at_risk": 0.15,
-          "population_filename": "Short-5pw-population-DXYZ.gz",
-          "genome_filename": "Short-5pw-genome-DXYZ.gz",
-          "training_filename": "1m-data-DXYZ.gz",
-          "trading": false,
-          "shorting": true,
-          "transaction_fee": 0.025
-        },
-        {
           "symbol": "INTC",
           "cash_at_risk": 0.15,
           "population_filename": "Short-5pw-population-INTC.gz",
           "genome_filename": "Short-5pw-genome-INTC.gz",
           "training_filename": "1m-data-INTC.gz",
+          "trading": false,
+          "shorting": true,
+          "transaction_fee": 0.001
+        },
+        {
+          "symbol": "META",
+          "cash_at_risk": 0.15,
+          "population_filename": "Short-5pw-population-META.gz",
+          "genome_filename": "Short-5pw-genome-META.gz",
+          "training_filename": "1m-data-META.gz",
           "trading": false,
           "shorting": true,
           "transaction_fee": 0.001
