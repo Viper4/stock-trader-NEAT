@@ -279,7 +279,7 @@ class Training(Agent):
         for i, (fitness, log) in enumerate(results):
             genome_id, genome = genomes[i]
             self.cum_fitness.setdefault(genome_id, []).append(fitness)
-            if len(self.cum_fitness[genome_id]) >= self.session["data_batches"]:
+            if len(self.cum_fitness[genome_id]) > self.session["data_batches"]:
                 self.cum_fitness[genome_id].pop(0)
 
             genome.fitness = sum(self.cum_fitness[genome_id])
