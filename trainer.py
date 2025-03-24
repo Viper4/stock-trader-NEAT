@@ -1,3 +1,4 @@
+import random
 import time
 import datetime as dt
 import os
@@ -7,7 +8,6 @@ import alpaca_trade_api as alpaca
 from base_manager import Manager
 from training_agent import Training
 from training_agent_gpu import TrainingGPU
-from multiprocessing import Pool
 from alpaca_trade_api.rest import URL, TimeFrameUnit
 
 
@@ -35,7 +35,10 @@ class Trainer(Manager):
         self.create_agents()
 
     def update_profile(self, profile, alpaca_api, no_agents=False):
-        print(f"Trainer: Updating {profile['name']} profile")
+        if self.gpu_training:
+            print(f"Trainer GPU: Updating {profile['name']} profile")
+        else:
+            print(f"Trainer CPU: Updating {profile['name']} profile")
 
         if self.largest_backtest < profile["data_batch_size"]:
             self.largest_backtest = profile["data_batch_size"]
@@ -178,7 +181,10 @@ class Trainer(Manager):
             return bars, sentiments, None
 
     def create_agents(self, regenerate=False, save_news=False):
-        print("Trainer: Creating agents")
+        if self.gpu_training:
+            print("Trainer GPU: Creating agents")
+        else:
+            print("Trainer CPU: Creating agents")
         now_date = dt.datetime.now(dt.timezone.utc)
         earliest_date = now_date - dt.timedelta(days=self.largest_backtest * self.largest_data_batch_size)
         end_date = now_date - dt.timedelta(minutes=16)  # Cant get recent 15 minute data with free alpaca acc
@@ -194,8 +200,8 @@ class Trainer(Manager):
 
             session["agents"].clear()
 
-            #pool = Pool(min(session["data_batches"], self.processes))
-            pool = Pool(processes=1)  # Only 1 GPU while multiple CPUs trying to use it so cant have more than 1 process
+
+            # pool = Pool(processes=min(self.session["data_batches"], self.processes))
             jobs = []
             stock_bars = {"SPY": [], "QQQ": []}
             stock_sentiments = {"SPY": [], "QQQ": []}
@@ -206,6 +212,7 @@ class Trainer(Manager):
                 if i >= len(stock_bars["SPY"]):
                     stock_bars["SPY"].append([])
                     stock_sentiments["SPY"].append([])
+                    stock_sentiments["SPY"].append([])
                     stock_indicators["SPY"].append([])
 
                     stock_bars["QQQ"].append([])
@@ -214,9 +221,10 @@ class Trainer(Manager):
 
                 sp500_file_path = os.path.join(self.training_path, str(session["interval"]) + "m-data-SPY" + str(i) + ".gz")
                 if not regenerate and os.path.exists(sp500_file_path):
-                    jobs.append((i, "SPY",
+                    jobs.append((i, "SPY", self.load_data("SPY", i, session, sp500_file_path)))
+                    '''jobs.append((i, "SPY",
                                  pool.apply_async(self.load_data,
-                                                  ("SPY", i, session, sp500_file_path))))
+                                                  ("SPY", i, session, sp500_file_path))))'''
                 else:
                     test_bars = self.get_bars("SPY", session["alpaca_api"], 1,
                                             start_date - time_delta, end_date - time_delta,
@@ -226,17 +234,22 @@ class Trainer(Manager):
                         continue
                     if len(self.finbert.saved_news) == 0:
                         self.finbert.save_news(self.symbols, earliest_date, end_date)
-                    jobs.append((i, "SPY",
+                    jobs.append((i, "SPY", self.generate_data("SPY", i, session,
+                                                              start_date - time_delta,
+                                                              end_date - time_delta,
+                                                              sp500_file_path, False)))
+                    '''jobs.append((i, "SPY",
                                  pool.apply_async(self.generate_data, ("SPY", i, session,
                                                                        start_date - time_delta,
                                                                        end_date - time_delta,
-                                                                       sp500_file_path, False))))
+                                                                       sp500_file_path, False))))'''
 
                 nasdaq_file_path = os.path.join(self.training_path, str(session["interval"]) + "m-data-QQQ" + str(i) + ".gz")
                 if not regenerate and os.path.exists(nasdaq_file_path):
-                    jobs.append((i, "QQQ",
+                    jobs.append((i, "QQQ", self.load_data("QQQ", i, session, nasdaq_file_path)))
+                    '''jobs.append((i, "QQQ",
                                  pool.apply_async(self.load_data,
-                                                  ("QQQ", i, session, nasdaq_file_path))))
+                                                  ("QQQ", i, session, nasdaq_file_path))))'''
                 else:
                     test_bars = self.get_bars("QQQ", session["alpaca_api"], 1,
                                             start_date - time_delta, end_date - time_delta,
@@ -246,11 +259,15 @@ class Trainer(Manager):
                         continue
                     if len(self.finbert.saved_news) == 0:
                         self.finbert.save_news(self.symbols, earliest_date, end_date)
-                    jobs.append((i, "QQQ",
+                    jobs.append((i, "QQQ", self.generate_data("QQQ", i, session,
+                                                             start_date - time_delta,
+                                                             end_date - time_delta,
+                                                             nasdaq_file_path, False)))
+                    '''jobs.append((i, "QQQ",
                                  pool.apply_async(self.generate_data, ("QQQ", i, session,
                                                                        start_date - time_delta,
                                                                        end_date - time_delta,
-                                                                       nasdaq_file_path, False))))
+                                                                       nasdaq_file_path, False))))'''
 
             for stock in session["stocks"]:
                 symbol = stock["symbol"]
@@ -274,9 +291,10 @@ class Trainer(Manager):
                     stock_indicators[symbol].append([])
 
                     if not regenerate and os.path.exists(file_path):
-                        jobs.append((i, symbol,
+                        jobs.append((i, symbol, self.load_data(symbol, i, session, file_path)))
+                        '''jobs.append((i, symbol,
                                      pool.apply_async(self.load_data,
-                                                      (symbol, i, session, file_path))))
+                                                      (symbol, i, session, file_path))))'''
                     else:
                         test_bars = self.get_bars(symbol, session["alpaca_api"], 1,
                                                 start_date - time_delta, end_date - time_delta,
@@ -286,38 +304,47 @@ class Trainer(Manager):
                             continue
                         if len(self.finbert.saved_news) == 0:
                             self.finbert.save_news(self.symbols, earliest_date, end_date)
-                        jobs.append((i, symbol,
+                        jobs.append((i, symbol, self.generate_data(symbol, i, session,
+                                                                   start_date - time_delta,
+                                                                   end_date - time_delta,
+                                                                   file_path, True)))
+                        '''jobs.append((i, symbol,
                                      pool.apply_async(self.generate_data,
                                                       (symbol, i, session,
                                                        start_date - time_delta,
                                                        end_date - time_delta,
-                                                       file_path, True))))
+                                                       file_path, True))))'''
 
+            used_substitutions = {}
             for job in jobs:
-                i, symbol, async_result = job
+                '''i, symbol, async_result = job
                 if async_result is None:
                     result = None
                 else:
-                    result = async_result.get()
+                    result = async_result.get()'''
+                i, symbol, result = job
                 time_delta = dt.timedelta(days=i * session["data_batch_size"])
+                if symbol not in used_substitutions:
+                    used_substitutions[symbol] = set()
 
                 if result is None:
                     found_data = False
-                    for j in reversed(range(i)):
-                        if not isinstance(stock_bars[symbol][j], int) and len(stock_bars[symbol][j]) != 0:
+                    for j in range(i):
+                        if not isinstance(stock_bars[symbol][j], int) and len(stock_bars[symbol][j]) != 0 and j not in used_substitutions[symbol]:
                             stock_bars[symbol][i], stock_sentiments[symbol][i], stock_indicators[symbol][i] = j, j, j
                             print(f" {symbol}{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}, using {symbol}{j} data")
                             found_data = True
+                            used_substitutions[symbol].add(j)
                             break
                     if not found_data:
-                        stock_bars[symbol][i], stock_sentiments[symbol][i], stock_indicators[symbol][i] = 0, 0, 0
-                        print(f" {symbol}{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}, using {symbol}0 data")
+                        if len(used_substitutions) == 0:
+                            print(f" {symbol}{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}, no data to substitute")
+                        else:
+                            sub_index = random.choice(list(used_substitutions[symbol]))
+                            stock_bars[symbol][i], stock_sentiments[symbol][i], stock_indicators[symbol][i] = sub_index, sub_index, sub_index
+                            print(f" {symbol}{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}, using {symbol}{sub_index} data")
                 else:
                     stock_bars[symbol][i], stock_sentiments[symbol][i], stock_indicators[symbol][i] = result
-
-            pool.close()
-            pool.join()
-            pool.terminate()
 
             for stock in session["stocks"]:
                 symbol = stock["symbol"]
@@ -334,9 +361,9 @@ class Trainer(Manager):
                                                              stock_indicators[symbol])
 
         if self.gpu_training:
-            print(f"Trainer: Created {self.symbols} GPU training agents\n")
+            print(f"Trainer GPU: Created {self.symbols} GPU training agents\n")
         else:
-            print(f"Trainer: Created {self.symbols} CPU training agents\n")
+            print(f"Trainer CPU: Created {self.symbols} CPU training agents\n")
 
     def start(self):
         print(f"Starting training... ({self.cycles})")

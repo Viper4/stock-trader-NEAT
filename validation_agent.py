@@ -21,7 +21,6 @@ class Validation(Agent):
         start_equity = float(start_cash)
         unsettled_cash = 0.0
         pending_sales = Queue()
-        profit_sum = 0.0
         num_windows = 0
         shares = 0.0
         cost = 0.0
@@ -248,17 +247,22 @@ class Validation(Agent):
                 if profit > max_profit[0]:
                     max_profit = (profit, 100 * (profit / start_equity))
                     max_date = start_date
-                profit_sum += profit
                 num_windows += 1
                 start_equity = equity
                 start_date = date
 
         print(pending_sales.head)
-        avg_profit = profit_sum / num_windows
+
+        if shares < 0:
+            equity = unsettled_cash + settled_cash + shares * stock_bars[-1]["close"] - cost
+        else:
+            equity = unsettled_cash + settled_cash + stock_bars[-1]["close"] * shares
+        total_profit = equity - float(start_cash)
+        avg_profit = total_profit / num_windows
         stock_change = stock_bars[-1]['close'] - stock_bars[0]['close']
         print(f"{self.stock['symbol']} simulation finished in {(time.time() - start_time):.2f}s over {consecutive_days} trading days and {num_windows} profit windows"
               f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / stock_bars[0]['close']), 4)}%"
-              f"\n Total profit: ${round(profit_sum, 2)} {round(100 * (profit_sum / float(start_cash)), 4)}%"
+              f"\n Total profit: ${round(total_profit, 2)} {round(100 * (total_profit / float(start_cash)), 4)}%"
               f"\n Average {self.session['profit_window']} day profit: ${round(avg_profit, 2)} {round(avg_profit / float(start_cash), 4)}%"
               f"\n Min profit: ${round(min_profit[0], 2)} {round(min_profit[1], 4)}% on {min_date}"
               f"\n Max profit: ${round(max_profit[0], 2)} {round(max_profit[1], 4)}% on {max_date}"

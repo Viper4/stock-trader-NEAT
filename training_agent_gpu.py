@@ -1,4 +1,5 @@
 import neat
+import recurrent_gpu
 import time
 import os
 import threading
@@ -70,7 +71,7 @@ def eval_genome(stock_opens,
 
         inputs = np.array(
             [
-                1,  # -1 = short, 1 = long
+                1.0,  # -1 = short, 1 = long
                 rel_change(cost, stock_closes[i] * shares),  # plpc
                 rel_change(stock_opens[i - 1], stock_opens[i]),
                 rel_change(stock_highs[i - 1], stock_highs[i]),
@@ -96,7 +97,7 @@ def eval_genome(stock_opens,
             inputs[0] = -1
             inputs[1] = rel_change(stock_closes[i] * abs(shares), cost)
 
-        outputs = net.activate(inputs)
+        outputs = network.activate(inputs)
 
         qty_percent = (outputs[1] + 1) * 0.5
         if outputs[0] > 0.5:  # Buy
@@ -117,8 +118,7 @@ def eval_genome(stock_opens,
                         profit = (avg_cost * quantity) - price
 
                     # TODO: REMOVE THIS LATER. Using this to incentivize shorting
-                    if profit > 0:
-                        profit *= 2
+                    profit *= 2
                     settled_cash += profit
             else:
                 quantity = qty_percent * settled_cash * cash_at_risk / stock_closes[i]
@@ -238,14 +238,14 @@ class TrainingGPU(Agent):
                                   b_sp500_bar_df["volume"].to_numpy(),
                                   b_nasdaq_bar_df["volume"].to_numpy(),
                                   b_stock_bar_df["vwap"].to_numpy(),
-                                  b_stock_sentiments,
-                                  b_sp500_sentiments,
-                                  b_nasdaq_sentiments,
+                                  np.array(b_stock_sentiments, dtype=np.float64),
+                                  np.array(b_sp500_sentiments, dtype=np.float64),
+                                  np.array(b_nasdaq_sentiments, dtype=np.float64),
                                   (b_stock_bar_df.index - first_timestamp).days.to_numpy(),
                                   (b_sp500_bar_df.index - first_timestamp).days.to_numpy(),
                                   (b_nasdaq_bar_df.index - first_timestamp).days.to_numpy(),
                                   self.session["start_cash"],
-                                  neat.nn.RecurrentNetwork.create(genome, config),
+                                  recurrent_gpu.RecurrentNetworkCreator.create(genome, config),
                                   self.stock["cash_at_risk"],
                                   self.session["profit_window"],
                                   self.session["fitness_multipliers"],
@@ -259,12 +259,12 @@ class TrainingGPU(Agent):
                                   np.array(b_indicator_data["rsi"], dtype=np.float32))
 
             self.cum_fitness.setdefault(genome_id, []).append(fitness)
-            if len(self.cum_fitness[genome_id]) >= self.session["data_batches"]:
+            if len(self.cum_fitness[genome_id]) > self.session["data_batches"]:
                 self.cum_fitness[genome_id].pop(0)
 
             genome.fitness = sum(self.cum_fitness[genome_id])
 
-            if self.best_genome is None or genome.fitness > self.best_genome.fitness:
+            if best_genome_id == -1 or genome.fitness > self.best_genome.fitness:
                 self.best_genome = genome
                 best_genome_id = genome_id
 

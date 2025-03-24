@@ -1,8 +1,61 @@
-from neat.graphs import required_for_output
+'''from neat.graphs import required_for_output
 from neat.six_util import itervalues, iteritems
+from numba import int32, float64, cuda
+from numba.experimental import jitclass
+import cupy as cp
 
 
-class RecurrentNetwork(object):
+spec = [
+    ("num_inputs", int32),
+    ("num_outputs", int32),
+    ("biases", float64[:]),
+    ("responses", float64[:]),
+    ("weights", float64[:, :]),
+    ("num_nodes", int32),
+    ("values", float64[:, :]),
+    ("active", int32),
+]
+
+
+@jitclass(spec=spec)
+class RecurrentNetworkGPU(object):
+    def __init__(self, num_inputs, num_outputs, biases, responses, weights):
+        self.num_inputs = num_inputs
+        self.num_outputs = num_outputs
+        self.biases = biases
+        self.responses = responses
+        self.weights = weights
+
+        self.num_nodes = self.biases.shape[0]
+        self.values = cp.zeros((2, self.num_nodes), dtype=cp.float64)  # Double buffer for values
+        self.active = 0
+
+    def reset(self):
+        self.values.fill(0.0)
+        self.active = 0
+
+    def activate(self, inputs):
+        if inputs.shape[0] != self.num_inputs:
+            raise RuntimeError(f"Expected {self.num_inputs} inputs, got {inputs.shape[0]}")
+
+        for i in range(inputs.shape[0]):
+            self.values[self.active][i] = inputs[i]
+            self.values[1 - self.active][i] = inputs[i]
+
+        for i in range(self.num_inputs, self.num_nodes):
+            s = 0.0
+            # For each input connection to this node
+            for j in range(self.weights[i].size):
+                s += self.values[self.active][i - self.weights[i].size + j] * self.weights[i, j]
+            self.values[1 - self.active][i] = cp.tanh(self.biases[i] + self.responses[i] * s)
+
+        outputs = self.values[1 - self.active][self.num_nodes - self.num_outputs:]
+        self.active = 1 - self.active
+
+        return outputs
+
+
+class RecurrentNetworkCreator(object):
     def __init__(self, inputs, outputs, node_evals):
         self.input_nodes = inputs
         self.output_nodes = outputs
@@ -63,11 +116,25 @@ class RecurrentNetwork(object):
             else:
                 node_inputs[o].append((i, cg.weight))
 
-        node_evals = []
-        for node_key, inputs in iteritems(node_inputs):
+        remapped_nodes = {}
+        biases = cp.zeros(len(node_inputs), dtype=cp.float64)
+        responses = cp.zeros(biases.shape[0], dtype=cp.float64)
+        max_connections = 0
+        iter_node_inputs = iteritems(node_inputs)
+        i = 0
+        for node_key, inputs in iter_node_inputs:
+            remapped_nodes[node_key] = i
             node = genome.nodes[node_key]
-            activation_function = genome_config.activation_defs.get(node.activation)
-            aggregation_function = genome_config.aggregation_function_defs.get(node.aggregation)
-            node_evals.append((node_key, activation_function, aggregation_function, node.bias, node.response, inputs))
+            biases[i] = node.bias
+            responses[i] = node.response
+            max_connections = max(max_connections, len(inputs))
+            i += 1
 
-        return RecurrentNetwork(genome_config.input_keys, genome_config.output_keys, node_evals)
+        weights = cp.zeros((biases.shape[0], max_connections), dtype=cp.float64)
+
+        for node_key, inputs in iter_node_inputs:
+            for i, w in inputs:
+                weights[remapped_nodes[node_key], i] = w
+
+        return RecurrentNetworkGPU(len(genome_config.input_keys), len(genome_config.output_keys), biases, responses, weights)
+'''
