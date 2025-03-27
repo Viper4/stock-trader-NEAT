@@ -108,9 +108,9 @@ class Schwab:
             if item["accountNumber"][-3:] == self.credentials["account_number"]:
                 self.account_hash = item["hashValue"]
         try:
-            driver.close()
+            driver.quit()
         except Exception as e:
-            print(f"Failed to close driver: {e}")
+            print(f"Failed to quit driver: {e}")
 
         self.authorizing = False
 

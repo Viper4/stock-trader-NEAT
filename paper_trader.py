@@ -67,12 +67,12 @@ class PaperTrader(Manager):
             session = self.sessions[profile_name]
             session["agents"].clear()
 
-            if self.get_market_status(session):
-                now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-                symbols = []
-                for stock in session["stocks"]:
-                    symbols.append(stock["symbol"])
-                self.finbert.save_news(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+            symbols = []
+            now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+            for stock in session["stocks"]:
+                symbols.append(stock["symbol"])
+
+            sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(symbols, now_date, session["alpaca_api"], session["interval"])
 
             for stock in session["stocks"]:
                 session["logs"][stock["symbol"]] = []
@@ -85,7 +85,10 @@ class PaperTrader(Manager):
                         best_genome = saving.SaveSystem.load_data(os.path.join(session["agents"][stock["symbol"]].genome_path, stock["genome_filename"]))
                         self.update_net(session["agents"][stock["symbol"]], best_genome, session["alpaca_api"],
                                         session["interval"], profile_name,
-                                        session["k_period"], session["d_period"], session["rsi_period"])
+                                        sp500_bars, nasdaq_bars,
+                                        sp500_sentiments, nasdaq_sentiments,
+                                        session["k_period"], session["d_period"], session["rsi_period"],
+                                        30)
                     except FileNotFoundError:
                         print(f" No genome file found for {stock['genome_filename']}")
             print(f" Created {', '.join(session['agents'].keys())} paper trading agents\n")
@@ -167,14 +170,17 @@ class PaperTrader(Manager):
 
                     for profile_name in self.sessions:
                         session = self.sessions[profile_name]
-                        self.finbert.save_news(list(session["agents"].keys()), now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+                        sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(list(session["agents"].keys()), now_date, session["alpaca_api"], session["interval"])
 
                         for symbol in session["agents"]:
                             trainer_agent = self.trainer.sessions[profile_name]["agents"][symbol]
-                            if trainer_agent.best_genome is not None:
+                            if trainer_agent.best_genome is not None and session["agents"][symbol].genome != trainer_agent.best_genome:
                                 self.update_net(session["agents"][symbol], trainer_agent.best_genome, session["alpaca_api"],
                                                 session["interval"], profile_name,
-                                                session["k_period"], session["d_period"], session["rsi_period"])
+                                                sp500_bars, nasdaq_bars,
+                                                sp500_sentiments, nasdaq_sentiments,
+                                                session["k_period"], session["d_period"], session["rsi_period"],
+                                                30)
 
                 for session in self.sessions.values():
                     while not session["pending_sales"].is_empty():

@@ -5,8 +5,7 @@ import datetime as dt
 import pytz
 import os
 import saving
-import alpaca_trade_api as alpaca
-from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit
+from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit, REST
 import requests
 
 
@@ -68,12 +67,42 @@ class Manager(object):
 
         # Alpaca API
         first_profile = settings["profiles"][profile_index]
-        alpaca_api = alpaca.REST(first_profile["public_key"], first_profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
+        alpaca_api = REST(first_profile["public_key"], first_profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
 
         return settings, alpaca_api
 
+    def generate_prep_data(self, symbols, now_date, alpaca_api, interval):
+        symbols.append("SPY")
+        symbols.append("QQQ")
+        self.finbert.save_news(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+        sp500_bars = self.get_bars("SPY", alpaca_api, interval, now_date - dt.timedelta(days=30),
+                                   now_date - dt.timedelta(minutes=16), 500000, False)
+        nasdaq_bars = self.get_bars("QQQ", alpaca_api, interval, now_date - dt.timedelta(days=30),
+                                    now_date - dt.timedelta(minutes=16), 500000, False)
+
+        start_time = time.time()
+        sp500_sentiments = []
+        for i in range(len(sp500_bars)):
+            backtest_date = sp500_bars[i]["timestamp"].to_pydatetime()
+            sp500_sentiments.append(self.finbert.get_saved_sentiment("SPY",
+                                                                     backtest_date - dt.timedelta(days=2),
+                                                                     backtest_date))
+        print(f"Generated previous 30 days of sentiment data for SPY in {time.time() - start_time}s")
+
+        start_time = time.time()
+        nasdaq_sentiments = []
+        for i in range(len(nasdaq_bars)):
+            backtest_date = nasdaq_bars[i]["timestamp"].to_pydatetime()
+            nasdaq_sentiments.append(self.finbert.get_saved_sentiment("QQQ",
+                                                                      backtest_date - dt.timedelta(days=2),
+                                                                      backtest_date))
+        print(f"Generated previous 30 days of sentiment data for QQQ in {time.time() - start_time}s")
+        return sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments
+
     @staticmethod
-    def update_net(for_agent, genome, alpaca_api, interval, profile_name, k_period, d_period, rsi_period):
+    def update_net(for_agent, genome, alpaca_api, interval, profile_name,
+                   sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments,
+                   k_period, d_period, rsi_period, days):
         k_period = for_agent.days_to_bars(k_period, interval)
         d_period = for_agent.days_to_bars(d_period, interval)
         rsi_period = for_agent.days_to_bars(rsi_period, interval)
@@ -81,12 +110,14 @@ class Manager(object):
         k_alpha = 2 / (k_period + 1)
 
         for_agent.net = nn.RecurrentNetwork.create(genome, for_agent.config)
+        for_agent.genome = genome
+
+        sp500_index = 0
+        nasdaq_index = 0
 
         # Preparing the network with past 20 days data
         now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-        stock_bars = for_agent.trader.get_bars(for_agent.stock["symbol"], alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16), 500000, False)
-        sp500_bars = for_agent.trader.get_bars("SPY", alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16), 500000, False)
-        nasdaq_bars = for_agent.trader.get_bars("QQQ", alpaca_api, interval, now_date - dt.timedelta(days=20), now_date - dt.timedelta(minutes=16), 500000, False)
+        stock_bars = for_agent.trader.get_bars(for_agent.stock["symbol"], alpaca_api, interval, now_date - dt.timedelta(days=days), now_date - dt.timedelta(minutes=16), 500000, False)
 
         prev_d_ema = stock_bars[0]["close"]
         prev_k_ema = stock_bars[0]["close"]
@@ -96,21 +127,26 @@ class Manager(object):
 
         for i in range(1, len(stock_bars)):
             stock_bar = stock_bars[i]
-            sp500_bar = sp500_bars[i]
-            nasdaq_bar = nasdaq_bars[i]
+            sp500_bar = sp500_bars[sp500_index]
+            nasdaq_bar = nasdaq_bars[nasdaq_index]
             prev_stock_bar = stock_bars[i - 1]
-            prev_sp500_bar = sp500_bars[i - 1]
-            prev_nasdaq_bar = nasdaq_bars[i - 1]
+            prev_sp500_bar = sp500_bars[min(0, sp500_index - 1)]
+            prev_nasdaq_bar = nasdaq_bars[min(0, nasdaq_index - 1)]
             backtest_date = stock_bars[i]["timestamp"].to_pydatetime()
             stock_sentiment = for_agent.trader.finbert.get_saved_sentiment(for_agent.stock["symbol"],
                                                                            backtest_date - dt.timedelta(days=2),
                                                                            backtest_date)
-            sp500_sentiment = for_agent.trader.finbert.get_saved_sentiment("SPY",
-                                                                           backtest_date - dt.timedelta(days=2),
-                                                                           backtest_date)
-            nasdaq_sentiment = for_agent.trader.finbert.get_saved_sentiment("QQQ",
-                                                                            backtest_date - dt.timedelta(days=2),
-                                                                            backtest_date)
+
+            # Dealing with mismatch in length of bars for sp500 and nasdaq
+            if sp500_index + 1 < len(sp500_bars):
+                sp500_date = sp500_bars[sp500_index + 1]["timestamp"].to_pydatetime()
+                if sp500_date <= backtest_date:
+                    sp500_index += 1
+
+            if nasdaq_index + 1 < len(nasdaq_bars):
+                nasdaq_date = nasdaq_bars[nasdaq_index + 1]["timestamp"].to_pydatetime()
+                if nasdaq_date <= backtest_date:
+                    nasdaq_index += 1
 
             k_percent = for_agent.calculate_k_percent(stock_bars[i - min(k_period, i):i])
 
@@ -148,10 +184,10 @@ class Manager(object):
                       stock_sentiment,  # -1 = negative, 0 = neutral, 1 = positive
                       for_agent.rel_change(prev_sp500_bar["close"], sp500_bar["close"]),
                       for_agent.rel_change(prev_sp500_bar["volume"], sp500_bar["volume"]),
-                      sp500_sentiment,
+                      sp500_sentiments[sp500_index],
                       for_agent.rel_change(prev_nasdaq_bar["close"], nasdaq_bar["close"]),
                       for_agent.rel_change(prev_nasdaq_bar["volume"], nasdaq_bar["volume"]),
-                      nasdaq_sentiment,
+                      nasdaq_sentiments[nasdaq_index],
                       k_percent,
                       d_ema,
                       k_ema,

@@ -50,7 +50,7 @@ class Trader(Manager):
         for stock in self.profile["stocks"]:
             if stock["trading"]:
                 symbols.append(stock["symbol"])
-        self.finbert.save_news(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+        sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(symbols, now_date, self.alpaca_api, self.profile["interval"])
 
         for stock in self.profile["stocks"]:
             if stock["trading"]:
@@ -63,16 +63,20 @@ class Trader(Manager):
                     else:
                         try:
                             best_genome = saving.SaveSystem.load_data(os.path.join(self.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
+
                             self.update_net(self.agents[stock["symbol"]], best_genome, self.alpaca_api,
                                             self.profile["interval"], self.profile["name"],
-                                            self.profile["k_period"], self.profile["d_period"], self.profile["rsi_period"])
+                                            sp500_bars, nasdaq_bars,
+                                            sp500_sentiments, nasdaq_sentiments,
+                                            self.profile["k_period"], self.profile["d_period"], self.profile["rsi_period"],
+                                            30)
                         except FileNotFoundError:
                             print(f" No genome file found for {stock['genome_filename']}")
                 else:
                     self.agents[stock["symbol"]].settings = self.settings
                     self.agents[stock["symbol"]].stock = stock
 
-        print(f" Created {', '.join(self.agents.keys())} trading agents\n")
+        print(f"Created {', '.join(self.agents.keys())} trading agents\n")
         for symbol in self.agents:
             threading.Thread(target=self.agents[symbol].run).start()
 
@@ -104,14 +108,17 @@ class Trader(Manager):
                     self.trainer.stop()
                     self.training_thread.join()
 
-                    self.finbert.save_news(list(self.agents.keys()), now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
+                    sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(list(self.agents.keys()), now_date, self.alpaca_api, self.profile["interval"])
 
                     for symbol in self.agents:
                         trainer_agent = self.trainer.sessions[self.settings["profiles"][0]["name"]]["agents"][symbol]
-                        if trainer_agent.best_genome is not None:
+                        if trainer_agent.best_genome is not None and self.agents[symbol].genome != trainer_agent.best_genome:
                             self.update_net(self.agents[symbol], trainer_agent.best_genome, self.alpaca_api,
                                             self.profile["interval"], self.profile["name"],
-                                            self.profile["k_period"], self.profile["d_period"], self.profile["rsi_period"])
+                                            sp500_bars, nasdaq_bars,
+                                            sp500_sentiments, nasdaq_sentiments,
+                                            self.profile["k_period"], self.profile["d_period"], self.profile["rsi_period"],
+                                            30)
 
                 for symbol in self.agents:
                     threading.Thread(target=self.agents[symbol].run).start()

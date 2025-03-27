@@ -16,7 +16,7 @@ class Validation(Agent):
                  k_period, d_period, rsi_period, start_cash):
         start_time = time.time()
         net = nn.RecurrentNetwork.create(genome, self.config)
-        start_date = stock_bars[0]["timestamp"].date()
+        start_date = stock_bars[0]["timestamp"].to_pydatetime()
         settled_cash = float(start_cash)
         start_equity = float(start_cash)
         unsettled_cash = 0.0
@@ -60,8 +60,8 @@ class Validation(Agent):
 
             stock_bar = stock_bars[i]
             prev_stock_bar = stock_bars[i - 1]
-            prev_date = prev_stock_bar["timestamp"].date()
-            date = stock_bar["timestamp"].date()
+            prev_date = prev_stock_bar["timestamp"].to_pydatetime()
+            date = stock_bar["timestamp"].to_pydatetime()
             if date != prev_date:  # Check pending sales to settle cash after 1 day of sale
                 consecutive_days += 1
                 while not pending_sales.is_empty():
@@ -75,12 +75,12 @@ class Validation(Agent):
 
             # Dealing with mismatch in length of bars for sp500 and nasdaq
             if sp500_index + 1 < len(sp500_bars):
-                sp500_date = sp500_bars[sp500_index + 1]["timestamp"].date()
+                sp500_date = sp500_bars[sp500_index + 1]["timestamp"].to_pydatetime()
                 if sp500_date <= date:
                     sp500_index += 1
 
             if nasdaq_index + 1 < len(nasdaq_bars):
-                nasdaq_date = nasdaq_bars[nasdaq_index + 1]["timestamp"].date()
+                nasdaq_date = nasdaq_bars[nasdaq_index + 1]["timestamp"].to_pydatetime()
                 if nasdaq_date <= date:
                     nasdaq_index += 1
 

@@ -11,6 +11,7 @@ class PaperTrading(Agent):
         self.trader = trader
         self.scraper = scraper
         self.net = None
+        self.genome = None
 
     def run(self):
         if self.running:

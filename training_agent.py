@@ -17,7 +17,7 @@ def eval_genome(args):
      short, fractionable, short_limit, transaction_fee,
      indicator_data) = args
     net = neat.nn.RecurrentNetwork.create(genome, config)
-    start_date = stock_bars[0]["timestamp"].date()
+    start_date = stock_bars[0]["timestamp"].to_pydatetime()
     settled_cash = start_cash
     unsettled_cash = 0
     pending_sales = Queue()
@@ -38,8 +38,8 @@ def eval_genome(args):
     for i in range(1, num_bars):
         stock_bar = stock_bars[i]
         prev_stock_bar = stock_bars[i-1]
-        date = stock_bar["timestamp"].date()
-        prev_date = prev_stock_bar["timestamp"].date()
+        date = stock_bar["timestamp"].to_pydatetime()
+        prev_date = prev_stock_bar["timestamp"].to_pydatetime()
         if date != prev_date:
             consecutive_days += 1
             while not pending_sales.is_empty():
@@ -53,12 +53,12 @@ def eval_genome(args):
 
         # Dealing with mismatch in length of bars for sp500 and nasdaq
         if sp500_index + 1 < len(sp500_bars):
-            sp500_date = sp500_bars[sp500_index + 1]["timestamp"].date()
+            sp500_date = sp500_bars[sp500_index + 1]["timestamp"].to_pydatetime()
             if sp500_date <= date:
                 sp500_index += 1
 
         if nasdaq_index + 1 < len(nasdaq_bars):
-            nasdaq_date = nasdaq_bars[nasdaq_index + 1]["timestamp"].date()
+            nasdaq_date = nasdaq_bars[nasdaq_index + 1]["timestamp"].to_pydatetime()
             if nasdaq_date <= date:
                 nasdaq_index += 1
 

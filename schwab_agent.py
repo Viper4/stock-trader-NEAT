@@ -9,6 +9,7 @@ class Trading(Agent):
         super().__init__(settings, None, stock)
         self.trader = trader
         self.net = None
+        self.genome = None
 
     def run(self):
         if self.running:
