@@ -57,6 +57,7 @@ class Trader(Manager):
                 if stock["symbol"] not in self.agents:
                     self.logs[stock["symbol"]] = []
                     self.agents[stock["symbol"]] = Trading(self.settings, stock, self)
+
                     if stock["genome_filename"] is None:
                         print(f" No genome filename provided for {stock['symbol']}")
                         exit(0)

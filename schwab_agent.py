@@ -1,6 +1,8 @@
 import datetime as dt
+import os
 import pytz
 import time
+import saving
 from base_agent import Agent
 
 
@@ -10,6 +12,18 @@ class Trading(Agent):
         self.trader = trader
         self.net = None
         self.genome = None
+
+    def save_memory(self):
+        values_path = self.settings["save_path"] + f"/Values/{self.trader.profile['name'].replace(' ', '-')}-{self.stock['symbol']}.gz"
+        saving.SaveSystem.save_data((self.net.values, self.net.active), values_path)
+
+    def load_memory(self):
+        values_path = self.settings["save_path"] + f"/Values/{self.trader.profile['name'].replace(' ', '-')}-{self.stock['symbol']}.gz"
+
+        if os.path.exists(values_path):
+            self.net.values, self.net.active = saving.SaveSystem.load_data(values_path)
+            return True
+        return False
 
     def run(self):
         if self.running:
@@ -246,5 +260,8 @@ class Trading(Agent):
                 wait_time = (next_open - now_date).total_seconds()
                 wait_time += self.trader.profile["interval"] * 60 + 10  # Wait for yahoo finance to update
                 print(f"{self.trader.profile['name']} {self.stock['symbol']}: Pausing trading. Waiting until market opens in {wait_time / 3600} hours")
+
+                self.save_memory()
+
                 time.sleep(wait_time)
                 print(f"{self.trader.profile['name']} {self.stock['symbol']}: Resuming trading")

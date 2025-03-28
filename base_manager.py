@@ -99,8 +99,7 @@ class Manager(object):
         print(f"Generated previous 30 days of sentiment data for QQQ in {time.time() - start_time}s")
         return sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments
 
-    @staticmethod
-    def update_net(for_agent, genome, alpaca_api, interval, profile_name,
+    def update_net(self, for_agent, genome, alpaca_api, interval, profile_name,
                    sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments,
                    k_period, d_period, rsi_period, days):
         k_period = for_agent.days_to_bars(k_period, interval)
@@ -112,10 +111,15 @@ class Manager(object):
         for_agent.net = nn.RecurrentNetwork.create(genome, for_agent.config)
         for_agent.genome = genome
 
+        # Loading network memory
+        if for_agent.load_memory():
+            print(f"{profile_name} {for_agent.stock['symbol']}: Network memory loaded successfully")
+            return
+
         sp500_index = 0
         nasdaq_index = 0
 
-        # Preparing the network with past 20 days data
+        # Preparing the network with past n days data
         now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
         stock_bars = for_agent.trader.get_bars(for_agent.stock["symbol"], alpaca_api, interval, now_date - dt.timedelta(days=days), now_date - dt.timedelta(minutes=16), 500000, False)
 
@@ -193,4 +197,6 @@ class Manager(object):
                       k_ema,
                       rsi]
             for_agent.net.activate(inputs)
-        print(f"{profile_name} {for_agent.stock['symbol']}: Updated network")
+        print(f"{profile_name} {for_agent.stock['symbol']}: Updated network with {len(stock_bars)} bars")
+
+        for_agent.save_memory()

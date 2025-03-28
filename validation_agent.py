@@ -30,9 +30,9 @@ class Validation(Agent):
         short_buys = 0
         long_sells = 0
         long_buys = 0
-        min_profit = (999999, 999999)
+        min_profit = (9999999, 9999999)
         min_date = None
-        max_profit = (-999999, -999999)
+        max_profit = (-9999999, -9999999)
         max_date = None
 
         prev_d_ema = None
