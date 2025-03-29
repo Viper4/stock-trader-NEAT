@@ -103,7 +103,7 @@ class Trainer(Manager):
                 print(f" {symbol}{i}: Loaded {len(b_bars)} bars and sentiments from {b_bars[0]['timestamp']} to {b_bars[-1]['timestamp']}")
             return b_bars, b_sentiments, None
 
-    def generate_data(self, symbol, i, session, start_date, end_date, file_path, indicators):
+    def generate_data(self, symbol, i, session, start_date, end_date, file_path, gen_indicators):
         # Leave most recent 30 days for validation
         now_date = dt.datetime.now()
         if end_date > now_date - dt.timedelta(days=30):
@@ -116,7 +116,7 @@ class Trainer(Manager):
         sentiments = [0]  # We skip first sentiment in training (due to relative change we must start at index 1)
         start_time = time.time()
 
-        if indicators:
+        if gen_indicators:
             print(f" {symbol}{i}: Generating sentiments and indicator data for {len(bars)} bars from {start_date} to {end_date}")
 
             bar_k_period = Training.days_to_bars(session["k_period"], session["interval"])
