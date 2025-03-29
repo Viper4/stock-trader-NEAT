@@ -104,6 +104,11 @@ class Trainer(Manager):
             return b_bars, b_sentiments, None
 
     def generate_data(self, symbol, i, session, start_date, end_date, file_path, indicators):
+        # Leave most recent 30 days for validation
+        now_date = dt.datetime.now()
+        if end_date > now_date - dt.timedelta(days=30):
+            end_date = now_date - dt.timedelta(days=30)
+
         bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], start_date, end_date, 500000, self.gpu_training)
         if len(bars) == 0:
             return None
