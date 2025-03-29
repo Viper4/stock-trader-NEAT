@@ -71,14 +71,14 @@ class Manager(object):
 
         return settings, alpaca_api
 
-    def generate_prep_data(self, symbols, now_date, alpaca_api, interval):
+    def generate_prep_data(self, symbols, start_date, end_date, alpaca_api, interval):
         symbols.append("SPY")
         symbols.append("QQQ")
-        self.finbert.save_news(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16))
-        sp500_bars = self.get_bars("SPY", alpaca_api, interval, now_date - dt.timedelta(days=30),
-                                   now_date - dt.timedelta(minutes=16), 500000, False)
-        nasdaq_bars = self.get_bars("QQQ", alpaca_api, interval, now_date - dt.timedelta(days=30),
-                                    now_date - dt.timedelta(minutes=16), 500000, False)
+        self.finbert.save_news(symbols, start_date, end_date)
+        sp500_bars = self.get_bars("SPY", alpaca_api, interval, start_date,
+                                   end_date, 500000, False)
+        nasdaq_bars = self.get_bars("QQQ", alpaca_api, interval, start_date,
+                                    end_date, 500000, False)
 
         start_time = time.time()
         sp500_sentiments = []
@@ -87,7 +87,7 @@ class Manager(object):
             sp500_sentiments.append(self.finbert.get_saved_sentiment("SPY",
                                                                      backtest_date - dt.timedelta(days=2),
                                                                      backtest_date))
-        print(f"Generated previous 30 days of sentiment data for SPY in {time.time() - start_time}s")
+        print(f"Generated previous {(end_date - start_date).days} days of sentiment data for SPY in {time.time() - start_time}s")
 
         start_time = time.time()
         nasdaq_sentiments = []
@@ -96,7 +96,7 @@ class Manager(object):
             nasdaq_sentiments.append(self.finbert.get_saved_sentiment("QQQ",
                                                                       backtest_date - dt.timedelta(days=2),
                                                                       backtest_date))
-        print(f"Generated previous 30 days of sentiment data for QQQ in {time.time() - start_time}s")
+        print(f"Generated previous {(end_date - start_date).days} days of sentiment data for QQQ in {time.time() - start_time}s")
         return sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments
 
     def update_net(self, for_agent, genome, alpaca_api, interval, profile_name,

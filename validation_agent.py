@@ -12,11 +12,12 @@ class Validation(Agent):
         self.finbert = finbert
 
     def validate(self, stock_bars, sp500_bars, nasdaq_bars,
+                 sp500_sentiments, nasdaq_sentiments,
                  genome, can_short, fractionable, short_limit,
                  k_period, d_period, rsi_period, start_cash):
         start_time = time.time()
         net = nn.RecurrentNetwork.create(genome, self.config)
-        start_date = stock_bars[0]["timestamp"].to_pydatetime()
+        start_date = stock_bars[0]["timestamp"].date()
         settled_cash = float(start_cash)
         start_equity = float(start_cash)
         unsettled_cash = 0.0
@@ -60,8 +61,8 @@ class Validation(Agent):
 
             stock_bar = stock_bars[i]
             prev_stock_bar = stock_bars[i - 1]
-            prev_date = prev_stock_bar["timestamp"].to_pydatetime()
-            date = stock_bar["timestamp"].to_pydatetime()
+            prev_date = prev_stock_bar["timestamp"].date()
+            date = stock_bar["timestamp"].date()
             if date != prev_date:  # Check pending sales to settle cash after 1 day of sale
                 consecutive_days += 1
                 while not pending_sales.is_empty():
@@ -75,12 +76,12 @@ class Validation(Agent):
 
             # Dealing with mismatch in length of bars for sp500 and nasdaq
             if sp500_index + 1 < len(sp500_bars):
-                sp500_date = sp500_bars[sp500_index + 1]["timestamp"].to_pydatetime()
+                sp500_date = sp500_bars[sp500_index + 1]["timestamp"].date()
                 if sp500_date <= date:
                     sp500_index += 1
 
             if nasdaq_index + 1 < len(nasdaq_bars):
-                nasdaq_date = nasdaq_bars[nasdaq_index + 1]["timestamp"].to_pydatetime()
+                nasdaq_date = nasdaq_bars[nasdaq_index + 1]["timestamp"].date()
                 if nasdaq_date <= date:
                     nasdaq_index += 1
 
@@ -93,12 +94,6 @@ class Validation(Agent):
             stock_sentiment = self.finbert.get_saved_sentiment(self.stock["symbol"],
                                                                backtest_date - dt.timedelta(days=2),
                                                                backtest_date)
-            sp500_sentiment = self.finbert.get_saved_sentiment("SPY",
-                                                               backtest_date - dt.timedelta(days=2),
-                                                               backtest_date)
-            nasdaq_sentiment = self.finbert.get_saved_sentiment("QQQ",
-                                                                backtest_date - dt.timedelta(days=2),
-                                                                backtest_date)
 
             k_percent = Agent.calculate_k_percent(stock_bars[i - min(bar_k_period, i):i])
             d_ema = Agent.calculate_ema(stock_bar["close"], d_alpha, prev_d_ema)
@@ -134,10 +129,10 @@ class Validation(Agent):
                       stock_sentiment,  # -1 = negative, 0 = neutral, 1 = positive
                       Agent.rel_change(prev_sp500_bar["close"], sp500_bar["close"]),
                       Agent.rel_change(prev_sp500_bar["volume"], sp500_bar["volume"]),
-                      sp500_sentiment,
+                      sp500_sentiments[sp500_index],
                       Agent.rel_change(prev_nasdaq_bar["close"], nasdaq_bar["close"]),
                       Agent.rel_change(prev_nasdaq_bar["volume"], nasdaq_bar["volume"]),
-                      nasdaq_sentiment,
+                      nasdaq_sentiments[nasdaq_index],
                       k_percent,
                       d_ema,
                       k_ema,
@@ -250,8 +245,6 @@ class Validation(Agent):
                 num_windows += 1
                 start_equity = equity
                 start_date = date
-
-        print(pending_sales.head)
 
         if shares < 0:
             equity = unsettled_cash + settled_cash + shares * stock_bars[-1]["close"] - cost

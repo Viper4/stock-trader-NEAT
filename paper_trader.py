@@ -72,7 +72,7 @@ class PaperTrader(Manager):
             for stock in session["stocks"]:
                 symbols.append(stock["symbol"])
 
-            sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(symbols, now_date, session["alpaca_api"], session["interval"])
+            sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16), session["alpaca_api"], session["interval"])
 
             for stock in session["stocks"]:
                 session["logs"][stock["symbol"]] = []
@@ -170,7 +170,7 @@ class PaperTrader(Manager):
 
                     for profile_name in self.sessions:
                         session = self.sessions[profile_name]
-                        sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(list(session["agents"].keys()), now_date, session["alpaca_api"], session["interval"])
+                        sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(list(session["agents"].keys()), now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16), session["alpaca_api"], session["interval"])
 
                         for symbol in session["agents"]:
                             trainer_agent = self.trainer.sessions[profile_name]["agents"][symbol]

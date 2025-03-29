@@ -50,7 +50,7 @@ class Trader(Manager):
         for stock in self.profile["stocks"]:
             if stock["trading"]:
                 symbols.append(stock["symbol"])
-        sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(symbols, now_date, self.alpaca_api, self.profile["interval"])
+        sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16), self.alpaca_api, self.profile["interval"])
 
         for stock in self.profile["stocks"]:
             if stock["trading"]:
@@ -109,7 +109,7 @@ class Trader(Manager):
                     self.trainer.stop()
                     self.training_thread.join()
 
-                    sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(list(self.agents.keys()), now_date, self.alpaca_api, self.profile["interval"])
+                    sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(list(self.agents.keys()), now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16), self.alpaca_api, self.profile["interval"])
 
                     for symbol in self.agents:
                         trainer_agent = self.trainer.sessions[self.settings["profiles"][0]["name"]]["agents"][symbol]

@@ -85,9 +85,7 @@ class Validator(Manager):
             pool = Pool(processes=min(simulations, self.settings["processes"]))
             jobs = []
 
-            self.finbert.save_news(list(session["agents"].keys()), start_date, end_date)
-            sp500_bars = self.get_bars("SPY", session["alpaca_api"], session["interval"], start_date, end_date, 500000, False)
-            nasdaq_bars = self.get_bars("QQQ", session["alpaca_api"], session["interval"], start_date, end_date, 500000, False)
+            sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(list(session["agents"].keys()), start_date, end_date, session["alpaca_api"], session["interval"])
 
             for symbol in stock_bars:
                 if len(stock_bars[symbol]) == 0:
@@ -96,14 +94,15 @@ class Validator(Manager):
                 print(f"{symbol}: Validating over {len(stock_bars[symbol])} bars from {stock_bars[symbol][0]['timestamp']} to {stock_bars[symbol][-1]['timestamp']}...")
                 asset = session["alpaca_api"].get_asset(symbol=symbol)
                 jobs.append((symbol, pool.apply_async(session["agents"][symbol].validate,
-                                 (stock_bars[symbol],
-                                  sp500_bars, nasdaq_bars,
-                                  genomes[symbol],
-                                  shorting[symbol] and asset.shortable,
-                                  asset.fractionable,
-                                  session["short_limit"],
-                                  session["k_period"], session["d_period"], session["rsi_period"],
-                                  start_cashes[symbol]))))
+                                                      (stock_bars[symbol],
+                                                       sp500_bars, nasdaq_bars,
+                                                       sp500_sentiments, nasdaq_sentiments,
+                                                       genomes[symbol],
+                                                       shorting[symbol] and asset.shortable,
+                                                       asset.fractionable,
+                                                       session["short_limit"],
+                                                       session["k_period"], session["d_period"], session["rsi_period"],
+                                                       start_cashes[symbol]))))
 
             for job in jobs:
                 symbol, async_result = job

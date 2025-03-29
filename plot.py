@@ -6,6 +6,7 @@ import saving
 import os
 from base_manager import Manager
 
+
 def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
     log_start = log[0]["datetime"]
     log_end = log[-1]["datetime"]

@@ -112,7 +112,7 @@ def eval_genome(args):
                         profit = (avg_cost * quantity) - price
 
                     # TODO: REMOVE THIS LATER. Using this to incentivize shorting
-                    profit *= 2.0
+                    profit *= 1.5
                     settled_cash += profit
 
                     if log_training:
