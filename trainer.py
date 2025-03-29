@@ -7,7 +7,7 @@ import saving
 import alpaca_trade_api as alpaca
 from base_manager import Manager
 from training_agent import Training
-from training_agent_gpu import TrainingGPU
+# from training_agent_gpu import TrainingGPU
 from alpaca_trade_api.rest import URL, TimeFrameUnit
 
 
@@ -354,12 +354,12 @@ class Trainer(Manager):
             for stock in session["stocks"]:
                 symbol = stock["symbol"]
                 if stock_indicators[symbol][0] is not None:
-                    if self.gpu_training:
-                        session["agents"][symbol] = TrainingGPU(self.settings, session, stock,
-                                                                stock_bars[symbol], stock_bars["SPY"], stock_bars["QQQ"],
-                                                                stock_sentiments[symbol], stock_sentiments["SPY"], stock_sentiments["QQQ"],
-                                                                stock_indicators[symbol])
-                    else:
+                    # if self.gpu_training:
+                        # session["agents"][symbol] = TrainingGPU(self.settings, session, stock,
+                        #                                         stock_bars[symbol], stock_bars["SPY"], stock_bars["QQQ"],
+                        #                                         stock_sentiments[symbol], stock_sentiments["SPY"], stock_sentiments["QQQ"],
+                        #                                         stock_indicators[symbol])
+                    # else:
                         session["agents"][symbol] = Training(self.settings, session, stock,
                                                              stock_bars[symbol], stock_bars["SPY"], stock_bars["QQQ"],
                                                              stock_sentiments[symbol], stock_sentiments["SPY"], stock_sentiments["QQQ"],
