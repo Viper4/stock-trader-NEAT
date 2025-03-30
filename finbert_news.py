@@ -36,6 +36,10 @@ class FinBERTNews(object):
                 time.sleep(5)
 
     def save_news(self, symbols, start_date, end_date):
+        if torch.cuda.is_available():
+            print(f"Finbert CUDA: Saving news for {symbols} from {start_date} to {end_date}")
+        else:
+            print(f"Finbert CPU: Saving news for {symbols} from {start_date} to {end_date}")
         self.saved_news.clear()
         # 200 calls/minute API limit makes this slow; Gets 50 news entities per request.
         news_entity = self.get_news(symbols, start_date, end_date, 500000)

@@ -7,6 +7,17 @@ import os
 from base_manager import Manager
 
 
+def plot_bars(bars, lines=None):
+    fig = go.Figure(data=[go.Candlestick(x=bars.index, open=bars["open"], high=bars["high"], low=bars["low"], close=bars["close"])])
+
+    if lines is not None:
+        for line in lines:
+            fig.add_trace(go.Scatter(x=bars.index, y=bars[line], mode="lines", name=line))
+
+    fig.update_layout(title=f"Bars", xaxis_rangeslider_visible=False, xaxis_title="Time", yaxis_title="Price ($)")
+    fig.show()
+
+
 def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
     log_start = log[0]["datetime"]
     log_end = log[-1]["datetime"]
@@ -94,21 +105,38 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
                                                      low=bars_df["low"],
                                                      close=bars_df["close"])])
     candlestick_fig.update_layout(
-        title=f"Candlestick chart for {symbol} at {interval}m interval",
-        xaxis_title="Date",
-        yaxis_title="Price ($USD)",
+        title=f"{symbol} {interval}m bars",
+        xaxis_title="Time",
+        yaxis_title="Price ($)",
         annotations=annotations)
     candlestick_fig.show()
 
 
 if __name__ == "__main__":
     settings, alpaca_api = Manager.get_settings_and_alpaca(0)
-    log_path = f"{settings['save_path']}\\Logs"
     filename = input("Enter file name: ")
+
+    data_path = f"{settings['save_path']}\\TrainingData\\"
+    bars_df = saving.SaveSystem.load_data(os.path.join(data_path, f"{filename}.gz"))
+    plot_bars(bars_df, ["vwap",
+                        "rsi",
+                        "slow_k",
+                        "slow_d",
+                        "atr",
+                        "ema_k",
+                        "ema_d",
+                        "sma_30",
+                        "sma_60",
+                        "sma_200",
+                        "sentiment",
+                        "sentiment_spy",
+                        "sentiment_qqq"])
+
+    '''log_path = f"{settings['save_path']}\\Logs"
     logs = saving.SaveSystem.load_data(os.path.join(log_path, f"{filename}.gz"))
     for symbol in logs:
         if len(logs[symbol]) > 0:
             if input(f"Plot {symbol}? (y/n): ") == "y":
                 plot_log(alpaca_api, symbol, logs[symbol], int(input("Enter interval: ")), True)
         else:
-            print(f" {symbol} log is empty. Skipping")
+            print(f" {symbol} log is empty. Skipping")'''

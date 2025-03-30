@@ -46,7 +46,8 @@ class Manager(object):
                     end=end.isoformat(),
                     limit=limit,
                     sort=sort,
-                    adjustment="all").df.tz_convert("US/Eastern").between_time("9:30", "16:00")
+                    adjustment="all").df.tz_convert("US/Eastern")
+                bars_df.drop_duplicates(inplace=True)
                 return bars_df
             except Exception as e:
                 Manager.check_internet_connection()

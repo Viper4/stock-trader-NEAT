@@ -59,15 +59,17 @@ def eval_genome(args):
                   Agent.rel_change(prev_row.close_qqq, row.close_qqq),
                   Agent.rel_change(prev_row.volume_qqq, row.volume_qqq),
                   row.sentiment_qqq,
-                  row.slow_k,
-                  row.slow_d,
-                  row.rsi,
-                  row.atr,
-                  row.ema_k,
-                  row.ema_d,
+                  (row.slow_k - 50) / 50,
+                  (row.slow_d - 50) / 50,
+                  (row.rsi - 50) / 50,
+                  Agent.rel_change(prev_row.atr, row.atr),
+                  Agent.rel_change(prev_row.ema_k, row.ema_k),
+                  Agent.rel_change(prev_row.ema_d, row.ema_d),
                   ]
         for sma_period in sma_periods:
-            inputs.append(getattr(row, f"sma_{sma_period}"))
+            prev_sma = getattr(prev_row, f"sma_{sma_period}")
+            sma = getattr(row, f"sma_{sma_period}")
+            inputs.append(Agent.rel_change(prev_sma, sma))
 
         outputs = net.activate(inputs)
 

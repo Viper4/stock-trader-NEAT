@@ -100,9 +100,9 @@ class Trainer(Manager):
         start_time = time.time()
 
         if gen_indicators:
-            print(f" {symbol}{i}: Generating sentiments and indicator data for {bars.shape[0]} bars from {start_date} to {end_date}")
+            print(f" {symbol}{i}: Generating {bars.shape[0]} indicator data from {start_date} to {end_date}")
 
-            # Ensure indicator data in bars df is not NaN
+            # Ensure indicator data for training isn't NaN with pre-batch data
             max_sma_period = max(session["sma_periods"])
             max_period = max(session["k_period"], session["d_period"], session["rsi_period"], session["atr_period"], max_sma_period)
             pre_start_date = start_date - dt.timedelta(days=max_period)
@@ -124,22 +124,19 @@ class Trainer(Manager):
             for sma_period in session["sma_periods"]:
                 bars[f"sma_{sma_period}"] = talib.SMA(bars["close"], timeperiod=sma_period)
 
-            bars = bars[bars.shape[0] - init_bars_length:]
-            bars["sentiment"] = 0.0
+            bars = bars[max(0, bars.shape[0] - init_bars_length):]
 
-            for row in bars.itertuples():
-                backtest_date = row.Index.to_pydatetime()
-                sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
-                bars.at[row.Index, "sentiment"] = sentiment
-        else:
-            print(f" {symbol}{i}: Generating sentiments for {bars.shape[0]} bars from {start_date} to {end_date}")
+            print(f" {symbol}{i}: Finished generating {bars.shape[0]} indicator data in {(time.time() - start_time):.2f}s")
 
-            bars["sentiment"] = 0.0
+        bars = bars.between_time("9:30", "16:00")
+        print(f" {symbol}{i}: Generating {bars.shape[0]} sentiments from {start_date} to {end_date}")
 
-            for row in bars.itertuples():
-                backtest_date = row.Index.to_pydatetime()
-                sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
-                bars.at[row.Index, "sentiment"] = sentiment
+        # Cant vectorize since GPU memory is too small
+        bars["sentiment"] = 0.0
+        for row in bars.itertuples():
+            backtest_date = row.Index.to_pydatetime()
+            sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
+            bars.at[row.Index, "sentiment"] = sentiment
 
         # Combine SPY df with stock df
         if spy_bars is not None:

@@ -14,8 +14,6 @@ class Scraper(object):
         print(f"Scraper initialized with {len(self.user_agents)} user agents.")
 
     def get_latest_candles(self, symbol, interval="5m"):
-        # TODO: Return data as a pandas dataframe
-
         headers = {
             "User-Agent": random.choice(self.user_agents),
             "Accept-Language": "en-US,en;q=0.5",
@@ -31,29 +29,24 @@ class Scraper(object):
                 if response.status_code == 200 or response.status_code == 201:
                     data = response.json()
 
-                    # Extract OHLCV data from the response
-                    current_price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
+                    df = pd.DataFrame(data=data["chart"]["result"][0]["indicators"]["quote"][0],
+                                      index=data["chart"]["result"][0]["timestamp"])
+
                     prev_close = data["chart"]["result"][0]["meta"]["previousClose"]  # Yesterday's close
-                    quote_data = data["chart"]["result"][0]["indicators"]["quote"][0]
-                    formatted_data = []
-                    for i in range(len(quote_data["open"])):
-                        # Last element is not updated until interval min mark is hit and just shows current price
-                        if quote_data["open"][i] != quote_data["high"][i] and quote_data["volume"][i] != 0:
-                            formatted_data.append({"open": quote_data["open"][i],
-                                                   "high": quote_data["high"][i],
-                                                   "low": quote_data["low"][i],
-                                                   "close": current_price,
-                                                   # "close": quote_data["close"][i],
-                                                   "volume": quote_data["volume"][i]})
-                    if len(formatted_data) == 0:
+
+                    if df.empty:
                         print(f"Received no candles for {symbol} retrying in 5 seconds... ({tries})")
                         time.sleep(5)
                         tries += 1
                     else:
-                        return formatted_data, prev_close
+                        df["typical_price"] = (df["high"] + df["low"] + df["close"]) / 3
+                        df["cum_volume"] = df["volume"].cumsum()
+                        df["cum_typical_price"] = (df["typical_price"] * df["volume"]).cumsum()
+                        df["vwap"] = df["cum_typical_price"] / df["cum_volume"]
+
+                        return df, prev_close
                 else:
-                    print(
-                        f"{response.status_code} error code fetching candles for {symbol}. Retrying in 5 seconds... ({tries})")
+                    print(f"{response.status_code} error code fetching candles for {symbol}. Retrying in 5 seconds... ({tries})")
                     time.sleep(5)
                     tries += 1
             except Exception as e:

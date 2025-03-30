@@ -25,9 +25,9 @@ class Agent:
         self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
 
     @staticmethod
-    def rel_change(a, b):
-        if a == 0:
-            return 0
+    def rel_change(a, b, epsilon=1e-6):
+        if abs(a) < epsilon:
+            return (b - a) / epsilon
         return (b - a) / a
 
     @staticmethod
