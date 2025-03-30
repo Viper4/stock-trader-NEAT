@@ -2,13 +2,10 @@ import random
 import time
 import datetime as dt
 import os
-import saving
 import alpaca_trade_api as alpaca
 from base_manager import Manager
 from training_agent import Training
 from alpaca_trade_api.rest import URL, TimeFrameUnit
-import talib
-import pandas as pd
 
 
 class Trainer(Manager):
@@ -34,7 +31,7 @@ class Trainer(Manager):
         self.create_agents()
 
     def update_profile(self, profile, alpaca_api, no_agents=False):
-        print(f"Trainer: Updating {profile['name']} profile")
+        print(f"Trainer: Updating {profile['name']}")
 
         if self.largest_backtest < profile["data_batch_size"]:
             self.largest_backtest = profile["data_batch_size"]
@@ -81,77 +78,6 @@ class Trainer(Manager):
         if not no_agents and update_agents:
             self.create_agents(False, True)
 
-    def load_data(self, symbol, i, file_path):
-        b_bars = saving.SaveSystem.load_data(file_path)
-        print(f" {symbol}{i}: Loaded {b_bars.shape[0]} bars from {b_bars.index[0]} to {b_bars.index[-1]}")
-        return b_bars
-
-    def generate_data(self, symbol, i, session, start_date, end_date, file_path, gen_indicators, spy_bars, qqq_bars):
-        # Leave most recent 30 days for validation
-        now_date = dt.datetime.now(dt.timezone.utc)
-        if end_date > now_date - dt.timedelta(days=30):
-            end_date = now_date - dt.timedelta(days=30)
-
-        bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], start_date, end_date, 500000)
-        if bars.empty:
-            print(f" {symbol}{i}: No bars found for {start_date} to {end_date}")
-            return None
-
-        start_time = time.time()
-
-        if gen_indicators:
-            print(f" {symbol}{i}: Generating {bars.shape[0]} indicator data from {start_date} to {end_date}")
-
-            # Ensure indicator data for training isn't NaN with pre-batch data
-            max_sma_period = max(session["sma_periods"])
-            max_period = max(session["k_period"], session["d_period"], session["rsi_period"], session["atr_period"], max_sma_period)
-            pre_start_date = start_date - dt.timedelta(days=max_period)
-            pre_bars = self.get_bars(symbol, session["alpaca_api"], session["interval"], pre_start_date, start_date, 500000)
-            init_bars_length = bars.shape[0]
-            bars = pd.concat([pre_bars, bars], ignore_index=False).drop_duplicates()
-            if not bars.index.is_monotonic_increasing:
-                print(f" {symbol}{i}: Non-monotonic bars, sorting...")
-                bars = bars.sort_index()
-
-            bars["slow_k"], bars["slow_d"] = talib.STOCH(bars["high"], bars["low"], bars["close"],
-                                                                 fastk_period=session["k_period"],
-                                                                 slowk_period=session["d_period"],
-                                                                 slowd_period=session["d_period"])
-            bars["rsi"] = talib.RSI(bars["close"], timeperiod=session["rsi_period"])
-            bars["atr"] = talib.ATR(bars["high"], bars["low"], bars["close"], timeperiod=session["atr_period"])
-            bars["ema_k"] = talib.EMA(bars["close"], timeperiod=session["k_period"])
-            bars["ema_d"] = talib.EMA(bars["close"], timeperiod=session["d_period"])
-            for sma_period in session["sma_periods"]:
-                bars[f"sma_{sma_period}"] = talib.SMA(bars["close"], timeperiod=sma_period)
-
-            bars = bars[max(0, bars.shape[0] - init_bars_length):]
-
-            print(f" {symbol}{i}: Finished generating {bars.shape[0]} indicator data in {(time.time() - start_time):.2f}s")
-
-        bars = bars.between_time("9:30", "16:00")
-        print(f" {symbol}{i}: Generating {bars.shape[0]} sentiments from {start_date} to {end_date}")
-
-        # Cant vectorize since GPU memory is too small
-        bars["sentiment"] = 0.0
-        for row in bars.itertuples():
-            backtest_date = row.Index.to_pydatetime()
-            sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
-            bars.at[row.Index, "sentiment"] = sentiment
-
-        # Combine SPY df with stock df
-        if spy_bars is not None:
-            spy_bars = spy_bars.reindex(bars.index, method="ffill")
-            bars = bars.join(spy_bars, rsuffix="_spy", how="inner")
-        # Combine QQQ df with stock df
-        if qqq_bars is not None:
-            qqq_bars = qqq_bars.reindex(bars.index, method="ffill")
-            bars = bars.join(qqq_bars, rsuffix="_qqq", how="inner")
-
-        print(f" {symbol}{i}: Finished generating {bars.shape[0]} data in {(time.time() - start_time):.2f}s")
-        saving.SaveSystem.save_data(bars, file_path)
-
-        return bars
-
     def create_agents(self, regenerate=False, save_news=False):
         print("Trainer: Creating agents")
         now_date = dt.datetime.now(dt.timezone.utc)
@@ -190,7 +116,8 @@ class Trainer(Manager):
                                                                 start_date - time_delta,
                                                                 end_date - time_delta,
                                                                 spy_file_path, False,
-                                                                None, None))
+                                                                None, None,
+                                                                False))
 
                 qqq_file_path = os.path.join(self.training_path, str(session["interval"]) + "m-data-QQQ" + str(i) + ".gz")
                 if not regenerate and os.path.exists(qqq_file_path):
@@ -209,7 +136,8 @@ class Trainer(Manager):
                                                                 start_date - time_delta,
                                                                 end_date - time_delta,
                                                                 qqq_file_path, False,
-                                                                None, None))
+                                                                None, None,
+                                                                False))
 
             used_substitutions = {}
             for stock in session["stocks"]:
@@ -256,7 +184,8 @@ class Trainer(Manager):
                                                                      start_date - time_delta,
                                                                      end_date - time_delta,
                                                                      file_path, True,
-                                                                     stock_bars["SPY"][i], stock_bars["QQQ"][i]))
+                                                                     stock_bars["SPY"][i], stock_bars["QQQ"][i],
+                                                                     False))
 
             for stock in session["stocks"]:
                 symbol = stock["symbol"]

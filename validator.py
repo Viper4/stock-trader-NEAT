@@ -42,13 +42,13 @@ class Validator(Manager):
                 ordered_sessions.append(self.sessions[profile])
                 print(f" {i}: {profile}")
                 i += 1
-            index = int(input("Enter account index: "))-1
+            index = int(input("Enter account index: ")) - 1
             session = ordered_sessions[index]
 
             start_date = dt.datetime(year=int(input("Enter start year: ")),
-                                   month=int(input("Enter start month: ")),
-                                   day=int(input("Enter start day: ")),
-                                   hour=16, tzinfo=pytz.timezone("US/Eastern"))
+                                     month=int(input("Enter start month: ")),
+                                     day=int(input("Enter start day: ")),
+                                     hour=16, tzinfo=pytz.timezone("US/Eastern"))
             end_date = dt.datetime(year=int(input("Enter end year: ")),
                                    month=int(input("Enter end month: ")),
                                    day=int(input("Enter end day: ")),
@@ -57,7 +57,6 @@ class Validator(Manager):
             stock_bars = {}
             genomes = {}
             start_cashes = {}
-            shorting = {}
             for stock in session["stocks"]:
                 if input(f"Run simulation for {stock['symbol']}? (y/n): ") == "y":
                     if stock["genome_filename"] is None:
@@ -66,26 +65,39 @@ class Validator(Manager):
                         try:
                             best_genome = saving.SaveSystem.load_data(os.path.join(session["agents"][stock["symbol"]].genome_path, stock["genome_filename"]))
                             start_cash = input(" Enter starting cash: ")
-                            stock_bars[stock["symbol"]] = self.get_bars(stock["symbol"],
-                                                                        session["alpaca_api"],
-                                                                        session["interval"],
-                                                                        start_date, end_date,
-                                                                        500000, False)
+                            validation_filename = f"{stock['symbol']}-{session['interval']}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
+                            file_path = f"{self.settings['save_path']}\\ValidationData\\{validation_filename}"
+                            if os.path.exists(file_path):
+                                stock_bars[stock["symbol"]] = self.load_data(stock["symbol"], "-V", file_path)
+                            else:
+                                if "SPY" not in stock_bars:
+                                    spy_filename = f"SPY-{session['interval']}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
+                                    spy_path = os.path.join(self.settings["save_path"], "ValidationData", spy_filename)
+                                    if os.path.exists(spy_path):
+                                        stock_bars["SPY"] = self.load_data("SPY", "-V", spy_path)
+                                    else:
+                                        stock_bars["SPY"] = self.generate_data("SPY", "-V", session, start_date, end_date, spy_path, False, None, None, False)
+                                if "QQQ" not in stock_bars:
+                                    qqq_filename = f"QQQ-{session['interval']}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
+                                    qqq_path = os.path.join(self.settings["save_path"], "ValidationData", qqq_filename)
+                                    if os.path.exists(qqq_path):
+                                        stock_bars["QQQ"] = self.load_data("QQQ", "-V", qqq_path)
+                                    else:
+                                        stock_bars["QQQ"] = self.generate_data("QQQ", "-V", session, start_date, end_date, qqq_path, False, None, None, False)
+
+                                stock_bars[stock["symbol"]] = self.generate_data(stock["symbol"], "-V", session, start_date, end_date, file_path, True, stock_bars["SPY"], stock_bars["QQQ"], False)
                             genomes[stock["symbol"]] = best_genome
                             start_cashes[stock["symbol"]] = start_cash
-                            shorting[stock["symbol"]] = stock["shorting"]
                         except FileNotFoundError:
                             print(f" No genome file found for {stock['genome_filename']}")
 
-            simulations = len(stock_bars)
-            if simulations == 0:
+            simulations = len(stock_bars) - 2  # SPY and QQQ
+            if simulations <= 0:
                 print("No simulations selected")
                 continue
             print(f"Validating {simulations} simulations...")
             pool = Pool(processes=min(simulations, self.settings["processes"]))
             jobs = []
-
-            sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(list(session["agents"].keys()), start_date, end_date, session["alpaca_api"], session["interval"])
 
             for symbol in stock_bars:
                 if len(stock_bars[symbol]) == 0:
@@ -95,13 +107,9 @@ class Validator(Manager):
                 asset = session["alpaca_api"].get_asset(symbol=symbol)
                 jobs.append((symbol, pool.apply_async(session["agents"][symbol].validate,
                                                       (stock_bars[symbol],
-                                                       sp500_bars, nasdaq_bars,
-                                                       sp500_sentiments, nasdaq_sentiments,
+                                                       session["sma_periods"],
                                                        genomes[symbol],
-                                                       shorting[symbol] and asset.shortable,
                                                        asset.fractionable,
-                                                       session["short_limit"],
-                                                       session["k_period"], session["d_period"], session["rsi_period"],
                                                        start_cashes[symbol]))))
 
             for job in jobs:

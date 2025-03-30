@@ -37,7 +37,7 @@
           "genome_filename": "5pw-genome-UVXY.gz",
           "training_filename": "5m-data-UVXY.gz",
           "trading": true,
-          "transaction_fee": 0.001
+          "transaction_fee": 0.0095
         },
         {
           "symbol": "GGLS",
@@ -46,7 +46,7 @@
           "genome_filename": "5pw-genome-GGLS.gz",
           "training_filename": "5m-data-GGLS.gz",
           "trading": false,
-          "transaction_fee": 0.001
+          "transaction_fee": 0.0095
         },
         {
           "symbol": "PLTD",
@@ -55,7 +55,7 @@
           "genome_filename": "5pw-genome-PLTD.gz",
           "training_filename": "5m-data-PLTD.gz",
           "trading": false,
-          "transaction_fee": 0.025
+          "transaction_fee": 0.0095
         },
         {
           "symbol": "METD",
@@ -64,7 +64,7 @@
           "genome_filename": "5pw-genome-METD.gz",
           "training_filename": "5m-data-METD.gz",
           "trading": false,
-          "transaction_fee": 0.025
+          "transaction_fee": 0.0095
         }
       ]
     }

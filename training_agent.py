@@ -34,7 +34,9 @@ def eval_genome(args):
     for row, prev_row in zip(stock_bars[1:].itertuples(), stock_bars[:-1].itertuples()):
         date = row.Index.to_pydatetime()
         prev_date = prev_row.Index.to_pydatetime()
-        if date != prev_date:
+
+        # Check to settle cash after each day
+        if (date - prev_date).days > 1:
             consecutive_days += 1
             while not pending_sales.is_empty():
                 sale_price, sale_day = pending_sales.head.value

@@ -50,7 +50,6 @@ class Trader(Manager):
         for stock in self.profile["stocks"]:
             if stock["trading"]:
                 symbols.append(stock["symbol"])
-        sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(symbols, now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16), self.alpaca_api, self.profile["interval"])
 
         for stock in self.profile["stocks"]:
             if stock["trading"]:
