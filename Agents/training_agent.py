@@ -6,7 +6,7 @@ import threading
 import saving
 import visualize
 import plot
-from base_agent import Agent
+from Agents.base_agent import Agent
 from data_structures import Queue
 from constants import POPULATION_DIR, GENOME_DIR
 

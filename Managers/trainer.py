@@ -1,7 +1,7 @@
 import random
 import time
 import datetime as dt
-from base_manager import Manager, Profile
+from Managers.base_manager import Manager, Profile
 from Agents.training_agent import Training
 from alpaca_trade_api.rest import TimeFrameUnit
 import os

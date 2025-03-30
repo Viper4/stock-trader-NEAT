@@ -5,7 +5,7 @@ import pandas as pd
 import pytz
 import time
 import saving
-from base_agent import Agent
+from Agents.base_agent import Agent
 from neat import nn
 
 

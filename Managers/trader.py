@@ -6,8 +6,8 @@ import saving
 import plot
 import candle_scraper as cs
 import threading
-from base_manager import Manager, Profile
-from trainer import Trainer
+from Managers.base_manager import Manager, Profile
+from Managers.trainer import Trainer
 from Agents.schwab_agent import Trading
 from constants import LOG_DIR, GENOME_DIR
 

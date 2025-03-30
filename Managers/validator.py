@@ -2,9 +2,8 @@ import datetime as dt
 import pytz
 import os
 import saving
-import alpaca_trade_api as alpaca
-from alpaca_trade_api.rest import URL
-from base_manager import Manager
+from alpaca_trade_api.rest import URL, REST
+from Managers.base_manager import Manager, Profile
 from Agents.validation_agent import Validation
 from multiprocessing import Pool
 
@@ -13,24 +12,15 @@ class Validator(Manager):
     def __init__(self, settings, finbert):
         super().__init__(settings, finbert)
 
-        for profile in settings["profiles"]:
-            api = alpaca.REST(profile["public_key"], profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
+        self.profiles = []
+        for i in range(len(settings["profiles"])):
+            profile = settings["profiles"][i]
+            alpaca_api = REST(profile["public_key"], profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
 
-            self.sessions[profile["name"]] = {
-                "alpaca_api": api,
-                "agents": {},
-                "stocks": profile["stocks"],
-                "interval": profile["interval"],
-                "profit_window": profile["profit_window"],
-                "short_limit": profile["short_limit"],
-                "k_period": profile["k_period"],
-                "d_period": profile["d_period"],
-                "rsi_period": profile["rsi_period"]
-            }
+            self.profiles.append(Profile(settings, i))
 
             for stock in profile["stocks"]:
-                session = self.sessions[profile["name"]]
-                session["agents"][stock["symbol"]] = Validation(settings, session, stock, finbert)
+                profile.agents[stock["symbol"]] = Validation(settings, profile, stock, finbert)
 
     def start(self):
         self.running = True

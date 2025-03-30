@@ -1,7 +1,7 @@
 import datetime as dt
 import pytz
 import time
-from base_agent import Agent
+from Agents.base_agent import Agent
 
 
 class PaperTrading(Agent):

@@ -11,8 +11,8 @@ import alpaca_trade_api.entity
 from alpaca_trade_api.rest import URL
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from urllib3.exceptions import ProtocolError
-from base_manager import Manager
-from trainer import Trainer
+from Managers.base_manager import Manager
+from Managers.trainer import Trainer
 from Agents.paper_agent import PaperTrading
 from data_structures import Queue
 

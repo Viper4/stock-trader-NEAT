@@ -1,13 +1,13 @@
 from neat import nn
 import time
 import plot
-from base_agent import Agent
+from Agents.base_agent import Agent
 from data_structures import Queue
 
 
 class Validation(Agent):
-    def __init__(self, settings, session, stock, finbert):
-        super().__init__(settings, session, stock)
+    def __init__(self, settings, profile, stock, finbert):
+        super().__init__(settings, profile, stock)
         self.finbert = finbert
 
     def validate(self, bars, sma_periods,
@@ -131,7 +131,7 @@ class Validation(Agent):
                     unsettled_cash += price
                     pending_sales.enqueue((price, consecutive_days))
                     long_sells += 1
-            if row.Index == last_index or (date - start_date).days >= self.session["profit_window"]:
+            if row.Index == last_index or (date - start_date).days >= self.profile.profit_window:
                 if shares < 0:
                     equity = unsettled_cash + settled_cash + shares * row.close - cost
                 else:
@@ -159,12 +159,12 @@ class Validation(Agent):
         print(f"{self.stock['symbol']} simulation finished in {(time.time() - start_time):.2f}s over {consecutive_days} trading days and {num_windows} profit windows"
               f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / first_row.close), 4)}%"
               f"\n Total profit: ${round(total_profit, 2)} {round(100 * (total_profit / float(start_cash)), 4)}%"
-              f"\n Average {self.session['profit_window']} day profit: ${round(avg_profit, 2)} {round(avg_profit / float(start_cash), 4)}%"
+              f"\n Average {self.profile.profit_window} day profit: ${round(avg_profit, 2)} {round(avg_profit / float(start_cash), 4)}%"
               f"\n Min profit: ${round(min_profit[0], 2)} {round(min_profit[1], 4)}% on {min_date}"
               f"\n Max profit: ${round(max_profit[0], 2)} {round(max_profit[1], 4)}% on {max_date}"
               f"\n Total long buys: {long_buys}"
               f"\n Total long sells: {long_sells}"
               f"\n Average actions/day: {len(log) / consecutive_days}")
-        plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], log, self.session["interval"])
+        plot.plot_log(self.profile.alpaca_api, self.stock["symbol"], log, self.profile.interval)
         return log
 
