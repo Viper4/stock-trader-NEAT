@@ -69,8 +69,6 @@
       ]
     }
   ],
-  "config_path": "C:\\Users\\vpr16\\PythonProjects\\StockTraderNEATShort\\config_recurrent.txt",
-  "save_path": "C:\\Users\\vpr16\\PythonProjects\\StockTraderNEATShort\\Saves",
   "training_reset": 3,
   "gen_stagger": 8,
   "processes": 16,

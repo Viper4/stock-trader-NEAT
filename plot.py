@@ -4,7 +4,7 @@ import time
 import datetime as dt
 import saving
 import os
-from base_manager import Manager
+from constants import LOG_DIR, TRAINING_DIR
 
 
 def plot_bars(bars, lines=None):
@@ -113,11 +113,9 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
 
 
 if __name__ == "__main__":
-    settings, alpaca_api = Manager.get_settings_and_alpaca(0)
     filename = input("Enter file name: ")
 
-    data_path = f"{settings['save_path']}\\TrainingData\\"
-    bars_df = saving.SaveSystem.load_data(os.path.join(data_path, f"{filename}.gz"))
+    bars_df = saving.SaveSystem.load_data(os.path.join(TRAINING_DIR, f"{filename}.gz"))
     plot_bars(bars_df, ["vwap",
                         "rsi",
                         "slow_k",

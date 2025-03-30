@@ -1,28 +1,21 @@
 import neat
 import os
-import saving
 import numpy as np
-import torch
+from constants import CONFIG_PATH
 
 
 class Agent:
-    def __init__(self, settings, session, stock):
+    def __init__(self, settings, profile, stock):
         self.running = False
         self.settings = settings
-        self.session = session
+        self.profile = profile
         self.stock = stock
 
         if self.settings["processes"] >= os.cpu_count():
             print("Using " + str(self.settings["processes"]) + " workers to train but system only has " + str(os.cpu_count()) + " cores.")
             self.settings["processes"] = os.cpu_count()
 
-        self.population_path = self.settings["save_path"] + "\\Populations"
-        saving.SaveSystem.make_dir(self.population_path)
-
-        self.genome_path = self.settings["save_path"] + "\\Genomes"
-        saving.SaveSystem.make_dir(self.genome_path)
-
-        self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, self.settings["config_path"])
+        self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, CONFIG_PATH)
 
     @staticmethod
     def rel_change(a, b, epsilon=1e-6):

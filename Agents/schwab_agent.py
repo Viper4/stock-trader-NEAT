@@ -6,6 +6,7 @@ import pytz
 import time
 import saving
 from base_agent import Agent
+from neat import nn
 
 
 class Trading(Agent):
@@ -15,17 +16,46 @@ class Trading(Agent):
         self.net = None
         self.genome = None
 
-    def save_memory(self):
-        values_path = self.settings["save_path"] + f"/Values/{self.trader.profile['name'].replace(' ', '-')}-{self.stock['symbol']}.gz"
-        saving.SaveSystem.save_data((self.net.values, self.net.active), values_path)
+    def create_net(self, values, active):
+        self.net = nn.RecurrentNetwork.create(self.genome, self.config)
+        self.net.values = values
+        self.net.active = active
 
-    def load_memory(self):
-        values_path = self.settings["save_path"] + f"/Values/{self.trader.profile['name'].replace(' ', '-')}-{self.stock['symbol']}.gz"
+    def update_net(self, bars, days):
+        # TODO: Run the network over the past given days to generate memory
+        print(f"{self.profile.name} {self.stock['symbol']}: Running network over {days} days")
 
-        if os.path.exists(values_path):
-            self.net.values, self.net.active = saving.SaveSystem.load_data(values_path)
-            return True
-        return False
+        for row, prev_row in zip(bars[1:].itertuples(), bars[:-1].itertuples()):
+            inputs = [
+                0.0,  # plpc
+                Agent.rel_change(prev_row.open, row.open),
+                Agent.rel_change(prev_row.high, row.high),
+                Agent.rel_change(prev_row.low, row.low),
+                Agent.rel_change(prev_row.close, row.close),
+                Agent.rel_change(prev_row.volume, row.volume),
+                Agent.rel_change(prev_row.vwap, row.vwap),
+                row.sentiment,  # -1 = negative, 0 = neutral, 1 = positive
+                Agent.rel_change(prev_row.close_spy, row.close_spy),
+                Agent.rel_change(prev_row.volume_spy, row.volume_spy),
+                row.sentiment_spy,
+                Agent.rel_change(prev_row.close_qqq, row.close_qqq),
+                Agent.rel_change(prev_row.volume_qqq, row.volume_qqq),
+                row.sentiment_qqq,
+                (row.slow_k - 50) / 50,
+                (row.slow_d - 50) / 50,
+                (row.rsi - 50) / 50,
+                Agent.rel_change(prev_row.atr, row.atr),
+                Agent.rel_change(prev_row.ema_k, row.ema_k),
+                Agent.rel_change(prev_row.ema_d, row.ema_d),
+            ]
+            for sma_period in self.trader.profile.sma_periods:
+                prev_sma = getattr(prev_row, f"sma_{sma_period}")
+                sma = getattr(row, f"sma_{sma_period}")
+                inputs.append(Agent.rel_change(prev_sma, sma))
+
+            self.net.activate(inputs)
+
+        print(f"{self.profile.name} {self.stock['symbol']}: Network memory updated")
 
     def run(self):
         if self.running:
@@ -166,3 +196,8 @@ class Trading(Agent):
 
                 time.sleep(wait_time)
                 print(f"{self.trader.profile['name']} {self.stock['symbol']}: Resuming trading")
+
+    def stop(self):
+        print(f"Stopping {self.trader.profile['name']} {self.stock['symbol']} trading agent...")
+        self.save_memory()
+        self.running = False

@@ -1,11 +1,11 @@
 import random
 import time
 import datetime as dt
+from base_manager import Manager, Profile
+from Agents.training_agent import Training
+from alpaca_trade_api.rest import TimeFrameUnit
 import os
-import alpaca_trade_api as alpaca
-from base_manager import Manager
-from training_agent import Training
-from alpaca_trade_api.rest import URL, TimeFrameUnit
+from constants import TRAINING_DIR
 
 
 class Trainer(Manager):
@@ -13,70 +13,36 @@ class Trainer(Manager):
         super().__init__(settings, finbert)
         self.cycles = 0
 
-        self.training_path = self.settings["save_path"] + "\\TrainingData"
-        if not os.path.exists(self.training_path):
-            os.mkdir(self.training_path)
-
         self.symbols = []
         self.largest_backtest = 0
         self.largest_data_batch_size = 0
         self.one_agent = False
         self.processes = settings["processes"]
 
-        for profile in settings["profiles"]:
-            alpaca_api = alpaca.REST(profile["public_key"], profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
+        self.profiles = []
+        for i in range(len(settings["profiles"])):
+            self.profiles.append(Profile(settings, i))
 
-            self.update_profile(profile, alpaca_api, True)
+        self.update_profiles()
 
         self.create_agents()
+        
+    def update_profiles(self):
+        self.symbols.clear()
+        for profile in self.profiles:
+            profile.update()
 
-    def update_profile(self, profile, alpaca_api, no_agents=False):
-        print(f"Trainer: Updating {profile['name']}")
-
-        if self.largest_backtest < profile["data_batch_size"]:
-            self.largest_backtest = profile["data_batch_size"]
-
-        if self.largest_data_batch_size < profile["data_batches"]:
-            self.largest_data_batch_size = profile["data_batches"]
-
-        if len(self.settings["profiles"]) == 1 and len(profile["stocks"]) == 1 and self.settings["gen_stagger"] != 0:
-            print(f"{profile['name']}: Only training 1 agent. Setting gen_stagger to 0.")
-            profile["gen_stagger"] = 0
-            self.one_agent = True
-
-        if profile["name"] in self.sessions:
-            agents = self.sessions[profile["name"]]["agents"]
-            logs = self.sessions[profile["name"]]["logs"]
-        else:
-            agents = {}
-            logs = {}
-
-        self.sessions[profile["name"]] = {
-            "alpaca_api": alpaca_api,
-            "agents": agents,
-            "logs": logs,
-            "stocks": profile["stocks"],
-            "data_batch_size": profile["data_batch_size"],
-            "data_batches": profile["data_batches"],
-            "interval": profile["interval"],
-            "k_period": profile["k_period"],
-            "d_period": profile["d_period"],
-            "rsi_period": profile["rsi_period"],
-            "atr_period": profile["atr_period"],
-            "sma_periods": profile["sma_periods"],
-            "profit_window": profile["profit_window"],
-            "fitness_multipliers": profile["fitness_multipliers"],
-            "start_cash": profile["start_cash"]
-        }
-
-        update_agents = False
-        for stock in profile["stocks"]:
-            if stock["symbol"] not in self.symbols:
+            for stock in profile.stocks:
                 self.symbols.append(stock["symbol"])
-                update_agents = True
+                if self.largest_backtest < profile.data_batch_size:
+                    self.largest_backtest = profile.data_batch_size
+                if self.largest_data_batch_size < profile.data_batches:
+                    self.largest_data_batch_size = profile.data_batches
 
-        if not no_agents and update_agents:
-            self.create_agents(False, True)
+            if len(self.settings["profiles"]) == 1 and len(profile.stocks) == 1 and self.settings["gen_stagger"] != 0:
+                print(f"{profile.name}: Only training 1 agent. Setting gen_stagger to 0")
+                self.settings["gen_stagger"] = 0
+                self.one_agent = True
 
     def create_agents(self, regenerate=False, save_news=False):
         print("Trainer: Creating agents")
@@ -87,23 +53,22 @@ class Trainer(Manager):
         if save_news:
             self.finbert.save_news(self.symbols + ["SPY", "QQQ"], earliest_date, end_date)
 
-        for profile_name in self.sessions:
-            print(profile_name)
-            session = self.sessions[profile_name]
-            start_date = now_date - dt.timedelta(days=session["data_batch_size"])
+        for profile in self.profiles:
+            print(profile.name)
+            start_date = now_date - dt.timedelta(days=profile.data_batch_size)
 
-            session["agents"].clear()
+            profile.agents.clear()
 
             stock_bars = {"SPY": [], "QQQ": []}
 
-            for i in range(session["data_batches"]):
-                time_delta = dt.timedelta(days=i * session["data_batch_size"])
+            for i in range(profile.data_batches):
+                time_delta = dt.timedelta(days=i * profile.data_batch_size)
 
-                spy_file_path = os.path.join(self.training_path, str(session["interval"]) + "m-data-SPY" + str(i) + ".gz")
+                spy_file_path = os.path.join(TRAINING_DIR, str(profile.interval) + "m-data-SPY" + str(i) + ".gz")
                 if not regenerate and os.path.exists(spy_file_path):
                     stock_bars["SPY"].append(self.load_data("SPY", i, spy_file_path))
                 else:
-                    test_bars = self.get_bars("SPY", session["alpaca_api"], 1,
+                    test_bars = self.get_bars("SPY", profile.alpaca_api, 1,
                                               start_date - time_delta, end_date - time_delta,
                                               100, TimeFrameUnit.Hour, "desc")
                     if test_bars.empty:
@@ -112,18 +77,18 @@ class Trainer(Manager):
                         continue
                     if len(self.finbert.saved_news) == 0:
                         self.finbert.save_news(self.symbols + ["SPY", "QQQ"], earliest_date, end_date)
-                    stock_bars["SPY"].append(self.generate_data("SPY", i, session,
+                    stock_bars["SPY"].append(self.generate_data("SPY", i, profile,
                                                                 start_date - time_delta,
                                                                 end_date - time_delta,
                                                                 spy_file_path, False,
                                                                 None, None,
                                                                 False))
 
-                qqq_file_path = os.path.join(self.training_path, str(session["interval"]) + "m-data-QQQ" + str(i) + ".gz")
+                qqq_file_path = os.path.join(TRAINING_DIR, str(profile.interval) + "m-data-QQQ" + str(i) + ".gz")
                 if not regenerate and os.path.exists(qqq_file_path):
                     stock_bars["QQQ"].append(self.load_data("QQQ", i, qqq_file_path))
                 else:
-                    test_bars = self.get_bars("QQQ", session["alpaca_api"], 1,
+                    test_bars = self.get_bars("QQQ", profile.alpaca_api, 1,
                                               start_date - time_delta, end_date - time_delta,
                                               100, TimeFrameUnit.Hour, "desc")
                     if test_bars.empty:
@@ -132,7 +97,7 @@ class Trainer(Manager):
                         continue
                     if len(self.finbert.saved_news) == 0:
                         self.finbert.save_news(self.symbols + ["QQQ"], earliest_date, end_date)
-                    stock_bars["QQQ"].append(self.generate_data("QQQ", i, session,
+                    stock_bars["QQQ"].append(self.generate_data("QQQ", i, profile,
                                                                 start_date - time_delta,
                                                                 end_date - time_delta,
                                                                 qqq_file_path, False,
@@ -140,7 +105,7 @@ class Trainer(Manager):
                                                                 False))
 
             used_substitutions = {}
-            for stock in session["stocks"]:
+            for stock in profile.stocks:
                 symbol = stock["symbol"]
                 stock_bars[symbol] = []
                 used_substitutions[symbol] = set()
@@ -149,15 +114,15 @@ class Trainer(Manager):
                     print(" No training data filename provided for " + symbol)
                     exit(0)
                 
-                training_file_path = os.path.join(self.training_path, stock["training_filename"])
-                for i in range(session["data_batches"]):
+                training_file_path = os.path.join(TRAINING_DIR, stock["training_filename"])
+                for i in range(profile.data_batches):
                     file_path = training_file_path.replace(".gz", f"{i}.gz")
-                    time_delta = dt.timedelta(days=i * session["data_batch_size"])
+                    time_delta = dt.timedelta(days=i * profile.data_batch_size)
 
                     if not regenerate and os.path.exists(file_path):
                         stock_bars[symbol].append(self.load_data(symbol, i, file_path))
                     else:
-                        test_bars = self.get_bars(symbol, session["alpaca_api"], 1,
+                        test_bars = self.get_bars(symbol, profile.alpaca_api, 1,
                                                   start_date - time_delta, end_date - time_delta,
                                                   100, TimeFrameUnit.Hour, "desc")
                         if test_bars.empty:
@@ -180,16 +145,16 @@ class Trainer(Manager):
                             continue
                         if len(self.finbert.saved_news) == 0:
                             self.finbert.save_news(self.symbols, earliest_date, end_date)
-                        stock_bars[symbol].append(self.generate_data(symbol, i, session,
+                        stock_bars[symbol].append(self.generate_data(symbol, i, profile,
                                                                      start_date - time_delta,
                                                                      end_date - time_delta,
                                                                      file_path, True,
                                                                      stock_bars["SPY"][i], stock_bars["QQQ"][i],
                                                                      False))
 
-            for stock in session["stocks"]:
+            for stock in profile.stocks:
                 symbol = stock["symbol"]
-                session["agents"][symbol] = Training(self.settings, session, stock, stock_bars[symbol])
+                profile.agents[symbol] = Training(self.settings, profile, stock, stock_bars[symbol])
 
         print(f"Trainer: Created {self.symbols} training agents\n")
 
@@ -201,26 +166,18 @@ class Trainer(Manager):
             self.create_agents(True, True)
 
         if self.one_agent:
-            first_session = self.sessions[next(iter(self.sessions))]
-            first_session["agents"][next(iter(first_session["agents"]))].run()
+            next(iter(self.profiles[0].agents.values())).run()
         else:
             while self.running:
-                for profile_name in self.sessions:
-                    session = self.sessions[profile_name]
-                    for symbol in session["agents"]:
-                        self.settings, session["alpaca_api"] = self.get_settings_and_alpaca(0)
-                        for profile in self.settings["profiles"]:
-                            if profile["name"] == profile_name:
-                                self.update_profile(profile, session["alpaca_api"])
-                                break
-
-                        current_agent = session["agents"][symbol]
-                        current_agent.settings = self.settings
-                        current_agent.run()
-                        while current_agent.running:
+                self.update_profiles()
+                for profile in self.profiles:
+                    for symbol in profile.agents:
+                        profile.agents[symbol].settings = self.settings
+                        profile.agents[symbol].run()
+                        while profile.agents[symbol].running:
                             time.sleep(1)
                         if self.settings["visualize"]:
-                            current_agent.plot()
+                            profile.agents[symbol].plot()
                         if not self.running:
                             return
 
@@ -228,7 +185,6 @@ class Trainer(Manager):
         print("Stopping training...")
         self.running = False
         self.cycles += 1
-        for profile_name in self.sessions:
-            session = self.sessions[profile_name]
-            for symbol in session["agents"]:
-                session["agents"][symbol].running = False
+        for profile in self.profiles:
+            for symbol in profile.agents:
+                profile.agents[symbol].stop()

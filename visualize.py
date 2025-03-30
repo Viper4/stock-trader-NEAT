@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import saving
 import neat
-import os
 import json
+from constants import SETTINGS_PATH, CONFIG_PATH, GENOME_DIR
 
 
 def plot_stats(statistics, ylog=False, view=False, filename='avg_fitness.svg'):
@@ -185,13 +185,11 @@ def draw_net(config, genome, view=False, filename=None, node_names=None, show_di
 
 
 if __name__ == "__main__":
-    local_dir = os.path.dirname(__file__)
-    settings_path = os.path.join(local_dir, "settings.json")
-    with open(settings_path) as file:
+    with open(SETTINGS_PATH) as file:
         settings = json.load(file)
-    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, settings["config_path"])
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, CONFIG_PATH)
     file_name = input("Enter file name of genome: ")
-    genome = saving.SaveSystem.load_data("Saves/Genomes/" + file_name + ".gz")
+    genome = saving.SaveSystem.load_data(GENOME_DIR + file_name + ".gz")
     node_names = {-19: 'Position',
                   -18: 'PLPC',
                   -17: 'Open%',

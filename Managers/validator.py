@@ -5,7 +5,7 @@ import saving
 import alpaca_trade_api as alpaca
 from alpaca_trade_api.rest import URL
 from base_manager import Manager
-from validation_agent import Validation
+from Agents.validation_agent import Validation
 from multiprocessing import Pool
 
 

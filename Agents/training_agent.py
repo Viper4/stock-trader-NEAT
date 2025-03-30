@@ -8,6 +8,7 @@ import visualize
 import plot
 from base_agent import Agent
 from data_structures import Queue
+from constants import POPULATION_DIR, GENOME_DIR
 
 
 def eval_genome(args):
@@ -47,27 +48,28 @@ def eval_genome(args):
                 else:
                     break
 
-        inputs = [Agent.rel_change(cost, row.close * shares),  # plpc
-                  Agent.rel_change(prev_row.open, row.open),
-                  Agent.rel_change(prev_row.high, row.high),
-                  Agent.rel_change(prev_row.low, row.low),
-                  Agent.rel_change(prev_row.close, row.close),
-                  Agent.rel_change(prev_row.volume, row.volume),
-                  Agent.rel_change(prev_row.vwap, row.vwap),
-                  row.sentiment,  # -1 = negative, 0 = neutral, 1 = positive
-                  Agent.rel_change(prev_row.close_spy, row.close_spy),
-                  Agent.rel_change(prev_row.volume_spy, row.volume_spy),
-                  row.sentiment_spy,
-                  Agent.rel_change(prev_row.close_qqq, row.close_qqq),
-                  Agent.rel_change(prev_row.volume_qqq, row.volume_qqq),
-                  row.sentiment_qqq,
-                  (row.slow_k - 50) / 50,
-                  (row.slow_d - 50) / 50,
-                  (row.rsi - 50) / 50,
-                  Agent.rel_change(prev_row.atr, row.atr),
-                  Agent.rel_change(prev_row.ema_k, row.ema_k),
-                  Agent.rel_change(prev_row.ema_d, row.ema_d),
-                  ]
+        inputs = [
+            Agent.rel_change(cost, row.close * shares),  # plpc
+            Agent.rel_change(prev_row.open, row.open),
+            Agent.rel_change(prev_row.high, row.high),
+            Agent.rel_change(prev_row.low, row.low),
+            Agent.rel_change(prev_row.close, row.close),
+            Agent.rel_change(prev_row.volume, row.volume),
+            Agent.rel_change(prev_row.vwap, row.vwap),
+            row.sentiment,  # -1 = negative, 0 = neutral, 1 = positive
+            Agent.rel_change(prev_row.close_spy, row.close_spy),
+            Agent.rel_change(prev_row.volume_spy, row.volume_spy),
+            row.sentiment_spy,
+            Agent.rel_change(prev_row.close_qqq, row.close_qqq),
+            Agent.rel_change(prev_row.volume_qqq, row.volume_qqq),
+            row.sentiment_qqq,
+            (row.slow_k - 50) / 50,
+            (row.slow_d - 50) / 50,
+            (row.rsi - 50) / 50,
+            Agent.rel_change(prev_row.atr, row.atr),
+            Agent.rel_change(prev_row.ema_k, row.ema_k),
+            Agent.rel_change(prev_row.ema_d, row.ema_d),
+        ]
         for sma_period in sma_periods:
             prev_sma = getattr(prev_row, f"sma_{sma_period}")
             sma = getattr(row, f"sma_{sma_period}")
@@ -137,15 +139,15 @@ def eval_genome(args):
 
 
 class Training(Agent):
-    def __init__(self, settings, session, stock, stock_bars):
-        super().__init__(settings, session, stock)
+    def __init__(self, settings, profile, stock, stock_bars):
+        super().__init__(settings, profile, stock)
         self.started = False
         self.best_genome = None  # Saving population object adds 10s to each gen
         self.consecutive_gens = 0
         self.stock_bars = stock_bars
         self.data_batch_index = 0
-        self.genome_file_path = os.path.join(self.genome_path, self.stock["genome_filename"])
-        self.population_file_path = os.path.join(self.population_path, self.stock["population_filename"])
+        self.genome_file_path = os.path.join(GENOME_DIR, self.stock["genome_filename"])
+        self.population_file_path = os.path.join(POPULATION_DIR, self.stock["population_filename"])
         self.fractionable = True
         self.cum_fitness = {}
 
@@ -167,14 +169,14 @@ class Training(Agent):
             args.append(
                 (
                     b_stock_bars,
-                    self.session["sma_periods"],
-                    self.session["start_cash"],
+                    self.profile.sma_periods,
+                    self.profile.start_cash,
                     genome,
                     self.config,
                     self.stock["cash_at_risk"],
                     self.settings["log_training"],
-                    self.session["profit_window"],
-                    self.session["fitness_multipliers"],
+                    self.profile.profit_window,
+                    self.profile.fitness_multipliers,
                     self.fractionable,
                     self.stock["transaction_fee"],
                 )
@@ -191,7 +193,7 @@ class Training(Agent):
         for i, (fitness, log) in enumerate(results):
             genome_id, genome = genomes[i]
             self.cum_fitness.setdefault(genome_id, []).append(fitness)
-            if len(self.cum_fitness[genome_id]) > self.session["data_batches"]:
+            if len(self.cum_fitness[genome_id]) > self.profile.data_batches:
                 self.cum_fitness[genome_id].pop(0)
 
             genome.fitness = sum(self.cum_fitness[genome_id])
@@ -204,7 +206,7 @@ class Training(Agent):
         if best_genome_id in self.cum_fitness:
             print(f"Fitness across data batches: {self.cum_fitness[best_genome_id]} - id {best_genome_id}")
         if best_log is not None and self.settings["log_training"]:
-            plot.plot_log(self.session["alpaca_api"], self.stock["symbol"], best_log, 30, True)
+            plot.plot_log(self.profile.alpaca_api, self.stock["symbol"], best_log, 30, True)
 
         pool.close()
         pool.join()
@@ -221,10 +223,10 @@ class Training(Agent):
         if self.running:
             return
         self.running = True
-        asset = self.session["alpaca_api"].get_asset(symbol=self.stock["symbol"])
+        asset = self.profile.alpaca_api.get_asset(symbol=self.stock["symbol"])
         self.fractionable = asset.fractionable
         if not self.started:
-            print(f"Starting {self.session['interval']}m {self.stock['symbol']} training agent...")
+            print(f"Starting {self.profile.interval}m {self.stock['symbol']} training agent...")
             save_system = saving.SaveSystem(1, self.genome_file_path, self.settings["gen_stagger"], self.population_file_path)
             if os.path.exists(self.population_file_path):
                 p = save_system.load_population(self.population_file_path)
@@ -236,8 +238,12 @@ class Training(Agent):
             p.add_reporter(save_system)
             threading.Thread(target=p.run, args=(self.eval_genomes, None)).start()
         else:
-            print(f"Resuming {self.session['interval']}m {self.stock['symbol']} training agent...")
+            print(f"Resuming {self.profile.interval}m {self.stock['symbol']} training agent...")
         self.started = True
+
+    def stop(self):
+        print(f"Stopping {self.profile.interval}m {self.stock['symbol']} training agent...")
+        self.running = False
 
     def plot(self):
         node_names = {-18: 'Position',

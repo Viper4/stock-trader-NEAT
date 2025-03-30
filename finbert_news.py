@@ -3,7 +3,7 @@ import numpy as np
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import datetime as dt
-from base_manager import Manager
+from Managers.base_manager import Manager
 
 
 class FinBERTNews(object):

@@ -6,11 +6,10 @@ import saving
 import plot
 import candle_scraper as cs
 import threading
-import alpaca_trade_api as alpaca
-from alpaca_trade_api.rest import URL
-from base_manager import Manager
+from base_manager import Manager, Profile
 from trainer import Trainer
-from schwab_agent import Trading
+from Agents.schwab_agent import Trading
+from constants import LOG_DIR, GENOME_DIR
 
 
 class Trader(Manager):
@@ -21,72 +20,48 @@ class Trader(Manager):
         self.scraper = cs.Scraper()
         self.training_thread = None
         self.consecutive_days = 0
-        self.profile = settings["profiles"][0]
-        self.alpaca_api = alpaca.REST(self.profile["public_key"], self.profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
-        self.agents = {}
+        self.profile = Profile(settings, 0)
         self.logs = {}
         self.clock = [None, 0]
-
-    def update_profile(self, market_status):
-        self.settings, self.alpaca_api = self.get_settings_and_alpaca(0)
-
-        self.profile = self.settings["profiles"][0]
-        print(f"Trader: Updating {self.profile['name']} profile")
-        if market_status:
-            for stock in self.profile["stocks"]:
-                if stock["trading"]:
-                    if stock["symbol"] not in self.agents:
-                        self.create_agents()
-                        break
-                    else:
-                        self.agents[stock["symbol"]].settings = self.settings
-                        self.agents[stock["symbol"]].stock = stock
 
     def create_agents(self):
         print("Trader: Creating agents")
 
-        now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
         symbols = []
-        for stock in self.profile["stocks"]:
+        for stock in self.profile.stocks:
             if stock["trading"]:
                 symbols.append(stock["symbol"])
 
-        for stock in self.profile["stocks"]:
+        for stock in self.profile.stocks:
             if stock["trading"]:
-                if stock["symbol"] not in self.agents:
+                if stock["symbol"] not in self.profile.agents:
                     self.logs[stock["symbol"]] = []
-                    self.agents[stock["symbol"]] = Trading(self.settings, stock, self)
+                    self.profile.agents[stock["symbol"]] = Trading(self.settings, stock, self)
 
                     if stock["genome_filename"] is None:
-                        print(f" No genome filename provided for {stock['symbol']}")
+                        print(f"No genome filename provided for {stock['symbol']}")
                         exit(0)
                     else:
                         try:
-                            best_genome = saving.SaveSystem.load_data(os.path.join(self.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
-
-                            self.update_net(self.agents[stock["symbol"]], best_genome, self.alpaca_api,
-                                            self.profile["interval"], self.profile["name"],
-                                            sp500_bars, nasdaq_bars,
-                                            sp500_sentiments, nasdaq_sentiments,
-                                            self.profile["k_period"], self.profile["d_period"],
-                                            self.profile["rsi_period"], self.profile["sma_periods"],
-                                            30)
+                            best_genome = saving.SaveSystem.load_data(os.path.join(GENOME_DIR, stock["genome_filename"]))
+                            self.profile.agents[stock["symbol"]].genome = best_genome
                         except FileNotFoundError:
                             print(f" No genome file found for {stock['genome_filename']}")
                 else:
-                    self.agents[stock["symbol"]].settings = self.settings
-                    self.agents[stock["symbol"]].stock = stock
+                    self.profile.agents[stock["symbol"]].profile = self.profile
+                    self.profile.agents[stock["symbol"]].settings = self.settings
+                    self.profile.agents[stock["symbol"]].stock = stock
 
-        print(f"Created {', '.join(self.agents.keys())} trading agents\n")
-        for symbol in self.agents:
-            threading.Thread(target=self.agents[symbol].run).start()
+        print(f"Created {', '.join(self.profile.agents.keys())} trading agents\n")
+        for symbol in self.profile.agents:
+            threading.Thread(target=self.profile.agents[symbol].run).start()
 
     def get_market_status(self):
         if self.clock[0] is None or time.time() - self.clock[1] > 1:
             tries = 1
             while True:
                 try:
-                    self.clock[0] = self.alpaca_api.get_clock()
+                    self.clock[0] = self.profile.alpaca_api.get_clock()
                     self.clock[1] = time.time()
                     return self.clock[0].is_open
                 except Exception as e:
@@ -103,27 +78,53 @@ class Trader(Manager):
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
             market_status = self.get_market_status()
-            self.update_profile(market_status)
+            self.profile.update()
             if market_status:
+                # Update agents with profile
+                for stock in self.profile.stocks:
+                    if stock["trading"]:
+                        if stock["symbol"] not in self.profile.agents:
+                            self.create_agents()
+                            break
+                        else:
+                            self.profile.agents[stock["symbol"]].profile = self.profile
+                            self.profile.agents[stock["symbol"]].settings = self.settings
+                            self.profile.agents[stock["symbol"]].stock = stock
+
+                # Stop training
                 if self.trainer.running:
                     self.trainer.stop()
                     self.training_thread.join()
 
-                    sp500_bars, nasdaq_bars, sp500_sentiments, nasdaq_sentiments = self.generate_prep_data(list(self.agents.keys()), now_date - dt.timedelta(days=30), now_date - dt.timedelta(minutes=16), self.alpaca_api, self.profile["interval"])
+                    for symbol in self.profile.agents:
+                        trainer_agent = self.trainer.profiles[self.profile.index].agents[symbol]
+                        if trainer_agent.best_genome is not None and self.profile.agents[symbol].genome != trainer_agent.best_genome:
+                            self.profile.agents[symbol].genome = trainer_agent.best_genome
 
-                    for symbol in self.agents:
-                        trainer_agent = self.trainer.sessions[self.settings["profiles"][0]["name"]]["agents"][symbol]
-                        if trainer_agent.best_genome is not None and self.agents[symbol].genome != trainer_agent.best_genome:
-                            self.update_net(self.agents[symbol], trainer_agent.best_genome, self.alpaca_api,
-                                            self.profile["interval"], self.profile["name"],
-                                            sp500_bars, nasdaq_bars,
-                                            sp500_sentiments, nasdaq_sentiments,
-                                            self.profile["k_period"], self.profile["d_period"],
-                                            self.profile["rsi_period"], self.profile["sma_periods"],
-                                            30)
+                # Update agents with previous 30 days
+                start_date = now_date - dt.timedelta(days=30)
+                end_date = now_date - dt.timedelta(minutes=16)
+                spy_bars = None
+                qqq_bars = None
+                for symbol in self.profile.agents:
+                    memory = self.load_memory(f"{self.profile.name.replace(' ', '-')}-{symbol}")
+                    if memory is None:
+                        if spy_bars is None:
+                            spy_bars = self.generate_data("SPY", "-T", self.profile, start_date, end_date, None,
+                                                          False, None, None, False)
+                        if qqq_bars is None:
+                            qqq_bars = self.generate_data("QQQ", "-T", self.profile, start_date, end_date, None,
+                                                          False, None, None, False)
 
-                for symbol in self.agents:
-                    threading.Thread(target=self.agents[symbol].run).start()
+                        bars = self.generate_data(symbol, "-T", self.profile, start_date, end_date, None, True, spy_bars, qqq_bars, False)
+
+                        self.profile.agents[symbol].update_net(bars, 30)
+                        self.save_memory(self.profile.agents[symbol].net, f"{self.profile.name.replace(' ', '-')}-{symbol}")
+                    else:
+                        self.profile.agents[symbol].create_net(memory[0], memory[1])
+
+                for symbol in self.profile.agents:
+                    threading.Thread(target=self.profile.agents[symbol].run).start()
                 next_close = self.clock[0].next_close
                 wait_time = (next_close - now_date).total_seconds()
                 print(f"Market closes in {wait_time / 3600} hours")
@@ -156,9 +157,9 @@ class Trader(Manager):
                       f"\n Market Value: {market_value}" +
                       f"\n Held Shares: {held_shares}")
 
-                logs_path = os.path.join(self.log_path, f"{self.profile['name']}.gz")
-                if os.path.exists(logs_path):
-                    previous_logs = saving.SaveSystem.load_data(logs_path)
+                log_path = os.path.join(LOG_DIR, f"{self.profile.name}.gz")
+                if os.path.exists(log_path):
+                    previous_logs = saving.SaveSystem.load_data(log_path)
                 else:
                     previous_logs = {}
                 for symbol in self.logs:
@@ -167,8 +168,8 @@ class Trader(Manager):
                             previous_logs[symbol].extend(self.logs[symbol])
                         else:
                             previous_logs[symbol] = self.logs[symbol]
-                        threading.Thread(target=plot.plot_log, args=(self.alpaca_api, symbol, self.logs[symbol], self.profile["interval"])).start()
-                saving.SaveSystem.save_data(previous_logs, os.path.join(self.log_path, f"{self.profile['name']}.gz"))
+                        threading.Thread(target=plot.plot_log, args=(self.profile.alpaca_api, symbol, self.logs[symbol], self.profile.interval)).start()
+                saving.SaveSystem.save_data(previous_logs, os.path.join(LOG_DIR, f"{self.profile.name}.gz"))
                 for symbol in self.logs:
                     self.logs[symbol].clear()
                 next_open = self.clock[0].next_open

@@ -13,7 +13,7 @@ from requests.exceptions import ConnectionError as RequestsConnectionError
 from urllib3.exceptions import ProtocolError
 from base_manager import Manager
 from trainer import Trainer
-from paper_agent import PaperTrading
+from Agents.paper_agent import PaperTrading
 from data_structures import Queue
 
 
