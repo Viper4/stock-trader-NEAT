@@ -70,10 +70,6 @@ class Agent:
         return 2 * (((bars[-1]["close"] - min_low) / denom) - 0.5)  # Scale to [-1, 1]
 
     @staticmethod
-    def calculate_k_percent_gpu(bars):
-        pass
-
-    @staticmethod
     def calculate_ema(close_price, alpha, prev_ema):
         """
         Exponential moving average
@@ -85,13 +81,6 @@ class Agent:
             prev_ema = close_price
         ema = close_price * alpha + prev_ema * (1 - alpha)
         return 2 * ((ema - close_price) / close_price)  # Normalize to [-1, 1]
-
-    @staticmethod
-    def calculate_ema_gpu(close_price, alpha, prev_ema):
-        close_price = torch.tensor(close_price, dtype=torch.float32)
-        prev_ema = torch.tensor(prev_ema, dtype=torch.float32)
-        ema = close_price * alpha + prev_ema * (1 - alpha)
-        return (2 * ((ema - close_price) / close_price)).cpu().item()  # Normalize to [-1, 1]
 
     @staticmethod
     def calculate_rsi(gain, loss, num_bars):
@@ -109,9 +98,4 @@ class Agent:
             rsi = 100 - (100 / (1 + avg_gain / avg_loss))
         return 2 * ((rsi - 50) / 50)  # Normalize to [-1, 1]
 
-    @staticmethod
-    def calculate_rsi_gpu(bars):
-        #changes = cp.array([bars[i]["close"]-bars[i-1]["close"] for i in range(1, len(bars))])
-        #gain = cp.sum(changes)
-        pass
 

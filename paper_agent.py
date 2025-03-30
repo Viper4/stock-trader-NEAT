@@ -89,12 +89,9 @@ class PaperTrading(Agent):
                 position = self.trader.get_position(self.stock["symbol"], self.session)
                 position_qty = float(position.qty)
 
-                stock_sentiment = self.finbert.get_api_sentiment(self.stock["symbol"],
-                                                                 now_date - dt.timedelta(days=2), now_date)
-                sp500_sentiment = self.finbert.get_api_sentiment("SPY",
-                                                                 now_date - dt.timedelta(days=2), now_date)
-                nasdaq_sentiment = self.finbert.get_api_sentiment("QQQ",
-                                                                 now_date - dt.timedelta(days=2), now_date)
+                stock_sentiment = self.finbert.get_api_sentiment(self.stock["symbol"], now_date - dt.timedelta(days=3), now_date)
+                sp500_sentiment = self.finbert.get_api_sentiment("SPY", now_date - dt.timedelta(days=3), now_date)
+                nasdaq_sentiment = self.finbert.get_api_sentiment("QQQ", now_date - dt.timedelta(days=3), now_date)
 
                 # Get historical data for momentum indicators
                 stock_bars = self.trader.get_bars(self.stock["symbol"], self.trader.alpaca_api,

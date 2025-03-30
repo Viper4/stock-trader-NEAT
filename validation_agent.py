@@ -92,7 +92,7 @@ class Validation(Agent):
 
             backtest_date = stock_bar["timestamp"].to_pydatetime()
             stock_sentiment = self.finbert.get_saved_sentiment(self.stock["symbol"],
-                                                               backtest_date - dt.timedelta(days=2),
+                                                               backtest_date - dt.timedelta(days=3),
                                                                backtest_date)
 
             k_percent = Agent.calculate_k_percent(stock_bars[i - min(bar_k_period, i):i])

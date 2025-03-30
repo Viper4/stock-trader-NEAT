@@ -3,6 +3,7 @@ import random
 import datetime as dt
 import os
 import time
+import pandas as pd
 
 SAVE_PATH = r"C:\Users\vpr16\PythonProjects\StockTraderNEAT\Saves\WebScraping"
 
@@ -13,6 +14,8 @@ class Scraper(object):
         print(f"Scraper initialized with {len(self.user_agents)} user agents.")
 
     def get_latest_candles(self, symbol, interval="5m"):
+        # TODO: Return data as a pandas dataframe
+
         headers = {
             "User-Agent": random.choice(self.user_agents),
             "Accept-Language": "en-US,en;q=0.5",
@@ -43,8 +46,8 @@ class Scraper(object):
                                                    # "close": quote_data["close"][i],
                                                    "volume": quote_data["volume"][i]})
                     if len(formatted_data) == 0:
-                        print(f"Received no candles for {symbol} retrying in 10 seconds... ({tries})")
-                        time.sleep(10)
+                        print(f"Received no candles for {symbol} retrying in 5 seconds... ({tries})")
+                        time.sleep(5)
                         tries += 1
                     else:
                         return formatted_data, prev_close

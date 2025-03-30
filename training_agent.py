@@ -11,13 +11,11 @@ from data_structures import Queue
 
 
 def eval_genome(args):
-    (stock_bars, sp500_bars, nasdaq_bars,
-     stock_sentiments, sp500_sentiments, nasdaq_sentiments,
+    (stock_bars, sma_periods,
      start_cash, genome, config, cash_at_risk, log_training, profit_window, fitness_multipliers,
-     short, fractionable, short_limit, transaction_fee,
-     indicator_data) = args
+     fractionable, transaction_fee) = args
     net = neat.nn.RecurrentNetwork.create(genome, config)
-    start_date = stock_bars[0]["timestamp"].to_pydatetime()
+    start_date = stock_bars.index[0].to_pydatetime()
     settled_cash = start_cash
     unsettled_cash = 0
     pending_sales = Queue()
@@ -30,16 +28,12 @@ def eval_genome(args):
     cost = 0.0
     consecutive_days = 1
     log = []
-    sp500_index = 0
-    nasdaq_index = 0
+    last_index = stock_bars.index[-1]
 
-    # Start at 1 to have previous bar for relative change
-    num_bars = len(stock_bars)
-    for i in range(1, num_bars):
-        stock_bar = stock_bars[i]
-        prev_stock_bar = stock_bars[i-1]
-        date = stock_bar["timestamp"].to_pydatetime()
-        prev_date = prev_stock_bar["timestamp"].to_pydatetime()
+    # Need previous bar for relative change
+    for row, prev_row in zip(stock_bars[1:].itertuples(), stock_bars[:-1].itertuples()):
+        date = row.Index.to_pydatetime()
+        prev_date = prev_row.Index.to_pydatetime()
         if date != prev_date:
             consecutive_days += 1
             while not pending_sales.is_empty():
@@ -51,136 +45,79 @@ def eval_genome(args):
                 else:
                     break
 
-        # Dealing with mismatch in length of bars for sp500 and nasdaq
-        if sp500_index + 1 < len(sp500_bars):
-            sp500_date = sp500_bars[sp500_index + 1]["timestamp"].to_pydatetime()
-            if sp500_date <= date:
-                sp500_index += 1
-
-        if nasdaq_index + 1 < len(nasdaq_bars):
-            nasdaq_date = nasdaq_bars[nasdaq_index + 1]["timestamp"].to_pydatetime()
-            if nasdaq_date <= date:
-                nasdaq_index += 1
-
-        sp500_bar = sp500_bars[sp500_index]
-        nasdaq_bar = nasdaq_bars[nasdaq_index]
-        prev_sp500_bar = sp500_bars[min(0, sp500_index - 1)]
-        prev_nasdaq_bar = nasdaq_bars[min(0, nasdaq_index - 1)]
-
-        inputs = [1,  # -1 = short, 1 = long
-                  Agent.rel_change(cost, stock_bar["close"] * shares),  # plpc
-                  Agent.rel_change(prev_stock_bar["open"], stock_bar["open"]),
-                  Agent.rel_change(prev_stock_bar["high"], stock_bar["high"]),
-                  Agent.rel_change(prev_stock_bar["low"], stock_bar["low"]),
-                  Agent.rel_change(prev_stock_bar["close"], stock_bar["close"]),
-                  Agent.rel_change(prev_stock_bar["volume"], stock_bar["volume"]),
-                  Agent.rel_change(prev_stock_bar["vwap"], stock_bar["vwap"]),
-                  stock_sentiments[i],  # -1 = negative, 0 = neutral, 1 = positive
-                  Agent.rel_change(prev_sp500_bar["close"], sp500_bar["close"]),
-                  Agent.rel_change(prev_sp500_bar["volume"], sp500_bar["volume"]),
-                  sp500_sentiments[sp500_index],
-                  Agent.rel_change(prev_nasdaq_bar["close"], nasdaq_bar["close"]),
-                  Agent.rel_change(prev_nasdaq_bar["volume"], nasdaq_bar["volume"]),
-                  nasdaq_sentiments[nasdaq_index],
-                  indicator_data["k_percent"][i],
-                  indicator_data["d_ema"][i],
-                  indicator_data["k_ema"][i],
-                  indicator_data["rsi"][i]
+        inputs = [Agent.rel_change(cost, row.close * shares),  # plpc
+                  Agent.rel_change(prev_row.open, row.open),
+                  Agent.rel_change(prev_row.high, row.high),
+                  Agent.rel_change(prev_row.low, row.low),
+                  Agent.rel_change(prev_row.close, row.close),
+                  Agent.rel_change(prev_row.volume, row.volume),
+                  Agent.rel_change(prev_row.vwap, row.vwap),
+                  row.sentiment,  # -1 = negative, 0 = neutral, 1 = positive
+                  Agent.rel_change(prev_row.close_spy, row.close_spy),
+                  Agent.rel_change(prev_row.volume_spy, row.volume_spy),
+                  row.sentiment_spy,
+                  Agent.rel_change(prev_row.close_qqq, row.close_qqq),
+                  Agent.rel_change(prev_row.volume_qqq, row.volume_qqq),
+                  row.sentiment_qqq,
+                  row.slow_k,
+                  row.slow_d,
+                  row.rsi,
+                  row.atr,
+                  row.ema_k,
+                  row.ema_d,
                   ]
-        if short and shares < 0:
-            inputs[0] = -1
-            inputs[1] = Agent.rel_change(stock_bar["close"] * abs(shares), cost)
+        for sma_period in sma_periods:
+            inputs.append(getattr(row, f"sma_{sma_period}"))
 
         outputs = net.activate(inputs)
 
         qty_percent = (outputs[1] + 1) * 0.5
         if outputs[0] > 0.5:  # Buy
-            if short and shares < 0:
-                quantity = qty_percent * abs(shares)
-                quantity = round(quantity)  # Shorts don't allow fractional qty
-                price = quantity * stock_bar["close"] * (1 - transaction_fee)
-                if price >= 1:
-                    if abs(shares) - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
-                        price = abs(shares) * stock_bar["close"] * (1 - transaction_fee)
-                        profit = cost - price
-                        shares = 0.0
-                        cost = 0.0
-                    else:
-                        avg_cost = cost / abs(shares)
-                        shares += quantity
-                        cost = avg_cost * abs(shares)
-                        profit = (avg_cost * quantity) - price
+            quantity = qty_percent * settled_cash * cash_at_risk / row.close
+            if not fractionable:
+                quantity = round(quantity)
+            price = quantity * row.close
+            if price >= 1:  # Alpaca doesn't allow trades under $1
+                cost += price
+                shares += quantity
+                settled_cash -= price
 
-                    # TODO: REMOVE THIS LATER. Using this to incentivize shorting
-                    profit *= 1.5
-                    settled_cash += profit
-
-                    if log_training:
-                        action = {"side": "Buy", "type": "short", "quantity": quantity, "price": stock_bar["close"],
-                                  "profit": profit, "settled_cash": settled_cash,
-                                  "unsettled_cash": unsettled_cash,
-                                  "datetime": stock_bar["timestamp"].to_pydatetime()}
-                        log.append(action)
-            else:
-                quantity = qty_percent * settled_cash * cash_at_risk / stock_bar["close"]
-                if not fractionable:
-                    quantity = round(quantity)
-                price = quantity * stock_bar["close"]
-                if price >= 1:  # Alpaca doesn't allow trades under $1
-                    cost += price
-                    shares += quantity
-                    settled_cash -= price
-
-                    if log_training:
-                        action = {"side": "Buy", "type": "long", "quantity": quantity, "price": stock_bar["close"],
-                                  "settled_cash": settled_cash, "unsettled_cash": unsettled_cash,
-                                  "datetime": stock_bar["timestamp"].to_pydatetime()}
-                        log.append(action)
+                if log_training:
+                    action = {"side": "Buy", "type": "long", "quantity": quantity, "price": row.close,
+                              "settled_cash": settled_cash, "unsettled_cash": unsettled_cash,
+                              "datetime": row.Index.to_pydatetime()}
+                    log.append(action)
         elif outputs[0] < -0.5:  # Sell
-            if short and shares <= 0:
-                quantity = qty_percent * (short_limit - cost) * cash_at_risk / stock_bar["close"]
-                quantity = round(quantity)  # Shorts don't allow fractional qty
-                price = quantity * stock_bar["close"] * (1 - transaction_fee)
-                if cost + price < short_limit:
-                    if price >= 1:  # Alpaca doesn't allow trades under $1
-                        cost += price
-                        shares -= quantity
+            quantity = qty_percent * shares
+            if not fractionable:
+                quantity = round(quantity)
+            price = quantity * row.close * (1 - transaction_fee)
+            if price >= 1:
+                if shares - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
+                    price = shares * row.close * (1 - transaction_fee)
+                    profit = price - cost
+                    shares = 0.0
+                    cost = 0.0
+                else:
+                    avg_cost = cost / shares
+                    shares -= quantity
+                    cost = avg_cost * shares
+                    profit = price - (avg_cost * quantity)
+                unsettled_cash += price
+                pending_sales.enqueue((price, consecutive_days))
 
-                        if log_training:
-                            action = {"side": "Sell", "type": "short", "quantity": abs(quantity), "price": stock_bar["close"],
-                                      "settled_cash": settled_cash, "unsettled_cash": unsettled_cash,
-                                      "datetime": stock_bar["timestamp"].to_pydatetime()}
-                            log.append(action)
-            else:
-                quantity = qty_percent * shares
-                if not fractionable:
-                    quantity = round(quantity)
-                price = quantity * stock_bar["close"] * (1 - transaction_fee)
-                if price >= 1:
-                    if shares - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
-                        price = shares * stock_bar["close"] * (1 - transaction_fee)
-                        profit = price - cost
-                        shares = 0.0
-                        cost = 0.0
-                    else:
-                        avg_cost = cost / shares
-                        shares -= quantity
-                        cost = avg_cost * shares
-                        profit = price - (avg_cost * quantity)
-                    unsettled_cash += price
-                    pending_sales.enqueue((price, consecutive_days))
+                if log_training:
+                    action = {"side": "Sell", "type": "long", "quantity": quantity, "price": row.close,
+                              "profit": profit, "settled_cash": settled_cash,
+                              "unsettled_cash": unsettled_cash,
+                              "datetime": row.Index.to_pydatetime()}
+                    log.append(action)
 
-                    if log_training:
-                        action = {"side": "Sell", "type": "long", "quantity": quantity, "price": stock_bar["close"],
-                                  "profit": profit, "settled_cash": settled_cash,
-                                  "unsettled_cash": unsettled_cash,
-                                  "datetime": stock_bar["timestamp"].to_pydatetime()}
-                        log.append(action)
-        if i == num_bars-1 or (date - start_date).days >= profit_window:
+        if row.Index == last_index or (date - start_date).days >= profit_window:
             if shares < 0:
-                equity = unsettled_cash + settled_cash + shares * stock_bar["close"] - cost
+                equity = unsettled_cash + settled_cash + shares * row.close - cost
             else:
-                equity = unsettled_cash + settled_cash + stock_bar["close"] * shares
+                equity = unsettled_cash + settled_cash + row.close * shares
             profit_sum += equity - start_equity
             num_windows += 1
             start_equity = equity
@@ -196,25 +133,15 @@ def eval_genome(args):
 
 
 class Training(Agent):
-    def __init__(self, settings, session, stock,
-                 stock_bars, sp500_bars, nasdaq_bars,
-                 stock_sentiments, sp500_sentiments, nasdaq_sentiments,
-                 indicator_data):
+    def __init__(self, settings, session, stock, stock_bars):
         super().__init__(settings, session, stock)
         self.started = False
         self.best_genome = None  # Saving population object adds 10s to each gen
         self.consecutive_gens = 0
         self.stock_bars = stock_bars
-        self.sp500_bars = sp500_bars
-        self.nasdaq_bars = nasdaq_bars
-        self.stock_sentiments = stock_sentiments
-        self.sp500_sentiments = sp500_sentiments
-        self.nasdaq_sentiments = nasdaq_sentiments
-        self.indicator_data = indicator_data
         self.data_batch_index = 0
         self.genome_file_path = os.path.join(self.genome_path, self.stock["genome_filename"])
         self.population_file_path = os.path.join(self.population_path, self.stock["population_filename"])
-        self.shortable = True
         self.fractionable = True
         self.cum_fitness = {}
 
@@ -226,21 +153,9 @@ class Training(Agent):
             sub_index = self.stock_bars[self.data_batch_index]
             print(f"Evaluating genomes on substitute data batch {sub_index}")
             b_stock_bars = self.stock_bars[sub_index]
-            b_sp500_bars = self.sp500_bars[sub_index]
-            b_nasdaq_bars = self.nasdaq_bars[sub_index]
-            b_stock_sentiments = self.stock_sentiments[sub_index]
-            b_sp500_sentiments = self.sp500_sentiments[sub_index]
-            b_nasdaq_sentiments = self.nasdaq_sentiments[sub_index]
-            b_indicator_data = self.indicator_data[sub_index]
         else:
             print(f"Evaluating genomes on data batch {self.data_batch_index}")
             b_stock_bars = self.stock_bars[self.data_batch_index]
-            b_sp500_bars = self.sp500_bars[self.data_batch_index]
-            b_nasdaq_bars = self.nasdaq_bars[self.data_batch_index]
-            b_stock_sentiments = self.stock_sentiments[self.data_batch_index]
-            b_sp500_sentiments = self.sp500_sentiments[self.data_batch_index]
-            b_nasdaq_sentiments = self.nasdaq_sentiments[self.data_batch_index]
-            b_indicator_data = self.indicator_data[self.data_batch_index]
 
         pool = Pool(processes=self.settings["processes"])
         args = []
@@ -248,11 +163,7 @@ class Training(Agent):
             args.append(
                 (
                     b_stock_bars,
-                    b_sp500_bars,
-                    b_nasdaq_bars,
-                    b_stock_sentiments,
-                    b_sp500_sentiments,
-                    b_nasdaq_sentiments,
+                    self.session["sma_periods"],
                     self.session["start_cash"],
                     genome,
                     self.config,
@@ -260,11 +171,8 @@ class Training(Agent):
                     self.settings["log_training"],
                     self.session["profit_window"],
                     self.session["fitness_multipliers"],
-                    self.stock["shorting"] and self.shortable,
                     self.fractionable,
-                    self.session["short_limit"],
                     self.stock["transaction_fee"],
-                    b_indicator_data
                 )
             )
 
@@ -310,7 +218,6 @@ class Training(Agent):
             return
         self.running = True
         asset = self.session["alpaca_api"].get_asset(symbol=self.stock["symbol"])
-        self.shortable = asset.shortable
         self.fractionable = asset.fractionable
         if not self.started:
             print(f"Starting {self.session['interval']}m {self.stock['symbol']} training agent...")

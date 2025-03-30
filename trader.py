@@ -69,7 +69,8 @@ class Trader(Manager):
                                             self.profile["interval"], self.profile["name"],
                                             sp500_bars, nasdaq_bars,
                                             sp500_sentiments, nasdaq_sentiments,
-                                            self.profile["k_period"], self.profile["d_period"], self.profile["rsi_period"],
+                                            self.profile["k_period"], self.profile["d_period"],
+                                            self.profile["rsi_period"], self.profile["sma_periods"],
                                             30)
                         except FileNotFoundError:
                             print(f" No genome file found for {stock['genome_filename']}")
@@ -118,7 +119,8 @@ class Trader(Manager):
                                             self.profile["interval"], self.profile["name"],
                                             sp500_bars, nasdaq_bars,
                                             sp500_sentiments, nasdaq_sentiments,
-                                            self.profile["k_period"], self.profile["d_period"], self.profile["rsi_period"],
+                                            self.profile["k_period"], self.profile["d_period"],
+                                            self.profile["rsi_period"], self.profile["sma_periods"],
                                             30)
 
                 for symbol in self.agents:
