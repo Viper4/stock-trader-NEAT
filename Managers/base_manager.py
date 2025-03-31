@@ -29,6 +29,7 @@ class Profile(object):
         self.data_batch_size = -1
         self.data_batches = -1
         self.schwab = None
+        self.logs = {}
 
         self.update_properties(settings, index)
 

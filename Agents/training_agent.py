@@ -204,7 +204,7 @@ class Training(Agent):
                 best_genome_id = genome_id
 
         if best_genome_id in self.cum_fitness:
-            print(f"Fitness across data batches: {self.cum_fitness[best_genome_id]} - id {best_genome_id}")
+            print(f"Best fitness across data batches: {self.cum_fitness[best_genome_id]} - id {best_genome_id}")
         if best_log is not None and self.settings["log_training"]:
             plot.plot_log(self.profile.alpaca_api, self.stock["symbol"], best_log, 30, True)
 

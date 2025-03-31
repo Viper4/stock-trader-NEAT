@@ -21,7 +21,6 @@ class Trader(Manager):
         self.training_thread = None
         self.consecutive_days = 0
         self.profile = Profile(settings, 0)
-        self.logs = {}
         self.clock = [None, 0]
 
     def create_agents(self):
@@ -35,7 +34,7 @@ class Trader(Manager):
         for stock in self.profile.stocks:
             if stock["trading"]:
                 if stock["symbol"] not in self.profile.agents:
-                    self.logs[stock["symbol"]] = []
+                    self.profile.logs[stock["symbol"]] = []
                     self.profile.agents[stock["symbol"]] = Trading(self.settings, stock, self)
 
                     if stock["genome_filename"] is None:
@@ -162,16 +161,16 @@ class Trader(Manager):
                     previous_logs = saving.SaveSystem.load_data(log_path)
                 else:
                     previous_logs = {}
-                for symbol in self.logs:
-                    if len(self.logs[symbol]) > 0:
+                for symbol in self.profile.logs:
+                    if len(self.profile.logs[symbol]) > 0:
                         if symbol in previous_logs:
-                            previous_logs[symbol].extend(self.logs[symbol])
+                            previous_logs[symbol].extend(self.profile.logs[symbol])
                         else:
-                            previous_logs[symbol] = self.logs[symbol]
-                        threading.Thread(target=plot.plot_log, args=(self.profile.alpaca_api, symbol, self.logs[symbol], self.profile.interval)).start()
+                            previous_logs[symbol] = self.profile.logs[symbol]
+                        threading.Thread(target=plot.plot_log, args=(self.profile.alpaca_api, symbol, self.profile.logs[symbol], self.profile.interval)).start()
                 saving.SaveSystem.save_data(previous_logs, os.path.join(LOG_DIR, f"{self.profile.name}.gz"))
-                for symbol in self.logs:
-                    self.logs[symbol].clear()
+                for symbol in self.profile.logs:
+                    self.profile.logs[symbol].clear()
                 next_open = self.clock[0].next_open
                 wait_time = (next_open - now_date).total_seconds()
                 print(f"\nMarket opens in {wait_time / 3600} hours\n-----")
