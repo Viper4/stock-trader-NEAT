@@ -65,7 +65,7 @@ class HMMRegimePrediction(object):
         predicted_regimes = self.model.predict(features)
         bars["regime"] = predicted_regimes
 
-        regime_stats = bars.groupby("regime")["returns"].mean().sort_values()
+        regime_stats = bars.groupby("regime")["close_pc"].mean().sort_values()
 
         self.regime_mapping = {
             regime_stats.index[0]: "Bear",
@@ -74,16 +74,16 @@ class HMMRegimePrediction(object):
         }
 
     @staticmethod
-    def get_score(bars):
+    def get_score(bars, std_deviation, threshold):
         # NOTE: Sometimes terrible model just guessing one regime for entire period can get 50% accuracy
         score = 0
         for i in tqdm(range(bars.shape[0] - 1)):
             predicted = bars.iloc[i].regime
             actual_change = bars.iloc[i + 1].returns
 
-            if ((predicted == "Bull" and actual_change > 0.001)
-                    or (predicted == "Bear" and actual_change < -0.001)
-                    or (predicted == "Choppy" and abs(actual_change) <= 0.001)):
+            if ((predicted == "Bull" and actual_change > threshold * std_deviation)
+                    or (predicted == "Bear" and actual_change < -threshold * std_deviation)
+                    or (predicted == "Choppy" and abs(actual_change) <= threshold * std_deviation)):
                 score += 1
         return score
 
@@ -96,7 +96,8 @@ class HMMRegimePrediction(object):
             print("Too little clusters to fit. Skipping validation...")
             return 0.0
 
-        print(f"Predicting regimes on {test_bars.shape[0]} test bars...")
+        minimum, maximum, mean, median, std_deviation = get_stats(pd.concat([train_bars_df, test_bars_df]), "close_pc", False)
+        print(f"Predicting regimes on {test_bars.shape[0]} test bars with stdv {std_deviation}...")
         predicted_labels = self.predict(test_bars)
         test_bars["regime"] = predicted_labels
 
@@ -110,9 +111,9 @@ class HMMRegimePrediction(object):
             bars_per_process = test_bars.shape[0] // processes
 
             for i in range(processes):
-                args.append(test_bars[i*bars_per_process:(i+1)*bars_per_process])
+                args.append((test_bars[i*bars_per_process:(i+1)*bars_per_process], std_deviation, 0.75))
 
-            results_async = pool.map_async(self.get_score, args)
+            results_async = pool.starmap_async(self.get_score, args)
             results = results_async.get()
             for result in results:
                 correct_predictions += result
@@ -120,7 +121,7 @@ class HMMRegimePrediction(object):
             pool.close()
             pool.join()
         else:
-            total_predictions = self.get_score(test_bars)
+            total_predictions = self.get_score(test_bars, std_deviation)
 
         accuracy = (correct_predictions / total_predictions) * 100
         print(f"Accuracy: {accuracy:.2f}%")
@@ -374,6 +375,38 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
     print(f"Best accuracy: {best_accuracy}%")
 
 
+def get_stats(bars, column, plot):
+    minimum = min(bars[column])
+    maximum = max(bars[column])
+    mean = bars[column].mean()
+    median = bars[column].median()
+    std_deviation = bars[column].std()
+
+    if plot:
+        print("Min: ", minimum)
+        print("Max: ", maximum)
+        print("Mean: ", mean)
+        print("Median: ", median)
+        print("Standard Deviation: ", std_deviation)
+
+        plt.figure(figsize=(12, 6))
+        plt.hist(bars[column], bins=50)
+        plt.xlabel(column)
+        plt.ylabel("Frequency")
+        plt.title(f"Histogram of {column}")
+        plt.show()
+
+        plt.figure(figsize=(15, 6))
+        plt.plot(bars.index, bars[column], color="black", label=column)
+
+        plt.legend()
+        plt.title(f"{column} over time")
+        plt.show()
+
+    return minimum, maximum, mean, median, std_deviation
+
+
+
 if __name__ == "__main__":
     user_input = input("Enter command (search, test, correlation): ")
     if not os.path.exists(DATA_PATH):
@@ -523,8 +556,7 @@ if __name__ == "__main__":
         bars_df["sar"] = talib.SAR(bars_df["high"], bars_df["low"], acceleration=0.02, maximum=0.2)
         bars_df["sar"] = bars_df["sar"].pct_change(fill_method=None)
 
-        bars_df["returns"] = bars_df["close"].pct_change(fill_method=None)
-        bars_df["volatility"] = bars_df["returns"].rolling(window=15).std()
+        bars_df["volatility"] = bars_df["close_pc"].rolling(window=15).std()
         bars_df.dropna(inplace=True)
 
         saving.SaveSystem.save_data(bars_df, DATA_PATH)
@@ -561,7 +593,7 @@ if __name__ == "__main__":
         "takuri", "tasuki_gap", "thrusting", "tristar", "unique_3_river",
         "upside_gap_2_crows", "side_gap_3_methods",
         "ad", "adosc", "obv", "adx", "ht_trendline", "kama", "mama", "fama", "sar",
-        "returns", "volatility"
+        "volatility"
     ]
 
     if user_input == "search":
@@ -569,7 +601,7 @@ if __name__ == "__main__":
     elif user_input == "test":
         # ["close_pc", "ema_1"] accuracy isn't good but looking at the graph it actually seems the most accurate
 
-        run_regime_test(train_bars_df, test_bars_df, ["long_line"])
+        run_regime_test(train_bars_df, test_bars_df, ["close_pc"])
     elif user_input == "correlation":
         features = all_features
         run_regime_test(train_bars_df, test_bars_df, features)
@@ -609,6 +641,8 @@ if __name__ == "__main__":
         plt.title("Feature Combination Accuracy Rankings")
         plt.gca().invert_yaxis()  # Best at top
         plt.show()
+    elif user_input == "get_stats":
+        get_stats(pd.concat([train_bars_df, test_bars_df]), "close", True)
 
     '''run_test_price_predict(16, 50, train_bars, bars_df[train_size + 1:])
     run_test_price_predict(8, 50, train_bars, bars_df[train_size + 1:])
