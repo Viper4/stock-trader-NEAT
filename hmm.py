@@ -19,9 +19,10 @@ import ast
 from sklearn.feature_selection import f_classif, mutual_info_classif
 from scipy.stats import chi2_contingency
 import seaborn as sns
+from datetime import timedelta
 
-DATA_PATH = SAVE_DIR + "HMM\\bars-data-TSLA-1h_2020-1-1_2025-4-1.gz"
-TESTED_PATH = SAVE_DIR + "HMM\\tested-TSLA-1h_2020-1-1_2025-4-1.csv"
+DATA_PATH = SAVE_DIR + "HMM\\bars-data-TSLA-1h_2019-1-1_2025-4-1.gz"
+TESTED_PATH = SAVE_DIR + "HMM\\tested-TSLA-1h_2019-1-1_2025-4-1.csv"
 
 
 class HMMRegimePrediction(object):
@@ -33,11 +34,13 @@ class HMMRegimePrediction(object):
 
     def get_features(self, bars):
         """Gets features from bars and scales features."""
+        bars.dropna(inplace=True)
         features = bars[self.feature_settings].values
         features_scaled = self.scaler.fit_transform(features)
         return features_scaled, bars
 
     def fit(self, bars):
+        bars.dropna(inplace=True)
         """Fits the HMM model and maps regimes."""
         features_scaled, bars = self.get_features(bars)
         self.model.fit(features_scaled)
@@ -72,14 +75,15 @@ class HMMRegimePrediction(object):
 
     @staticmethod
     def get_score(bars):
+        # NOTE: Sometimes terrible model just guessing one regime for entire period can get 50% accuracy
         score = 0
         for i in tqdm(range(bars.shape[0] - 1)):
             predicted = bars.iloc[i].regime
             actual_change = bars.iloc[i + 1].returns
 
-            if ((predicted == "Bull" and actual_change > 0.01)
-                    or (predicted == "Bear" and actual_change < -0.01)
-                    or (predicted == "Choppy" and abs(actual_change) <= 0.01)):
+            if ((predicted == "Bull" and actual_change > 0.001)
+                    or (predicted == "Bear" and actual_change < -0.001)
+                    or (predicted == "Choppy" and abs(actual_change) <= 0.001)):
                 score += 1
         return score
 
@@ -324,6 +328,8 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
 
     tested = {}
 
+    if not os.path.exists(TESTED_PATH):
+        saving.SaveSystem.make_csv(["Features", "Accuracy"], TESTED_PATH)
     rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
     for row in rows:
         if row[0] == "Features":
@@ -336,8 +342,8 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
 
     print("Starting search")
     i = 0
-    start_time = time.time()
     for features in feature_combinations:
+        start_time = time.time()
         print(f"\nTest {i}/{len(feature_combinations)} {100 * i / len(feature_combinations):.4f}%:")
         features_list = list(features)
 
@@ -359,8 +365,11 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
             best_features = features_list
             print(f"New best accuracy: {best_accuracy}%")
         i += 1
+        iteration_time = time.time() - start_time
+        eta = (len(feature_combinations) - i) * iteration_time
+        print(f"Finished in {iteration_time:.2f} seconds. ETA: {str(timedelta(seconds=eta))}")
 
-    print(f"Search finished in {time.time() - start_time:.2f} seconds")
+    print(f"Search finished")
     print(f"Best features: {best_features}")
     print(f"Best accuracy: {best_accuracy}%")
 
@@ -521,6 +530,7 @@ if __name__ == "__main__":
         saving.SaveSystem.save_data(bars_df, DATA_PATH)
     else:
         bars_df = saving.SaveSystem.load_data(DATA_PATH)
+        bars_df.dropna(inplace=True)
 
     train_size = int(bars_df.shape[0] * 0.8)
     train_bars_df = bars_df[:train_size].copy()
@@ -557,7 +567,9 @@ if __name__ == "__main__":
     if user_input == "search":
         run_regime_search(train_bars_df, test_bars_df, all_features, 8)
     elif user_input == "test":
-        run_regime_test(train_bars_df, test_bars_df, ["ema_1", "returns"])
+        # ["close_pc", "ema_1"] accuracy isn't good but looking at the graph it actually seems the most accurate
+
+        run_regime_test(train_bars_df, test_bars_df, ["long_line"])
     elif user_input == "correlation":
         features = all_features
         run_regime_test(train_bars_df, test_bars_df, features)
@@ -565,6 +577,38 @@ if __name__ == "__main__":
         correlation_matrix = correlation.compute_feature_correlation(test_bars_df)
         print("Correlation matrix:\n", correlation_matrix)
         correlation.plot_correlation(correlation_matrix)
+    elif user_input == "get_best":
+        results = []
+        rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
+        for row in rows:
+            if row[0] == "Features":
+                continue
+            key = row[0]
+            accuracy = float(row[1])
+            results.append((key, accuracy))
+        results.sort(key=lambda x: x[1], reverse=True)
+        best_features, best_accuracy = results[0]
+        print("Best features: ", best_features)
+        print("Best accuracy: ", best_accuracy)
+
+        save_path = TESTED_PATH.replace(".csv", "_sorted.csv")
+        saving.SaveSystem.delete_file(save_path)
+        saving.SaveSystem.make_csv(["Features", "Accuracy"], save_path)
+
+        sorted_features = []
+        sorted_accuracies = []
+        for features, accuracy in results:
+            sorted_features.append(features)
+            sorted_accuracies.append(accuracy)
+            saving.SaveSystem.save_to_csv([features, accuracy], save_path, "a")
+
+        plt.figure(figsize=(12, 6))
+        plt.barh(sorted_features[:200], sorted_accuracies[:200], color="skyblue")
+        plt.xlabel("Accuracy (%)")
+        plt.ylabel("Feature Combinations")
+        plt.title("Feature Combination Accuracy Rankings")
+        plt.gca().invert_yaxis()  # Best at top
+        plt.show()
 
     '''run_test_price_predict(16, 50, train_bars, bars_df[train_size + 1:])
     run_test_price_predict(8, 50, train_bars, bars_df[train_size + 1:])

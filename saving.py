@@ -50,6 +50,12 @@ class SaveSystem(BaseReporter):
             return f.read()
 
     @staticmethod
+    def make_csv(header, path, mode="w"):
+        with open(path, mode, newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(header)
+
+    @staticmethod
     def save_to_csv(data, path, mode="w"):
         with open(path, mode, newline="") as f:
             writer = csv.writer(f)
@@ -72,13 +78,18 @@ class SaveSystem(BaseReporter):
             pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     @staticmethod
-    def load_data(filepath, mode="r"):
-        with gzip.open(filepath, mode) as f:
+    def load_data(path, mode="r"):
+        with gzip.open(path, mode) as f:
             return pickle.load(f)
 
     @staticmethod
-    def load_population(filepath):
-        with gzip.open(filepath) as f:
+    def load_population(path):
+        with gzip.open(path) as f:
             generation, config, population, species_set, rndstate = pickle.load(f)
             random.setstate(rndstate)
             return Population(config, (population, species_set, generation))
+
+    @staticmethod
+    def delete_file(path):
+        if os.path.exists(path):
+            os.remove(path)
