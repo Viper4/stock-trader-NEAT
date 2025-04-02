@@ -1,5 +1,4 @@
 import datetime as dt
-import talib
 import pandas as pd
 import pytz
 import time
