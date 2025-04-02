@@ -18,6 +18,60 @@ class Agent:
         self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, CONFIG_PATH)
 
     @staticmethod
+    def generate_inputs(row, plpc, sma_periods):
+        stock_sma_pcs = []
+        spy_sma_pcs = []
+        qqq_sma_pcs = []
+        for sma_period in sma_periods:
+            stock_sma_pcs.append(getattr(row, f"sma_{sma_period}_pc"))
+            spy_sma_pcs.append(getattr(row, f"sma_{sma_period}_spy_pc"))
+            qqq_sma_pcs.append(getattr(row, f"sma_{sma_period}_qqq_pc"))
+
+        return [
+            # Stock data
+            plpc,  # plpc
+            row.open_pc,
+            row.high_pc,
+            row.low_pc,
+            row.close_pc,
+            row.volume_pc,
+            row.vwap_pc,
+            row.sentiment,  # -1 = negative, 0 = neutral, 1 = positive
+            row.hmm_prediction,
+            (row.slow_k - 50) / 50,
+            (row.slow_d - 50) / 50,
+            (row.rsi - 50) / 50,
+            row.atr_pc,
+            row.ema_k_pc,
+            row.ema_d_pc,
+            *stock_sma_pcs,
+
+            # SPY data
+            row.close_spy_pc,
+            row.volume_spy_pc,
+            row.sentiment_spy,
+            (row.slow_k_spy - 50) / 50,
+            (row.slow_d_spy - 50) / 50,
+            (row.rsi_spy - 50) / 50,
+            row.atr_spy_pc,
+            row.ema_k_spy_pc,
+            row.ema_d_spy_pc,
+            *spy_sma_pcs,
+
+            # QQQ data
+            row.close_qqq_pc,
+            row.volume_qqq_pc,
+            row.sentiment_qqq,
+            (row.slow_k_spy - 50) / 50,
+            (row.slow_d_spy - 50) / 50,
+            (row.rsi_spy - 50) / 50,
+            row.atr_spy_pc,
+            row.ema_k_spy_pc,
+            row.ema_d_spy_pc,
+            *qqq_sma_pcs
+        ]
+
+    @staticmethod
     def rel_change(a, b, epsilon=1e-6):
         if abs(a) < epsilon:
             return (b - a) / epsilon

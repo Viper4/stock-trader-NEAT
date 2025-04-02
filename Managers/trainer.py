@@ -80,9 +80,9 @@ class Trainer(Manager):
                     stock_bars["SPY"].append(self.generate_data("SPY", i, profile,
                                                                 start_date - time_delta,
                                                                 end_date - time_delta,
-                                                                spy_file_path, False,
+                                                                spy_file_path,
                                                                 None, None,
-                                                                False))
+                                                                training=True))
 
                 qqq_file_path = os.path.join(TRAINING_DIR, str(profile.interval) + "m-data-QQQ" + str(i) + ".gz")
                 if not regenerate and os.path.exists(qqq_file_path):
@@ -100,9 +100,9 @@ class Trainer(Manager):
                     stock_bars["QQQ"].append(self.generate_data("QQQ", i, profile,
                                                                 start_date - time_delta,
                                                                 end_date - time_delta,
-                                                                qqq_file_path, False,
+                                                                qqq_file_path,
                                                                 None, None,
-                                                                False))
+                                                                training=True))
 
             used_substitutions = {}
             for stock in profile.stocks:
@@ -148,9 +148,9 @@ class Trainer(Manager):
                         stock_bars[symbol].append(self.generate_data(symbol, i, profile,
                                                                      start_date - time_delta,
                                                                      end_date - time_delta,
-                                                                     file_path, True,
+                                                                     file_path,
                                                                      stock_bars["SPY"][i], stock_bars["QQQ"][i],
-                                                                     False))
+                                                                     training=True, gen_hmm=True))
 
             for stock in profile.stocks:
                 symbol = stock["symbol"]

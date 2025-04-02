@@ -4,6 +4,7 @@ import random
 from neat.population import Population
 from neat.reporting import BaseReporter
 import os
+import csv
 
 
 class SaveSystem(BaseReporter):
@@ -35,6 +36,33 @@ class SaveSystem(BaseReporter):
     def make_dir(path):
         if not os.path.exists(path):
             os.mkdir(path)
+
+    @staticmethod
+    def write_to_file(string, path, mode="w"):
+        print(f"Writing string to {path}")
+
+        with open(path, mode) as f:
+            f.write(string)
+
+    @staticmethod
+    def read_from_file(path, mode="r"):
+        with open(path, mode) as f:
+            return f.read()
+
+    @staticmethod
+    def save_to_csv(data, path, mode="w"):
+        with open(path, mode, newline="") as f:
+            writer = csv.writer(f)
+            if mode == "a":
+                writer.writerow(data)
+            else:
+                writer.writerows(data)
+
+    @staticmethod
+    def read_from_csv(path, mode="r"):
+        with open(path, mode, newline="") as f:
+            reader = csv.reader(f)
+            return list(reader)
 
     @staticmethod
     def save_data(data, path, mode="w"):

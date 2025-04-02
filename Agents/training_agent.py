@@ -30,14 +30,13 @@ def eval_genome(args):
     consecutive_days = 1
     log = []
     last_index = stock_bars.index[-1]
+    prev_date = None
 
-    # Need previous bar for relative change
-    for row, prev_row in zip(stock_bars[1:].itertuples(), stock_bars[:-1].itertuples()):
+    for row in stock_bars.itertuples():
         date = row.Index.to_pydatetime()
-        prev_date = prev_row.Index.to_pydatetime()
 
         # Check to settle cash after each day
-        if (date - prev_date).days > 1:
+        if prev_date is not None and (date - prev_date).days > 1:
             consecutive_days += 1
             while not pending_sales.is_empty():
                 sale_price, sale_day = pending_sales.head.value
@@ -48,32 +47,7 @@ def eval_genome(args):
                 else:
                     break
 
-        inputs = [
-            Agent.rel_change(cost, row.close * shares),  # plpc
-            Agent.rel_change(prev_row.open, row.open),
-            Agent.rel_change(prev_row.high, row.high),
-            Agent.rel_change(prev_row.low, row.low),
-            Agent.rel_change(prev_row.close, row.close),
-            Agent.rel_change(prev_row.volume, row.volume),
-            Agent.rel_change(prev_row.vwap, row.vwap),
-            row.sentiment,  # -1 = negative, 0 = neutral, 1 = positive
-            Agent.rel_change(prev_row.close_spy, row.close_spy),
-            Agent.rel_change(prev_row.volume_spy, row.volume_spy),
-            row.sentiment_spy,
-            Agent.rel_change(prev_row.close_qqq, row.close_qqq),
-            Agent.rel_change(prev_row.volume_qqq, row.volume_qqq),
-            row.sentiment_qqq,
-            (row.slow_k - 50) / 50,
-            (row.slow_d - 50) / 50,
-            (row.rsi - 50) / 50,
-            Agent.rel_change(prev_row.atr, row.atr),
-            Agent.rel_change(prev_row.ema_k, row.ema_k),
-            Agent.rel_change(prev_row.ema_d, row.ema_d),
-        ]
-        for sma_period in sma_periods:
-            prev_sma = getattr(prev_row, f"sma_{sma_period}")
-            sma = getattr(row, f"sma_{sma_period}")
-            inputs.append(Agent.rel_change(prev_sma, sma))
+        inputs = Agent.generate_inputs(row, Agent.rel_change(cost, row.close * shares), sma_periods)
 
         outputs = net.activate(inputs)
 
@@ -120,10 +94,7 @@ def eval_genome(args):
                     log.append(action)
 
         if row.Index == last_index or (date - start_date).days >= profit_window:
-            if shares < 0:
-                equity = unsettled_cash + settled_cash + shares * row.close - cost
-            else:
-                equity = unsettled_cash + settled_cash + row.close * shares
+            equity = unsettled_cash + settled_cash + row.close * shares
             profit_sum += equity - start_equity
             num_windows += 1
             start_equity = equity
@@ -131,6 +102,8 @@ def eval_genome(args):
             if equity > running_max_equity:
                 running_max_equity = equity
             max_drawdown = max(running_max_equity - equity, max_drawdown)
+
+        prev_date = date
 
     avg_factor = (profit_sum / num_windows) * fitness_multipliers["average"]
     total_factor = profit_sum * fitness_multipliers["total"]
@@ -227,7 +200,8 @@ class Training(Agent):
         self.fractionable = asset.fractionable
         if not self.started:
             print(f"Starting {self.profile.interval}m {self.stock['symbol']} training agent...")
-            save_system = saving.SaveSystem(1, self.genome_file_path, self.settings["gen_stagger"], self.population_file_path)
+            save_system = saving.SaveSystem(1, self.genome_file_path, self.settings["gen_stagger"],
+                                            self.population_file_path)
             if os.path.exists(self.population_file_path):
                 p = save_system.load_population(self.population_file_path)
             else:

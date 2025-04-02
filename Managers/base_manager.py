@@ -7,6 +7,7 @@ import requests
 import talib
 import pandas as pd
 from constants import *
+import hmm
 
 
 class Profile(object):
@@ -118,12 +119,40 @@ class Manager(object):
             return saving.SaveSystem.load_data(file_path)
         return None
 
+    def generate_percent_change(self, bars, sma_periods):
+        bars["open_pc"] = bars["open"].pct_change()
+        bars["high_pc"] = bars["high"].pct_change()
+        bars["low_pc"] = bars["low"].pct_change()
+        bars["close_pc"] = bars["close"].pct_change()
+        bars["volume_pc"] = bars["volume"].pct_change()
+        bars["vwap_pc"] = bars["vwap"].pct_change()
+        bars["ema_k_pc"] = bars["ema_k"].pct_change()
+        bars["ema_d_pc"] = bars["ema_d"].pct_change()
+
+        bars["close_spy_pc"] = bars["close_spy"].pct_change()
+        bars["volume_spy_pc"] = bars["volume_spy"].pct_change()
+        bars["atr_spy_pc"] = bars["atr_spy"].pct_change()
+        bars["ema_k_spy_pc"] = bars["ema_k_spy"].pct_change()
+        bars["ema_d_spy_pc"] = bars["ema_d_spy"].pct_change()
+
+        bars["close_qqq_pc"] = bars["close_qqq"].pct_change()
+        bars["volume_qqq_pc"] = bars["volume_qqq"].pct_change()
+        bars["atr_qqq_pc"] = bars["atr_qqq"].pct_change()
+        bars["ema_k_qqq_pc"] = bars["ema_k_qqq"].pct_change()
+        bars["ema_d_qqq_pc"] = bars["ema_d_qqq"].pct_change()
+
+        for sma_period in sma_periods:
+            bars[f"sma_{sma_period}_pc"] = bars[f"sma_{sma_period}"].pct_change()
+            bars[f"sma_spy_{sma_period}_pc"] = bars[f"sma_spy_{sma_period}"].pct_change()
+            bars[f"sma_qqq_{sma_period}_pc"] = bars[f"sma_qqq_{sma_period}"].pct_change()
+
     def load_data(self, symbol, i, file_path):
         b_bars = saving.SaveSystem.load_data(file_path)
         print(f" {symbol}{i}: Loaded {b_bars.shape[0]} bars from {b_bars.index[0]} to {b_bars.index[-1]}")
         return b_bars
 
-    def generate_data(self, symbol, i, profile, start_date, end_date, file_path, gen_indicators, spy_bars, qqq_bars, training):
+    def generate_data(self, symbol, i, profile, start_date, end_date,
+                      file_path=None, bars_spy=None, bars_qqq=None, training=False, gen_hmm=False):
         if training:
             # Leave most recent 30 days for validation
             now_date = dt.datetime.now(dt.timezone.utc)
@@ -137,56 +166,77 @@ class Manager(object):
 
         start_time = time.time()
 
-        if gen_indicators:
-            print(f" {symbol}{i}: Generating {bars.shape[0]} indicator data from {start_date} to {end_date}")
+        print(f" {symbol}{i}: Generating {bars.shape[0]} indicator data from {start_date} to {end_date}")
 
-            # Ensure indicator data for training isn't NaN with pre-batch data
-            max_sma_period = max(profile.sma_periods)
-            max_period = max(profile.k_period, profile.d_period, profile.rsi_period, profile.atr_period, max_sma_period)
-            pre_start_date = start_date - dt.timedelta(days=max_period)
-            pre_bars = self.get_bars(symbol, profile.alpaca_api, profile.interval, pre_start_date, start_date, 500000)
-            init_bars_length = bars.shape[0]
-            bars = pd.concat([pre_bars, bars], ignore_index=False).drop_duplicates()
-            if not bars.index.is_monotonic_increasing:
-                print(f" {symbol}{i}: Non-monotonic bars, sorting...")
-                bars = bars.sort_index()
+        # Ensure indicator data for training isn't NaN with pre-batch data
+        max_sma_period = max(profile.sma_periods)
+        max_period = max(profile.k_period, profile.d_period, profile.rsi_period, profile.atr_period, max_sma_period)
+        pre_start_date = start_date - dt.timedelta(days=max_period)
+        pre_bars = self.get_bars(symbol, profile.alpaca_api, profile.interval, pre_start_date, start_date, 500000)
+        init_bars_length = bars.shape[0]
+        bars = pd.concat([pre_bars, bars], ignore_index=False).drop_duplicates()
+        if not bars.index.is_monotonic_increasing:
+            print(f" {symbol}{i}: Non-monotonic bars, sorting...")
+            bars = bars.sort_index()
 
-            bars["slow_k"], bars["slow_d"] = talib.STOCH(bars["high"], bars["low"], bars["close"],
-                                                         fastk_period=profile.k_period,
-                                                         slowk_period=profile.d_period,
-                                                         slowd_period=profile.d_period)
-            bars["rsi"] = talib.RSI(bars["close"], timeperiod=profile.rsi_period)
-            bars["atr"] = talib.ATR(bars["high"], bars["low"], bars["close"], timeperiod=profile.atr_period)
-            bars["ema_k"] = talib.EMA(bars["close"], timeperiod=profile.k_period)
-            bars["ema_d"] = talib.EMA(bars["close"], timeperiod=profile.d_period)
-            for sma_period in profile.sma_periods:
-                bars[f"sma_{sma_period}"] = talib.SMA(bars["close"], timeperiod=sma_period)
+        bars["slow_k"], bars["slow_d"] = talib.STOCH(bars["high"], bars["low"], bars["close"],
+                                                     fastk_period=profile.k_period,
+                                                     slowk_period=profile.d_period,
+                                                     slowd_period=profile.d_period)
+        bars["rsi"] = talib.RSI(bars["close"], timeperiod=profile.rsi_period)
+        bars["atr"] = talib.ATR(bars["high"], bars["low"], bars["close"], timeperiod=profile.atr_period)
+        bars["ema_k"] = talib.EMA(bars["close"], timeperiod=profile.k_period)
+        bars["ema_d"] = talib.EMA(bars["close"], timeperiod=profile.d_period)
+        for sma_period in profile.sma_periods:
+            bars[f"sma_{sma_period}"] = talib.SMA(bars["close"], timeperiod=sma_period)
 
-            bars = bars[max(0, bars.shape[0] - init_bars_length):]
+        print(f" {symbol}{i}: Finished generating {bars.shape[0]} indicator data in {(time.time() - start_time):.2f}s")
 
-            print(f" {symbol}{i}: Finished generating {bars.shape[0]} indicator data in {(time.time() - start_time):.2f}s")
-
-        bars = bars.between_time("9:30", "16:00")
-        print(f" {symbol}{i}: Generating {bars.shape[0]} sentiments from {start_date} to {end_date}")
+        backtest_bars = bars[max(0, bars.shape[0] - init_bars_length):].copy()
+        backtest_bars = backtest_bars.between_time("9:30", "16:00")
 
         # Cant vectorize since GPU memory is too small
-        bars["sentiment"] = 0.0
-        for row in bars.itertuples():
-            backtest_date = row.Index.to_pydatetime()
-            sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
-            bars.at[row.Index, "sentiment"] = sentiment
+        backtest_bars["sentiment"] = 0.0
+        if gen_hmm:
+            print(f" {symbol}{i}: Generating {backtest_bars.shape[0]} sentiments and HMM predictions from {start_date} to {end_date}")
+            hmm_predictor = hmm.HMMPricePrediction(10, 100)
+
+            augmented_bars = hmm_predictor.augment_bars(bars)
+            backtest_bars["hmm_prediction"] = 0.0
+            j = 0
+            for row in backtest_bars.itertuples():
+                backtest_date = row.Index.to_pydatetime()
+                sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
+                backtest_bars.at[row.Index, "sentiment"] = sentiment
+
+                previous_data = augmented_bars[:row.Index]
+                if j % 100 == 0:
+                    print(f" {symbol}{i}: Fitting HMM {j}/{backtest_bars.shape[0]}")
+                    hmm_predictor.fit_augmented(previous_data)
+                backtest_bars.at[row.Index, "hmm_prediction"] = hmm_predictor.predict_augmented(row.open, previous_data)
+                j += 1
+            print(f" {symbol}{i}: Finished generating {bars.shape[0]} sentiments and HMM predictions in {(time.time() - start_time):.2f}s")
+        else:
+            print(f" {symbol}{i}: Generating {backtest_bars.shape[0]} sentiments from {start_date} to {end_date}")
+            for row in backtest_bars.itertuples():
+                backtest_date = row.Index.to_pydatetime()
+                sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
+                backtest_bars.at[row.Index, "sentiment"] = sentiment
+            print(f" {symbol}{i}: Finished generating {backtest_bars.shape[0]} sentiments in {(time.time() - start_time):.2f}s")
 
         # Combine SPY df with stock df
-        if spy_bars is not None:
-            spy_bars = spy_bars.reindex(bars.index, method="ffill")
-            bars = bars.join(spy_bars, rsuffix="_spy", how="inner")
+        if bars_spy is not None:
+            bars_spy = bars_spy.reindex(backtest_bars.index, method="ffill")
+            backtest_bars = backtest_bars.join(bars_spy, rsuffix="_spy", how="inner")
         # Combine QQQ df with stock df
-        if qqq_bars is not None:
-            qqq_bars = qqq_bars.reindex(bars.index, method="ffill")
-            bars = bars.join(qqq_bars, rsuffix="_qqq", how="inner")
+        if bars_qqq is not None:
+            bars_qqq = bars_qqq.reindex(backtest_bars.index, method="ffill")
+            backtest_bars = backtest_bars.join(bars_qqq, rsuffix="_qqq", how="inner")
 
-        print(f" {symbol}{i}: Finished generating {bars.shape[0]} data in {(time.time() - start_time):.2f}s")
+        self.generate_percent_change(backtest_bars, profile.sma_periods)
+
+        print(f" {symbol}{i}: Finished generating {backtest_bars.shape[0]} data in {(time.time() - start_time):.2f}s")
         if file_path is not None:
-            saving.SaveSystem.save_data(bars, file_path)
+            saving.SaveSystem.save_data(backtest_bars, file_path)
 
-        return bars
+        return backtest_bars

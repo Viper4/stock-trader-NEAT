@@ -74,11 +74,13 @@ class FinBERTNews(object):
             return self.last_sentiment
 
         if self.device == "cpu":
-            with torch.no_grad():
+            with torch.no_grad():  # Don't need gradients since we aren't training
                 tokens = self.tokenizer(news, return_tensors="pt", padding=True).to(self.device)
-                sentiment_probs = self.model(tokens["input_ids"], attention_mask=tokens["attention_mask"])["logits"]
-                sentiment_probs = torch.nn.functional.softmax(torch.sum(sentiment_probs, 0), dim=-1).numpy()
-                sentiment = sentiment_probs[0] - sentiment_probs[1]  # positive% - negative%
+
+                with torch.amp.autocast(self.device):  # Enable mixed precision
+                    sentiment_probs = self.model(tokens["input_ids"], attention_mask=tokens["attention_mask"])["logits"]
+                    sentiment_probs = torch.nn.functional.softmax(torch.sum(sentiment_probs, 0), dim=-1).numpy()
+                    sentiment = sentiment_probs[0] - sentiment_probs[1]  # positive% - negative%
         else:
             with torch.no_grad():  # Don't need gradients since we aren't training
                 tokens = self.tokenizer(news, return_tensors="pt", padding=True).to(self.device)

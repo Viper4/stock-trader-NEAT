@@ -12,7 +12,7 @@
       "d_period": 3,
       "rsi_period": 14,
       "atr_period": 10,
-      "sma_periods": [30, 60, 200],
+      "sma_periods": [30, 60, 200, 1000],
       "start_cash": 100000.0,
       "cash_limit": 999999999.0,
       "fitness_multipliers": {
@@ -21,6 +21,24 @@
         "risk": 0.0
       },
       "stocks": [
+        {
+          "symbol": "COIN",
+          "cash_at_risk": 0.15,
+          "population_filename": "5pw-population-COIN.gz",
+          "genome_filename": "5pw-genome-COIN.gz",
+          "training_filename": "5m-data-COIN.gz",
+          "trading": true,
+          "transaction_fee": 0.0095
+        },
+        {
+          "symbol": "NVDA",
+          "cash_at_risk": 0.15,
+          "population_filename": "5pw-population-NVDA.gz",
+          "genome_filename": "5pw-genome-NVDA.gz",
+          "training_filename": "5m-data-NVDA.gz",
+          "trading": true,
+          "transaction_fee": 0.0095
+        },
         {
           "symbol": "TSLA",
           "cash_at_risk": 0.15,

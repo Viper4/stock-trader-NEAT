@@ -109,13 +109,11 @@ class Trader(Manager):
                     memory = self.load_memory(f"{self.profile.name.replace(' ', '-')}-{symbol}")
                     if memory is None:
                         if spy_bars is None:
-                            spy_bars = self.generate_data("SPY", "-T", self.profile, start_date, end_date, None,
-                                                          False, None, None, False)
+                            spy_bars = self.generate_data("SPY", "-T", self.profile, start_date, end_date)
                         if qqq_bars is None:
-                            qqq_bars = self.generate_data("QQQ", "-T", self.profile, start_date, end_date, None,
-                                                          False, None, None, False)
+                            qqq_bars = self.generate_data("QQQ", "-T", self.profile, start_date, end_date)
 
-                        bars = self.generate_data(symbol, "-T", self.profile, start_date, end_date, None, True, spy_bars, qqq_bars, False)
+                        bars = self.generate_data(symbol, "-T", self.profile, start_date, end_date, None, spy_bars, qqq_bars, training=False, gen_hmm=True)
 
                         self.profile.agents[symbol].update_net(bars, 30)
                         self.save_memory(self.profile.agents[symbol].net, f"{self.profile.name.replace(' ', '-')}-{symbol}")
@@ -149,7 +147,7 @@ class Trader(Manager):
                     market_value = 0
                     balance_change = 0
 
-                print(f"\n{self.profile['name']} Details:" +
+                print(f"\n{self.profile.name} Details:" +
                       f"\n Bal Change: {balance_change}" +
                       f"\n Settled Cash: {settled_cash}" +
                       f"\n Unsettled Cash: {unsettled_cash}" +

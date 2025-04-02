@@ -2,7 +2,6 @@ import datetime as dt
 import pytz
 import os
 import saving
-from alpaca_trade_api.rest import URL, REST
 from Managers.base_manager import Manager, Profile
 from Agents.validation_agent import Validation
 from multiprocessing import Pool
@@ -15,7 +14,6 @@ class Validator(Manager):
         self.profiles = []
         for i in range(len(settings["profiles"])):
             profile = settings["profiles"][i]
-            alpaca_api = REST(profile["public_key"], profile["secret_key"], base_url=URL("https://paper-api.alpaca.markets"))
 
             self.profiles.append(Profile(settings, i))
 
@@ -27,55 +25,49 @@ class Validator(Manager):
         while self.running:
             print("Accounts:")
             i = 1
-            ordered_sessions = []
-            for profile in self.sessions:
-                ordered_sessions.append(self.sessions[profile])
+            for profile in self.profiles:
                 print(f" {i}: {profile}")
                 i += 1
             index = int(input("Enter account index: ")) - 1
-            session = ordered_sessions[index]
+            profile = self.profiles[index]
 
-            start_date = dt.datetime(year=int(input("Enter start year: ")),
-                                     month=int(input("Enter start month: ")),
-                                     day=int(input("Enter start day: ")),
-                                     hour=16, tzinfo=pytz.timezone("US/Eastern"))
-            end_date = dt.datetime(year=int(input("Enter end year: ")),
-                                   month=int(input("Enter end month: ")),
-                                   day=int(input("Enter end day: ")),
-                                   hour=16, tzinfo=pytz.timezone("US/Eastern"))
+            start = input("Enter start date (YYYY-MM-DD): ")
+            end = input("Enter end date (YYYY-MM-DD): ")
+            start_date = dt.datetime.strptime(start, "%Y-%m-%d").replace(hour=9, minute=30, tzinfo=pytz.timezone("US/Eastern"))
+            end_date = dt.datetime.strptime(end, "%Y-%m-%d").replace(hour=16, minute=0, tzinfo=pytz.timezone("US/Eastern"))
 
             stock_bars = {}
             genomes = {}
             start_cashes = {}
-            for stock in session["stocks"]:
+            for stock in profile.stocks:
                 if input(f"Run simulation for {stock['symbol']}? (y/n): ") == "y":
                     if stock["genome_filename"] is None:
                         print(f" No genome filename provided for {stock['symbol']}")
                     else:
                         try:
-                            best_genome = saving.SaveSystem.load_data(os.path.join(session["agents"][stock["symbol"]].genome_path, stock["genome_filename"]))
+                            best_genome = saving.SaveSystem.load_data(os.path.join(profile.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
                             start_cash = input(" Enter starting cash: ")
-                            validation_filename = f"{stock['symbol']}-{session['interval']}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
+                            validation_filename = f"{stock['symbol']}-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
                             file_path = f"{self.settings['save_path']}\\ValidationData\\{validation_filename}"
                             if os.path.exists(file_path):
                                 stock_bars[stock["symbol"]] = self.load_data(stock["symbol"], "-V", file_path)
                             else:
                                 if "SPY" not in stock_bars:
-                                    spy_filename = f"SPY-{session['interval']}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
+                                    spy_filename = f"SPY-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
                                     spy_path = os.path.join(self.settings["save_path"], "ValidationData", spy_filename)
                                     if os.path.exists(spy_path):
                                         stock_bars["SPY"] = self.load_data("SPY", "-V", spy_path)
                                     else:
-                                        stock_bars["SPY"] = self.generate_data("SPY", "-V", session, start_date, end_date, spy_path, False, None, None, False)
+                                        stock_bars["SPY"] = self.generate_data("SPY", "-V", profile, start_date, end_date, spy_path)
                                 if "QQQ" not in stock_bars:
-                                    qqq_filename = f"QQQ-{session['interval']}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
+                                    qqq_filename = f"QQQ-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
                                     qqq_path = os.path.join(self.settings["save_path"], "ValidationData", qqq_filename)
                                     if os.path.exists(qqq_path):
                                         stock_bars["QQQ"] = self.load_data("QQQ", "-V", qqq_path)
                                     else:
-                                        stock_bars["QQQ"] = self.generate_data("QQQ", "-V", session, start_date, end_date, qqq_path, False, None, None, False)
+                                        stock_bars["QQQ"] = self.generate_data("QQQ", "-V", profile, start_date, end_date, qqq_path)
 
-                                stock_bars[stock["symbol"]] = self.generate_data(stock["symbol"], "-V", session, start_date, end_date, file_path, True, stock_bars["SPY"], stock_bars["QQQ"], False)
+                                stock_bars[stock["symbol"]] = self.generate_data(stock["symbol"], "-V", profile, start_date, end_date, file_path, stock_bars["SPY"], stock_bars["QQQ"], False)
                             genomes[stock["symbol"]] = best_genome
                             start_cashes[stock["symbol"]] = start_cash
                         except FileNotFoundError:
@@ -94,10 +86,10 @@ class Validator(Manager):
                     print(f"{symbol}: No bars, skipping...")
                     continue
                 print(f"{symbol}: Validating over {len(stock_bars[symbol])} bars from {stock_bars[symbol][0]['timestamp']} to {stock_bars[symbol][-1]['timestamp']}...")
-                asset = session["alpaca_api"].get_asset(symbol=symbol)
-                jobs.append((symbol, pool.apply_async(session["agents"][symbol].validate,
+                asset = profile.alpaca_api.get_asset(symbol=symbol)
+                jobs.append((symbol, pool.apply_async(profile.agents[symbol].validate,
                                                       (stock_bars[symbol],
-                                                       session["sma_periods"],
+                                                       profile.sma_periods,
                                                        genomes[symbol],
                                                        asset.fractionable,
                                                        start_cashes[symbol]))))
@@ -132,10 +124,15 @@ class Validator(Manager):
                                     print(f" |NASDAQ Close: {action[key][12]}")
                                     print(f" |NASDAQ Volume: {action[key][13]}")
                                     print(f" |NASDAQ Sentiment: {action[key][14]}")
-                                    print(f" |%K: {action[key][15]}")
-                                    print(f" |{session['d_period']}-day EMA: {action[key][16]}")
-                                    print(f" |{session['k_period']}-day EMA: {action[key][17]}")
-                                    print(f" |{session['rsi_period']}-day RSI: {action[key][18]}")
+                                    print(f" |Slow K: {action[key][15]}")
+                                    print(f" |Slow D: {action[key][16]}")
+                                    print(f" |{profile.k_period}-day EMA: {action[key][17]}")
+                                    print(f" |{profile.d_period}-day EMA: {action[key][18]}")
+                                    print(f" |{profile.rsi_period}-day RSI: {action[key][19]}")
+                                    print(f" |{profile.atr_period}-day ATR: {action[key][20]}")
+                                    for i in range(len(profile.sma_periods)):
+                                        print(f" |{profile.sma_periods[i]}-day SMA: {action[key][21 + i]}")
+
                                 elif key == "outputs":
                                     print("-Outputs")
                                     print(f" |Buy/Sell: {action[key][0]}")

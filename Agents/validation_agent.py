@@ -33,9 +33,9 @@ class Validation(Agent):
         last_index = bars.index[-1]
         log = []
 
-        # Start at 1 to have previous bar for relative change
         i = 0
-        for row, prev_row in zip(bars[1:].itertuples(), bars[:-1].itertuples()):
+        prev_date = None
+        for row in bars.itertuples():
             if i % 1000 == 0:
                 elapsed = time.time() - start_time
                 eta = (elapsed / i) * (bars.shape[0] - i)
@@ -43,10 +43,9 @@ class Validation(Agent):
             i += 1
 
             date = row.Index.to_pydatetime()
-            prev_date = prev_row.Index.to_pydatetime()
 
             # Check to settle cash after each day
-            if (date - prev_date).days > 1:
+            if prev_date is not None and (date - prev_date).days > 1:
                 consecutive_days += 1
                 while not pending_sales.is_empty():
                     sale_price, sale_day = pending_sales.head.value
@@ -55,33 +54,9 @@ class Validation(Agent):
                         unsettled_cash -= sale_price
                         pending_sales.dequeue()
                     else:
-                        break            
-            
-            inputs = [Agent.rel_change(cost, row.close * shares),  # plpc
-                      Agent.rel_change(prev_row.open, row.open),
-                      Agent.rel_change(prev_row.high, row.high),
-                      Agent.rel_change(prev_row.low, row.low),
-                      Agent.rel_change(prev_row.close, row.close),
-                      Agent.rel_change(prev_row.volume, row.volume),
-                      Agent.rel_change(prev_row.vwap, row.vwap),
-                      row.sentiment,  # -1 = negative, 0 = neutral, 1 = positive
-                      Agent.rel_change(prev_row.close_spy, row.close_spy),
-                      Agent.rel_change(prev_row.volume_spy, row.volume_spy),
-                      row.sentiment_spy,
-                      Agent.rel_change(prev_row.close_qqq, row.close_qqq),
-                      Agent.rel_change(prev_row.volume_qqq, row.volume_qqq),
-                      row.sentiment_qqq,
-                      (row.slow_k - 50) / 50,
-                      (row.slow_d - 50) / 50,
-                      (row.rsi - 50) / 50,
-                      Agent.rel_change(prev_row.atr, row.atr),
-                      Agent.rel_change(prev_row.ema_k, row.ema_k),
-                      Agent.rel_change(prev_row.ema_d, row.ema_d)
-                      ]
-            for sma_period in sma_periods:
-                prev_sma = getattr(prev_row, f"sma_{sma_period}")
-                sma = getattr(row, f"sma_{sma_period}")
-                inputs.append(Agent.rel_change(prev_sma, sma))
+                        break
+
+            inputs = self.generate_inputs(row, Agent.rel_change(cost, row.close * shares), sma_periods)
 
             outputs = net.activate(inputs)
 
@@ -131,11 +106,9 @@ class Validation(Agent):
                     unsettled_cash += price
                     pending_sales.enqueue((price, consecutive_days))
                     long_sells += 1
+
             if row.Index == last_index or (date - start_date).days >= self.profile.profit_window:
-                if shares < 0:
-                    equity = unsettled_cash + settled_cash + shares * row.close - cost
-                else:
-                    equity = unsettled_cash + settled_cash + row.close * shares
+                equity = unsettled_cash + settled_cash + row.close * shares
                 profit = equity - start_equity
                 if profit < min_profit[0]:
                     min_profit = (profit, 100 * (profit / start_equity))
@@ -146,6 +119,8 @@ class Validation(Agent):
                 num_windows += 1
                 start_equity = equity
                 start_date = date
+
+            prev_date = date
 
         first_row = bars.iloc[0]
         last_row = bars.iloc[-1]
