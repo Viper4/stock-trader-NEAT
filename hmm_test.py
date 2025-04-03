@@ -19,8 +19,8 @@ from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-QQQ-1h_2019-1-1_2025-4-1.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-QQQ-1h_2019-1-1_2025-4-1.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-QQQ-1d_2019-1-1_2025-4-1.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-QQQ-1d_2019-1-1_2025-4-1.csv"
 
 
 class CorrelationAnalysis(object):
@@ -81,8 +81,8 @@ def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df)
 
 
 def run_regime_test(train_bars, test_bars, features, plot):
-    regime_predictor = models.HMMRegimePrediction(features)
-    regime_predictor.validate(train_bars, test_bars, 2, plot)
+    regime_predictor = models.HMMRegimePrediction(processes=1)
+    regime_predictor.validate(train_bars, test_bars, features, plot)
     start_time = time.time()
     predicted_regimes = regime_predictor.predict_probability(test_bars_df)
     print(f"Regime probabilities:\n", predicted_regimes)
@@ -115,6 +115,7 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
             best_accuracy = tested[key]
 
     print("Starting search")
+    regime_predictor = models.HMMRegimePrediction(processes=val_processes)
     i = 0
     for features in feature_combinations:
         start_time = time.time()
@@ -126,8 +127,7 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
 
         key = str(features_list)
         if key not in tested:
-            regime_predictor = models.HMMRegimePrediction(features_list)
-            accuracy = regime_predictor.validate(train_bars, test_bars, val_processes, False)
+            accuracy = regime_predictor.validate(train_bars, test_bars, features_list, False)
             tested[key] = accuracy
             saving.SaveSystem.save_to_csv([features_list, accuracy], TESTED_PATH, "a")
         else:
@@ -186,11 +186,14 @@ def run_random_forest(bars, features):
 
 
 if __name__ == "__main__":
-    user_input = input("Enter command (search, price test, reg test, reg best, correlation, stats, random forest): ")
+    user_input = input("Enter command (brute force, price test, reg test, reg best, correlation, stats, random forest): ")
     if not os.path.exists(DATA_PATH):
         symbol = input("Enter symbol: ")
         start = input("Enter start date (YYYY-MM-DD): ")
         end = input("Enter end date (YYYY-MM-DD): ")
+        interval = int(input("Enter interval (1, 5, 15, 30): "))
+        unit_input = input("Enter interval unit (Minute, Day, Week, Month): ")
+        unit_map = {"Minute": TimeFrameUnit.Minute, "Day": TimeFrameUnit.Day, "Week": TimeFrameUnit.Week, "Month": TimeFrameUnit.Month}
         start_date = dt.datetime.strptime(start, "%Y-%m-%d").replace(hour=9, minute=30,
                                                                      tzinfo=pytz.timezone("US/Eastern"))
         end_date = dt.datetime.strptime(end, "%Y-%m-%d").replace(hour=16, minute=0, tzinfo=pytz.timezone("US/Eastern"))
@@ -198,9 +201,9 @@ if __name__ == "__main__":
             settings = json.load(file)
         alpaca_api = REST(settings["profiles"][0]["public_key"], settings["profiles"][0]["secret_key"],
                           base_url=URL("https://paper-api.alpaca.markets"))
-        bars_df = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, 1, start_date, end_date, 500000,
-                                                         TimeFrameUnit.Hour)
+        bars_df = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval, start_date, end_date, 500000, unit_map[unit_input])
 
+        # Calculate percentage changes and indicators
         bars_df["open_pc"] = bars_df["open"].pct_change(fill_method=None)
         bars_df["high_pc"] = bars_df["high"].pct_change(fill_method=None)
         bars_df["low_pc"] = bars_df["low"].pct_change(fill_method=None)
@@ -336,7 +339,7 @@ if __name__ == "__main__":
         bars_df["sar"] = talib.SAR(bars_df["high"], bars_df["low"], acceleration=0.02, maximum=0.2)
         bars_df["sar"] = bars_df["sar"].pct_change(fill_method=None)
 
-        bars_df["volatility"] = bars_df["close_pc"].rolling(window=15).std()
+        bars_df["volatility"] = bars_df["close_pc"].rolling(window=30).std()
         bars_df.dropna(inplace=True)
 
         saving.SaveSystem.save_data(bars_df, DATA_PATH)
@@ -376,10 +379,11 @@ if __name__ == "__main__":
         "volatility"
     ]
 
-    if user_input == "search":
-        run_regime_search(train_bars_df, test_bars_df, all_features, 2)
+    if user_input == "brute force":
+        num_processes = int(input("Number of processes (1 best for small test set, >1 better for big test set): "))
+        run_regime_search(train_bars_df, test_bars_df, all_features, num_processes)
     elif user_input == "price test":
-        run_price_test(input("Number of components: "), int(input("Number of latent bars: ")), train_bars_df, test_bars_df)
+        run_price_test(int(input("Number of components: ")), int(input("Number of latent bars: ")), train_bars_df, test_bars_df)
     elif user_input == "reg test":
         # ["close_pc", "ema_1"] accuracy isn't good but looking at the graph it actually seems the best
         test_features = ast.literal_eval(input("Type features, Ex: ['close_pc', 'ema_1']: "))

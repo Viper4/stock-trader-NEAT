@@ -199,7 +199,7 @@ class Manager(object):
         backtest_bars["sentiment"] = 0.0
         if gen_hmm:
             print(f" {symbol}{i}: Generating {backtest_bars.shape[0]} sentiments and HMM predictions from {start_date} to {end_date}")
-            regime_predictor = HMMRegimePrediction(["close_pc", "ema_k_pc"])
+            regime_predictor = HMMRegimePrediction(processes=4)
 
             backtest_bars["hmm_regime"] = 0.0
             j = 0
@@ -210,7 +210,7 @@ class Manager(object):
 
                 if j % 100 == 0:
                     print(f" {symbol}{i}: Fitting HMM {j}/{backtest_bars.shape[0]}")
-                    regime_predictor.fit(bars[:row.Index])
+                    regime_predictor.fit(bars[:row.Index], ["close_pc", "ema_k_pc"])
                 regime_prediction = regime_predictor.predict_latest_probability(bars[:row.Index])
                 backtest_bars.at[row.Index, "hmm_regime"] = regime_prediction["Bull"] - regime_prediction["Bear"]
                 j += 1

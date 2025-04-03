@@ -10,28 +10,32 @@ import hmm_test
 
 
 class HMMRegimePrediction(object):
-    def __init__(self, feature_settings):
+    def __init__(self, processes):
         self.model = GaussianHMM(n_components=3, n_iter=10000)
         self.scaler = StandardScaler()  # Store scaler for consistent transformation
         self.regime_mapping = None  # Store regime mapping
-        self.feature_settings = feature_settings
+        self.processes = processes
+        self.fitted_feature_settings = None
 
-    def get_features(self, bars):
+    def get_features(self, bars, feature_settings):
         """Gets features from bars and scales features."""
         bars.dropna(inplace=True)
-        features = bars[self.feature_settings].values
+        features = bars[feature_settings].values
         features_scaled = self.scaler.fit_transform(features)
         return features_scaled, bars
 
-    def fit(self, bars):
-        bars.dropna(inplace=True)
+    def fit(self, bars, feature_settings):
         """Fits the HMM model and maps regimes."""
-        features_scaled, bars = self.get_features(bars)
+        bars.dropna(inplace=True)
+        self.fitted_feature_settings = feature_settings
+        features_scaled, bars = self.get_features(bars, feature_settings)
         self.model.fit(features_scaled)
         self.map_regimes(bars, features_scaled)
 
     def predict_latest_probability(self, bars):
-        features_scaled, bars = self.get_features(bars[-1:])
+        if self.fitted_feature_settings is None:
+            raise ValueError("Model has not been fitted yet.")
+        features_scaled, bars = self.get_features(bars[-1:], self.fitted_feature_settings)
         prediction_probs = self.model.predict_proba(features_scaled)[-1]
         mapped_prediction = {}
         for i in range(prediction_probs.shape[0]):
@@ -39,7 +43,9 @@ class HMMRegimePrediction(object):
         return mapped_prediction
 
     def predict_probability(self, bars):
-        features_scaled, bars = self.get_features(bars)
+        if self.fitted_feature_settings is None:
+            raise ValueError("Model has not been fitted yet.")
+        features_scaled, bars = self.get_features(bars, self.fitted_feature_settings)
         prediction_probs = self.model.predict_proba(features_scaled)
         mapped_predictions = [
             {self.regime_mapping[np.int64(i)]: float(prob[i]) for i in range(len(prob))}
@@ -49,7 +55,9 @@ class HMMRegimePrediction(object):
 
     def predict(self, bars):
         """Predicts market regimes and returns them as mapped labels."""
-        features_scaled, bars = self.get_features(bars)
+        if self.fitted_feature_settings is None:
+            raise ValueError("Model has not been fitted yet.")
+        features_scaled, bars = self.get_features(bars, self.fitted_feature_settings)
         predicted_regimes = self.model.predict(features_scaled)
         return np.array([self.regime_mapping[r] for r in predicted_regimes])
 
@@ -80,11 +88,11 @@ class HMMRegimePrediction(object):
                 score += 1
         return score
 
-    def validate(self, train_bars, test_bars, processes, plot):
+    def validate(self, train_bars, test_bars, feature_settings, plot):
         """Trains HMM, evaluates accuracy, and visualizes results."""
-        print(f"Training HMM on {train_bars.shape[0]} bars with\nFeatures: {self.feature_settings}")
+        print(f"Training HMM on {train_bars.shape[0]} bars with\nFeatures: {feature_settings}")
         try:
-            self.fit(train_bars)
+            self.fit(train_bars, feature_settings)
         except IndexError as e:
             print("Too little clusters to fit. Skipping validation...")
             return 0.0
@@ -98,12 +106,14 @@ class HMMRegimePrediction(object):
         correct_predictions = 0
         total_predictions = len(test_bars) - 1  # Ignore last row due to comparing predicted with future price
 
-        if processes > 1:
-            pool = Pool(processes=processes)
+        pool = Pool(processes=self.processes)
+        if self.processes > 1:
             args = []
-            bars_per_process = test_bars.shape[0] // processes
+            bars_per_process = test_bars.shape[0] // self.processes
 
-            for i in range(processes):
+            for i in range(self.processes):
+                # Threshold for Choppy of within 0.25*stdv or ~19.75% of data assuming normal (which it is from close_pc histogram)
+                # Hopefully this means a bad combination that guesses Choppy for everything can only get ~20% accuracy
                 args.append((test_bars[i*bars_per_process:(i+1)*bars_per_process], std_deviation, 0.25))
 
             results_async = pool.starmap_async(self.get_score, args)
@@ -114,7 +124,7 @@ class HMMRegimePrediction(object):
             pool.close()
             pool.join()
         else:
-            total_predictions = self.get_score(test_bars, std_deviation, 0.25)
+            correct_predictions = self.get_score(test_bars, std_deviation, 0.25)
 
         accuracy = (correct_predictions / total_predictions) * 100
         print(f"Accuracy: {accuracy:.2f}%")
