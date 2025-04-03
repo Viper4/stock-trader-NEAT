@@ -19,8 +19,8 @@ from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-QQQ-1d_2019-1-1_2025-4-1.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-QQQ-1d_2019-1-1_2025-4-1.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-TSLA-1d_2019-1-1_2025-4-1.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-TSLA-1d_2019-1-1_2025-4-1.csv"
 
 
 class CorrelationAnalysis(object):
@@ -80,17 +80,17 @@ def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df)
     print(f"Finished in {time.time() - start_time} seconds")
 
 
-def run_regime_test(train_bars, test_bars, features, plot):
+def run_regime_test(train_bars, test_bars, features, seed, plot):
     regime_predictor = models.HMMRegimePrediction(processes=1)
-    regime_predictor.validate(train_bars, test_bars, features, plot)
+    regime_predictor.validate(train_bars, test_bars, features, plot, seed)
     start_time = time.time()
     predicted_regimes = regime_predictor.predict_probability(test_bars_df)
-    print(f"Regime probabilities:\n", predicted_regimes)
+    print(f"Most recent prediction:\n", predicted_regimes[-1])
     print("Finished in ", time.time() - start_time)
     print()
 
 
-def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterations=-1):
+def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterations=-1, n_seeds=20):
     feature_combinations = []
     print("Generating combinations")
     for i in range(1, 5):
@@ -98,20 +98,22 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
     print(f"Generated {len(feature_combinations)} combinations")
 
     best_features = []
+    best_seed = 0
     best_accuracy = 0
 
     tested = {}
 
     if not os.path.exists(TESTED_PATH):
-        saving.SaveSystem.make_csv(["Features", "Accuracy"], TESTED_PATH)
+        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy"], TESTED_PATH)
     rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
     for row in rows:
         if row[0] == "Features":
             continue
-        key = row[0]
-        tested[key] = float(row[1])
+        key = row[0] + row[1]
+        tested[key] = float(row[2])
         if tested[key] > best_accuracy:
             best_features = ast.literal_eval(row[0])
+            best_seed = int(row[1])
             best_accuracy = tested[key]
 
     print("Starting search")
@@ -120,24 +122,27 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
     for features in feature_combinations:
         start_time = time.time()
         print(f"\nTest {i}/{len(feature_combinations)} {100 * i / len(feature_combinations):.4f}%:")
-        features_list = list(features)
+        for j in range(n_seeds):
+            print(f"-{j}-")
+            features_list = list(features)
 
-        if n_iterations != -1 and i >= n_iterations:
-            break
+            if n_iterations != -1 and i >= n_iterations:
+                break
 
-        key = str(features_list)
-        if key not in tested:
-            accuracy = regime_predictor.validate(train_bars, test_bars, features_list, False)
-            tested[key] = accuracy
-            saving.SaveSystem.save_to_csv([features_list, accuracy], TESTED_PATH, "a")
-        else:
-            accuracy = tested[key]
-            print(f"Already tested: {key} - {tested[key]}%")
+            key = str(features_list) + str(j)
+            if key not in tested:
+                accuracy = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
+                tested[key] = accuracy
+                saving.SaveSystem.save_to_csv([features_list, j, accuracy], TESTED_PATH, "a")
+            else:
+                accuracy = tested[key]
+                print(f"Already tested: {key} - {tested[key]}%")
 
-        if accuracy > best_accuracy:
-            best_accuracy = accuracy
-            best_features = features_list
-            print(f"New best accuracy: {best_accuracy}%")
+            if accuracy > best_accuracy:
+                best_accuracy = accuracy
+                best_features = features_list
+                best_seed = j
+                print(f"New best accuracy: {best_accuracy}%")
         i += 1
         iteration_time = time.time() - start_time
         eta = (len(feature_combinations) - i) * iteration_time
@@ -145,6 +150,7 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
 
     print(f"Search finished")
     print(f"Best features: {best_features}")
+    print(f"Best seed: {best_seed}")
     print(f"Best accuracy: {best_accuracy}%")
 
 
@@ -192,8 +198,8 @@ if __name__ == "__main__":
         start = input("Enter start date (YYYY-MM-DD): ")
         end = input("Enter end date (YYYY-MM-DD): ")
         interval = int(input("Enter interval (1, 5, 15, 30): "))
-        unit_input = input("Enter interval unit (Minute, Day, Week, Month): ")
-        unit_map = {"Minute": TimeFrameUnit.Minute, "Day": TimeFrameUnit.Day, "Week": TimeFrameUnit.Week, "Month": TimeFrameUnit.Month}
+        unit_input = input("Enter interval unit (Minute, Day, Week, Month, Hour): ")
+        unit_map = {"Minute": TimeFrameUnit.Minute, "Day": TimeFrameUnit.Day, "Week": TimeFrameUnit.Week, "Month": TimeFrameUnit.Month, "Hour": TimeFrameUnit.Hour}
         start_date = dt.datetime.strptime(start, "%Y-%m-%d").replace(hour=9, minute=30,
                                                                      tzinfo=pytz.timezone("US/Eastern"))
         end_date = dt.datetime.strptime(end, "%Y-%m-%d").replace(hour=16, minute=0, tzinfo=pytz.timezone("US/Eastern"))
@@ -381,7 +387,8 @@ if __name__ == "__main__":
 
     if user_input == "brute force":
         num_processes = int(input("Number of processes (1 best for small test set, >1 better for big test set): "))
-        run_regime_search(train_bars_df, test_bars_df, all_features, num_processes)
+        num_seeds = int(input("Number of seeds to check (10 is good): "))
+        run_regime_search(train_bars_df, test_bars_df, all_features, val_processes=num_processes, n_seeds=num_seeds)
     elif user_input == "price test":
         run_price_test(int(input("Number of components: ")), int(input("Number of latent bars: ")), train_bars_df, test_bars_df)
     elif user_input == "reg test":
@@ -390,11 +397,12 @@ if __name__ == "__main__":
         run_regime_test(train_bars_df, test_bars_df, test_features, True)
     elif user_input == "correlation":
         feature_input = input("Type features or 'all', Ex: ['close_pc', 'ema_1']: ")
+        seed = int(input("Seed: "))
         if feature_input == "all":
             corr_features = all_features
         else:
             corr_features = ast.literal_eval(feature_input)
-        run_regime_test(train_bars_df, test_bars_df, corr_features, True)
+        run_regime_test(train_bars_df, test_bars_df, corr_features, True, seed)
         correlation = CorrelationAnalysis(corr_features)
         correlation_matrix = correlation.compute_feature_correlation(test_bars_df)
         print("Correlation matrix:")
@@ -407,34 +415,33 @@ if __name__ == "__main__":
         for row in rows:
             if row[0] == "Features":
                 continue
-            key = row[0]
-            accuracy = float(row[1])
-            results.append((key, accuracy))
-        results.sort(key=lambda x: x[1], reverse=True)
-        best_features, best_accuracy = results[0]
+            results.append((row[0], int(row[1]), float(row[2])))
+        results.sort(key=lambda x: x[2], reverse=True)
+        best_features, best_seed, best_accuracy = results[0]
         print("Best features: ", best_features)
+        print("Best seed: ", best_seed)
         print("Best accuracy: ", best_accuracy)
 
         save_path = TESTED_PATH.replace(".csv", "_sorted.csv")
         saving.SaveSystem.delete_file(save_path)
-        saving.SaveSystem.make_csv(["Features", "Accuracy"], save_path)
+        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy"], save_path)
 
-        sorted_features = []
+        sorted_keys = []
         sorted_accuracies = []
-        for feature_settings, accuracy in results:
-            sorted_features.append(feature_settings)
+        for feature_settings, seed, accuracy in results:
+            sorted_keys.append(feature_settings + " " + str(seed))
             sorted_accuracies.append(accuracy)
-            saving.SaveSystem.save_to_csv([feature_settings, accuracy], save_path, "a")
+            saving.SaveSystem.save_to_csv([feature_settings, seed, accuracy], save_path, "a")
 
         plt.figure(figsize=(12, 6))
-        plt.barh(sorted_features[:200], sorted_accuracies[:200], color="skyblue")
+        plt.barh(sorted_keys[:200], sorted_accuracies[:200], color="skyblue")
         plt.xlabel("Accuracy (%)")
         plt.ylabel("Feature Combinations")
         plt.title("Feature Combination Accuracy Rankings")
         plt.gca().invert_yaxis()  # Best at top
         plt.show()
 
-        run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(best_features), True)
+        run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(best_features), True, best_seed)
     elif user_input == "stats":
         get_stats(pd.concat([train_bars_df, test_bars_df]), input("Enter column: "), True)
     elif user_input == "random forest":

@@ -11,7 +11,7 @@ import hmm_test
 
 class HMMRegimePrediction(object):
     def __init__(self, processes):
-        self.model = GaussianHMM(n_components=3, n_iter=10000)
+        self.model = GaussianHMM(n_components=3, n_iter=10000, covariance_type="diag", init_params="")
         self.scaler = StandardScaler()  # Store scaler for consistent transformation
         self.regime_mapping = None  # Store regime mapping
         self.processes = processes
@@ -24,10 +24,19 @@ class HMMRegimePrediction(object):
         features_scaled = self.scaler.fit_transform(features)
         return features_scaled, bars
 
-    def fit(self, bars, feature_settings):
+    def fit(self, bars, feature_settings, seed=42):
         """Fits the HMM model and maps regimes."""
         bars.dropna(inplace=True)
         self.fitted_feature_settings = feature_settings
+
+        np.random.seed(seed)  # For reproducibility
+
+        # Set initial parameters dynamically based on n_dim
+        self.model.startprob_ = np.full(3, 1.0 / 3)  # Uniform probabilities
+        self.model.transmat_ = np.full((3, 3), 1.0 / 3)  # Equal transition probabilities
+        self.model.means_ = np.random.rand(3, len(feature_settings))  # Random means with correct shape
+        self.model.covars_ = np.full((3, len(feature_settings)), 0.1)  # Small diagonal covariance values
+
         features_scaled, bars = self.get_features(bars, feature_settings)
         self.model.fit(features_scaled)
         self.map_regimes(bars, features_scaled)
@@ -88,13 +97,14 @@ class HMMRegimePrediction(object):
                 score += 1
         return score
 
-    def validate(self, train_bars, test_bars, feature_settings, plot):
+    def validate(self, train_bars, test_bars, feature_settings, plot, seed=0):
         """Trains HMM, evaluates accuracy, and visualizes results."""
-        print(f"Training HMM on {train_bars.shape[0]} bars with\nFeatures: {feature_settings}")
+        print(f"Training HMM on {train_bars.shape[0]} bars at {seed} seed with\nFeatures: {feature_settings}")
+
         try:
-            self.fit(train_bars, feature_settings)
+            self.fit(train_bars, feature_settings, seed=seed)
         except IndexError as e:
-            print("Too little clusters to fit. Skipping validation...")
+            print(f"Too little clusters to fit. Skipping validation...")
             return 0.0
 
         minimum, maximum, mean, median, std_deviation = hmm_test.get_stats(pd.concat([train_bars, test_bars]), "close_pc", False)
