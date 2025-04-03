@@ -1,0 +1,106 @@
+Features,Accuracy
+['open_pc'],26.00732600732601
+['high_pc'],26.00732600732601
+['low_pc'],32.6007326007326
+['close_pc'],35.53113553113553
+['volume_pc'],34.065934065934066
+['vwap_pc'],23.809523809523807
+['fracocp'],33.33333333333333
+['frachp'],31.868131868131865
+['fraclp'],34.065934065934066
+['sma_1'],38.095238095238095
+['sma_2'],41.02564102564102
+['sma_3'],41.39194139194139
+['sma_4'],36.26373626373626
+['ema_1'],37.72893772893773
+['ema_2'],38.82783882783883
+['ema_3'],40.29304029304029
+['ema_4'],37.72893772893773
+['atr'],34.065934065934066
+['natr'],26.73992673992674
+['tr'],26.73992673992674
+['rsi'],39.56043956043956
+['slow_k'],30.036630036630036
+['slow_d'],29.67032967032967
+['three_black_crows'],0.0
+['three_inside'],22.344322344322347
+['three_lines'],0.0
+['three_outside'],23.44322344322344
+['three_stars'],0.0
+['three_whitesoldiers'],0.0
+['abandoned_baby'],0.0
+['advance_block'],0.0
+['belthold'],24.175824175824175
+['breakaway'],0.0
+['closing_marubozu'],27.106227106227106
+['conceal_baby'],0.0
+['counterattack'],0.0
+['dark_cloud_cover'],0.0
+['doji'],28.93772893772894
+['doji_star'],24.175824175824175
+['dragonfly_doji'],0.0
+['engulfing'],23.076923076923077
+['evening_doji_star'],0.0
+['evening_star'],0.0
+['gap_side_by_side'],22.344322344322347
+['gravestone_doji'],0.0
+['hammer'],0.0
+['hanging_man'],0.0
+['harami'],23.809523809523807
+['harami_cross'],23.076923076923077
+['high_wave'],20.87912087912088
+['hikkake'],24.175824175824175
+['homing_pigeon'],0.0
+['identical_three_crows'],0.0
+['in_neck'],0.0
+['inverted_hammer'],0.0
+['kicking'],0.0
+['kicking_by_length'],0.0
+['ladder_bottom'],0.0
+['long_leader'],0.0
+['long_line'],26.00732600732601
+['marubozu'],23.44322344322344
+['matching_low'],0.0
+['mat_hold'],0.0
+['morning_doji_star'],0.0
+['morning_star'],0.0
+['on_neck'],0.0
+['piercing'],0.0
+['rickshaw_man'],0.0
+['rise_fall_three_methods'],0.0
+['separating_lines'],22.344322344322347
+['shooting_star'],0.0
+['short_line'],23.076923076923077
+['spinning_top'],22.344322344322347
+['stalled_pattern'],0.0
+['stick_sandwich'],0.0
+['takuri'],31.135531135531135
+['tasuki_gap'],22.344322344322347
+['thrusting'],0.0
+['tristar'],0.0
+['unique_3_river'],0.0
+['upside_gap_2_crows'],0.0
+['side_gap_3_methods'],21.978021978021978
+['ad'],36.63003663003663
+['adosc'],31.5018315018315
+['obv'],36.63003663003663
+['adx'],36.63003663003663
+['ht_trendline'],42.49084249084249
+['kama'],36.26373626373626
+['mama'],38.46153846153847
+['fama'],44.32234432234432
+['sar'],31.5018315018315
+['volatility'],32.967032967032964
+"['open_pc', 'high_pc']",37.362637362637365
+"['open_pc', 'low_pc']",32.967032967032964
+"['open_pc', 'close_pc']",36.26373626373626
+"['open_pc', 'volume_pc']",32.967032967032964
+"['open_pc', 'vwap_pc']",34.43223443223443
+"['open_pc', 'fracocp']",33.6996336996337
+"['open_pc', 'frachp']",36.996336996337
+"['open_pc', 'fraclp']",34.43223443223443
+"['open_pc', 'sma_1']",36.63003663003663
+"['open_pc', 'sma_2']",42.49084249084249
+"['open_pc', 'sma_3']",41.75824175824176
+"['open_pc', 'sma_4']",34.065934065934066
+"['open_pc', 'ema_1']",35.8974358974359

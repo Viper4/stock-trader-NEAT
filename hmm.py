@@ -79,7 +79,7 @@ class HMMRegimePrediction(object):
         score = 0
         for i in tqdm(range(bars.shape[0] - 1)):
             predicted = bars.iloc[i].regime
-            actual_change = bars.iloc[i + 1].returns
+            actual_change = bars.iloc[i + 1].close_pc
 
             if ((predicted == "Bull" and actual_change > threshold * std_deviation)
                     or (predicted == "Bear" and actual_change < -threshold * std_deviation)
@@ -111,7 +111,7 @@ class HMMRegimePrediction(object):
             bars_per_process = test_bars.shape[0] // processes
 
             for i in range(processes):
-                args.append((test_bars[i*bars_per_process:(i+1)*bars_per_process], std_deviation, 0.75))
+                args.append((test_bars[i*bars_per_process:(i+1)*bars_per_process], std_deviation, 0.25))
 
             results_async = pool.starmap_async(self.get_score, args)
             results = results_async.get()
@@ -121,7 +121,7 @@ class HMMRegimePrediction(object):
             pool.close()
             pool.join()
         else:
-            total_predictions = self.get_score(test_bars, std_deviation)
+            total_predictions = self.get_score(test_bars, std_deviation, 0.25)
 
         accuracy = (correct_predictions / total_predictions) * 100
         print(f"Accuracy: {accuracy:.2f}%")
@@ -310,7 +310,7 @@ def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df)
 
 def run_regime_test(train_bars_df, test_bars_df, features):
     regime_predictor = HMMRegimePrediction(features)
-    regime_predictor.validate(train_bars_df, test_bars_df, 8, True)
+    regime_predictor.validate(train_bars_df, test_bars_df, 2, True)
     start_time = time.time()
     predicted_regime = regime_predictor.predict_probability(test_bars_df)
     print(f"Predicted:", predicted_regime)
@@ -406,7 +406,6 @@ def get_stats(bars, column, plot):
     return minimum, maximum, mean, median, std_deviation
 
 
-
 if __name__ == "__main__":
     user_input = input("Enter command (search, test, correlation): ")
     if not os.path.exists(DATA_PATH):
@@ -455,6 +454,7 @@ if __name__ == "__main__":
         bars_df["atr"] = bars_df["atr"].pct_change(fill_method=None)
         bars_df["natr"] = talib.NATR(bars_df["high"], bars_df["low"], bars_df["close"], timeperiod=14)
         bars_df["natr"] = bars_df["natr"].pct_change(fill_method=None)
+        bars_df["tr"] = talib.TRANGE(bars_df["high"], bars_df["low"], bars_df["close"]).pct_change(fill_method=None)
         bars_df["rsi"] = (talib.RSI(bars_df["close"], timeperiod=14) - 50) / 50
 
         slow_k, slow_d = talib.STOCH(bars_df["high"], bars_df["low"], bars_df["close"], fastk_period=5,
@@ -576,7 +576,7 @@ if __name__ == "__main__":
         "fracocp", "frachp", "fraclp",
         "sma_1", "sma_2", "sma_3", "sma_4",
         "ema_1", "ema_2", "ema_3", "ema_4",
-        "atr", "natr", "rsi", "slow_k", "slow_d",
+        "atr", "natr", "tr", "rsi", "slow_k", "slow_d",
         "three_black_crows", "three_inside", "three_lines", "three_outside",
         "three_stars", "three_whitesoldiers", "abandoned_baby", "advance_block",
         "belthold", "breakaway", "closing_marubozu", "conceal_baby",
@@ -597,11 +597,11 @@ if __name__ == "__main__":
     ]
 
     if user_input == "search":
-        run_regime_search(train_bars_df, test_bars_df, all_features, 8)
+        run_regime_search(train_bars_df, test_bars_df, all_features, 2)
     elif user_input == "test":
         # ["close_pc", "ema_1"] accuracy isn't good but looking at the graph it actually seems the most accurate
 
-        run_regime_test(train_bars_df, test_bars_df, ["close_pc"])
+        run_regime_test(train_bars_df, test_bars_df, ["close_pc", "ema_2"])
     elif user_input == "correlation":
         features = all_features
         run_regime_test(train_bars_df, test_bars_df, features)
@@ -641,8 +641,10 @@ if __name__ == "__main__":
         plt.title("Feature Combination Accuracy Rankings")
         plt.gca().invert_yaxis()  # Best at top
         plt.show()
+
+        run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(best_features))
     elif user_input == "get_stats":
-        get_stats(pd.concat([train_bars_df, test_bars_df]), "close", True)
+        get_stats(pd.concat([train_bars_df, test_bars_df]), "close_pc", True)
 
     '''run_test_price_predict(16, 50, train_bars, bars_df[train_size + 1:])
     run_test_price_predict(8, 50, train_bars, bars_df[train_size + 1:])

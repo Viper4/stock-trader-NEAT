@@ -1,0 +1,144 @@
+Features,Accuracy
+"['open_pc', 'atr']",47.65896544673891
+['atr'],47.3522796974034
+['natr'],47.22960539766919
+"['open_pc', 'vwap_pc']",47.20915968104682
+"['open_pc', 'in_neck']",47.16826824780209
+"['open_pc', 'evening_star']",46.96381108157841
+['three_lines'],46.922919648333675
+"['open_pc', 'three_lines']",46.922919648333675
+"['open_pc', 'evening_doji_star']",46.902473931711306
+['rise_fall_three_methods'],46.88202821508894
+['separating_lines'],46.86158249846657
+['tasuki_gap'],46.86158249846657
+"['open_pc', 'conceal_baby']",46.841136781844206
+['three_inside'],46.82069106522184
+['tristar'],46.80024534859947
+['side_gap_3_methods'],46.80024534859947
+"['open_pc', 'ema_1']",46.7797996319771
+"['open_pc', 'identical_three_crows']",46.75935391535474
+['doji_star'],46.61623389899816
+"['open_pc', 'doji_star']",46.61623389899816
+['marubozu'],46.16642813330607
+['harami_cross'],46.14598241668371
+"['open_pc', 'harami_cross']",46.14598241668371
+['three_outside'],46.0846452668166
+['closing_marubozu'],45.69617665099162
+"['open_pc', 'closing_marubozu']",45.69617665099162
+['high_pc'],45.08280515232059
+['belthold'],44.96013085258638
+"['open_pc', 'belthold']",44.96013085258638
+"['open_pc', 'natr']",44.93968513596401
+"['open_pc', 'close_pc']",44.79656511960744
+"['open_pc', 'hammer']",44.79656511960744
+['high_wave'],44.714782253117974
+"['open_pc', 'high_wave']",44.714782253117974
+"['open_pc', 'fracocp']",44.612553670006136
+['ema_1'],44.55121652013903
+['long_line'],44.244530770803514
+"['open_pc', 'sma_1']",44.019627887957476
+['open_pc'],43.42670210590881
+['spinning_top'],42.56798200776937
+['fama'],42.11817624207728
+['sma_1'],41.77059905949704
+['ema_2'],40.339398895931296
+['ad'],40.298507462686565
+"['open_pc', 'ema_3']",39.76691883050501
+"['open_pc', 'ema_2']",39.153547331833984
+['ht_trendline'],38.70374156614189
+['adosc'],38.56062154978532
+"['open_pc', 'rsi']",38.49928439991822
+['ema_3'],38.43794725005111
+['rsi'],37.926804334491926
+['sma_2'],37.74279288489061
+"['open_pc', 'sma_3']",37.74279288489061
+['sma_3'],37.23164996933143
+['sar'],36.59783275403803
+"['open_pc', 'ema_4']",36.16847270496831
+['sma_4'],36.1071355551012
+['adx'],36.06624412185647
+"['open_pc', 'sma_2']",35.53465548967492
+['ema_4'],35.51420977305255
+"['open_pc', 'fraclp']",35.268861173584135
+['kama'],35.00306685749335
+['slow_d'],34.716826824780206
+['short_line'],34.32835820895522
+"['open_pc', 'slow_d']",34.185238192598646
+['obv'],33.81721529339604
+"['open_pc', 'slow_k']",33.653649560417094
+"['open_pc', 'low_pc']",33.42874667757105
+['fraclp'],33.38785524432632
+"['open_pc', 'frachp']",33.16295236148027
+"['open_pc', 'doji']",33.16295236148027
+['slow_k'],32.958495195256596
+['volatility'],32.93804947863423
+"['open_pc', 'sma_4']",32.3860151298303
+"['open_pc', 'volume_pc']",32.14066653036189
+['low_pc'],32.058883663872415
+['frachp'],30.750357800040888
+"['open_pc', 'dragonfly_doji']",30.320997750971173
+['vwap_pc'],29.74851768554488
+['mama'],28.889797587405436
+"['open_pc', 'breakaway']",28.7875690042936
+['fracocp'],28.68534042118176
+"['open_pc', 'three_black_crows']",28.52177468820282
+"['open_pc', 'counterattack']",28.46043753833572
+"['open_pc', 'dark_cloud_cover']",28.399100388468618
+['volume_pc'],27.295031690860768
+"['open_pc', 'high_pc']",27.295031690860768
+['close_pc'],27.09057452463709
+['hikkake'],26.967900224902884
+['harami'],25.659374361071357
+"['open_pc', 'hikkake']",25.107340012267432
+"['open_pc', 'hanging_man']",24.902882846043752
+"['open_pc', 'gravestone_doji']",24.841545696176652
+"['open_pc', 'homing_pigeon']",24.534859946841138
+"['open_pc', 'three_stars']",24.51441423021877
+"['open_pc', 'three_inside']",24.4939685135964
+"['open_pc', 'three_outside']",24.4939685135964
+"['open_pc', 'advance_block']",24.4939685135964
+"['open_pc', 'gap_side_by_side']",24.4939685135964
+"['open_pc', 'harami']",24.4939685135964
+"['open_pc', 'three_whitesoldiers']",24.473522796974034
+['gap_side_by_side'],24.453077080351665
+"['open_pc', 'engulfing']",22.428951134737275
+['engulfing'],22.306276835003068
+['three_black_crows'],0.0
+['three_stars'],0.0
+['three_whitesoldiers'],0.0
+['abandoned_baby'],0.0
+['advance_block'],0.0
+['breakaway'],0.0
+['conceal_baby'],0.0
+['counterattack'],0.0
+['dark_cloud_cover'],0.0
+['doji'],0.0
+['dragonfly_doji'],0.0
+['evening_doji_star'],0.0
+['evening_star'],0.0
+['gravestone_doji'],0.0
+['hammer'],0.0
+['hanging_man'],0.0
+['homing_pigeon'],0.0
+['identical_three_crows'],0.0
+['in_neck'],0.0
+['inverted_hammer'],0.0
+['kicking'],0.0
+['kicking_by_length'],0.0
+['ladder_bottom'],0.0
+['long_leader'],0.0
+['matching_low'],0.0
+['mat_hold'],0.0
+['morning_doji_star'],0.0
+['morning_star'],0.0
+['on_neck'],0.0
+['piercing'],0.0
+['rickshaw_man'],0.0
+['shooting_star'],0.0
+['stalled_pattern'],0.0
+['stick_sandwich'],0.0
+['takuri'],0.0
+['thrusting'],0.0
+['unique_3_river'],0.0
+['upside_gap_2_crows'],0.0
+"['open_pc', 'abandoned_baby']",0.0
