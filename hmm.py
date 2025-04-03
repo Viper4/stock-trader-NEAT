@@ -21,8 +21,8 @@ from scipy.stats import chi2_contingency
 import seaborn as sns
 from datetime import timedelta
 
-DATA_PATH = SAVE_DIR + "HMM\\bars-data-TSLA-1h_2019-1-1_2025-4-1.gz"
-TESTED_PATH = SAVE_DIR + "HMM\\tested-TSLA-1h_2019-1-1_2025-4-1.csv"
+DATA_PATH = SAVE_DIR + "HMM\\bars-data-QQQ-1h_2019-1-1_2025-4-1.gz"
+TESTED_PATH = SAVE_DIR + "HMM\\tested-QQQ-1h_2019-1-1_2025-4-1.csv"
 
 
 class HMMRegimePrediction(object):
@@ -454,7 +454,8 @@ if __name__ == "__main__":
         bars_df["atr"] = bars_df["atr"].pct_change(fill_method=None)
         bars_df["natr"] = talib.NATR(bars_df["high"], bars_df["low"], bars_df["close"], timeperiod=14)
         bars_df["natr"] = bars_df["natr"].pct_change(fill_method=None)
-        bars_df["tr"] = talib.TRANGE(bars_df["high"], bars_df["low"], bars_df["close"]).pct_change(fill_method=None)
+        bars_df["tr"] = talib.TRANGE(bars_df["high"], bars_df["low"], bars_df["close"])
+        bars_df["tr"] = bars_df["tr"].pct_change(fill_method=None).replace(np.inf, 1).replace(-np.inf, -1)
         bars_df["rsi"] = (talib.RSI(bars_df["close"], timeperiod=14) - 50) / 50
 
         slow_k, slow_d = talib.STOCH(bars_df["high"], bars_df["low"], bars_df["close"], fastk_period=5,
@@ -644,7 +645,7 @@ if __name__ == "__main__":
 
         run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(best_features))
     elif user_input == "get_stats":
-        get_stats(pd.concat([train_bars_df, test_bars_df]), "close_pc", True)
+        get_stats(pd.concat([train_bars_df, test_bars_df]), "tr", True)
 
     '''run_test_price_predict(16, 50, train_bars, bars_df[train_size + 1:])
     run_test_price_predict(8, 50, train_bars, bars_df[train_size + 1:])

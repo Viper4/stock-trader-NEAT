@@ -18,3 +18,590 @@ Features,Accuracy
 ['ema_4'],38.314883148831484
 ['atr'],24.600246002460025
 ['natr'],40.56990569905699
+['tr'],29.00779007790078
+['rsi'],39.56539565395654
+['slow_k'],35.05535055350554
+['slow_d'],36.20336203362034
+['three_black_crows'],0.0
+['three_inside'],42.94792947929479
+['three_lines'],42.76342763427634
+['three_outside'],42.435424354243544
+['three_stars'],0.0
+['three_whitesoldiers'],0.0
+['abandoned_baby'],0.0
+['advance_block'],0.0
+['belthold'],41.779417794177945
+['breakaway'],0.0
+['closing_marubozu'],28.782287822878228
+['conceal_baby'],0.0
+['counterattack'],0.0
+['dark_cloud_cover'],0.0
+['doji'],0.0
+['doji_star'],42.61992619926199
+['dragonfly_doji'],0.0
+['engulfing'],25.994259942599424
+['evening_doji_star'],0.0
+['evening_star'],0.0
+['gap_side_by_side'],42.61992619926199
+['gravestone_doji'],0.0
+['hammer'],0.0
+['hanging_man'],0.0
+['harami'],41.86141861418614
+['harami_cross'],28.49528495284953
+['high_wave'],41.348913489134894
+['hikkake'],40.07790077900779
+['homing_pigeon'],0.0
+['identical_three_crows'],0.0
+['in_neck'],0.0
+['inverted_hammer'],0.0
+['kicking'],0.0
+['kicking_by_length'],0.0
+['ladder_bottom'],0.0
+['long_leader'],0.0
+['long_line'],41.348913489134894
+['marubozu'],42.10742107421074
+['matching_low'],0.0
+['mat_hold'],0.0
+['morning_doji_star'],0.0
+['morning_star'],36.141861418614184
+['on_neck'],0.0
+['piercing'],0.0
+['rickshaw_man'],0.0
+['rise_fall_three_methods'],0.0
+['separating_lines'],42.72242722427224
+['shooting_star'],0.0
+['short_line'],31.098810988109882
+['spinning_top'],39.66789667896679
+['stalled_pattern'],0.0
+['stick_sandwich'],0.0
+['takuri'],0.0
+['tasuki_gap'],42.66092660926609
+['thrusting'],0.0
+['tristar'],42.476424764247646
+['unique_3_river'],0.0
+['upside_gap_2_crows'],0.0
+['side_gap_3_methods'],42.66092660926609
+['ad'],28.761787617876177
+['adosc'],41.69741697416974
+['obv'],28.392783927839275
+['adx'],34.542845428454285
+['ht_trendline'],40.241902419024186
+['kama'],42.455924559245595
+['mama'],29.766297662976633
+['fama'],30.29930299302993
+['sar'],33.456334563345635
+['volatility'],33.92783927839279
+"['open_pc', 'high_pc']",33.00533005330053
+"['open_pc', 'low_pc']",45.3259532595326
+"['open_pc', 'close_pc']",37.35137351373513
+"['open_pc', 'volume_pc']",30.873308733087327
+"['open_pc', 'vwap_pc']",25.338253382533825
+"['open_pc', 'fracocp']",36.12136121361213
+"['open_pc', 'frachp']",33.845838458384584
+"['open_pc', 'fraclp']",34.70684706847069
+"['open_pc', 'sma_1']",43.398933989339895
+"['open_pc', 'sma_2']",42.35342353423534
+"['open_pc', 'sma_3']",41.00041000410004
+"['open_pc', 'sma_4']",37.31037310373104
+"['open_pc', 'ema_1']",46.719967199672
+"['open_pc', 'ema_2']",43.35793357933579
+"['open_pc', 'ema_3']",39.29889298892989
+"['open_pc', 'ema_4']",29.68429684296843
+"['open_pc', 'atr']",23.862238622386222
+"['open_pc', 'natr']",38.33538335383354
+"['open_pc', 'tr']",32.246822468224686
+"['open_pc', 'rsi']",41.615416154161544
+"['open_pc', 'slow_k']",39.36039360393604
+"['open_pc', 'slow_d']",36.859368593685936
+"['open_pc', 'three_black_crows']",28.782287822878228
+"['open_pc', 'three_inside']",42.94792947929479
+"['open_pc', 'three_lines']",42.76342763427634
+"['open_pc', 'three_outside']",42.435424354243544
+"['open_pc', 'three_stars']",0.0
+"['open_pc', 'three_whitesoldiers']",42.64042640426404
+"['open_pc', 'abandoned_baby']",28.761787617876177
+"['open_pc', 'advance_block']",42.33292332923329
+"['open_pc', 'belthold']",41.779417794177945
+"['open_pc', 'breakaway']",0.0
+"['open_pc', 'closing_marubozu']",42.025420254202544
+"['open_pc', 'conceal_baby']",0.0
+"['open_pc', 'counterattack']",28.823288232882327
+"['open_pc', 'dark_cloud_cover']",28.823288232882327
+"['open_pc', 'doji']",28.51578515785158
+"['open_pc', 'doji_star']",42.61992619926199
+"['open_pc', 'dragonfly_doji']",41.86141861418614
+"['open_pc', 'engulfing']",24.497744977449777
+"['open_pc', 'evening_doji_star']",28.700287002870027
+"['open_pc', 'evening_star']",28.700287002870027
+"['open_pc', 'gap_side_by_side']",42.61992619926199
+"['open_pc', 'gravestone_doji']",28.925789257892582
+"['open_pc', 'hammer']",28.51578515785158
+"['open_pc', 'hanging_man']",30.278802788027882
+"['open_pc', 'harami']",41.90241902419024
+"['open_pc', 'harami_cross']",28.474784747847476
+"['open_pc', 'high_wave']",41.348913489134894
+"['open_pc', 'hikkake']",31.344813448134477
+"['open_pc', 'homing_pigeon']",42.53792537925379
+"['open_pc', 'identical_three_crows']",28.761787617876177
+"['open_pc', 'in_neck']",28.761787617876177
+"['open_pc', 'inverted_hammer']",28.90528905289053
+"['open_pc', 'kicking']",42.701927019270194
+"['open_pc', 'kicking_by_length']",42.701927019270194
+"['open_pc', 'ladder_bottom']",27.982779827798275
+"['open_pc', 'long_leader']",28.33128331283313
+"['open_pc', 'long_line']",41.348913489134894
+"['open_pc', 'marubozu']",42.10742107421074
+"['open_pc', 'matching_low']",28.94628946289463
+"['open_pc', 'mat_hold']",42.68142681426814
+"['open_pc', 'morning_doji_star']",42.66092660926609
+"['open_pc', 'morning_star']",28.064780647806476
+"['open_pc', 'on_neck']",28.761787617876177
+"['open_pc', 'piercing']",42.66092660926609
+"['open_pc', 'rickshaw_man']",28.63878638786388
+"['open_pc', 'rise_fall_three_methods']",28.761787617876177
+"['open_pc', 'separating_lines']",42.72242722427224
+"['open_pc', 'shooting_star']",41.779417794177945
+"['open_pc', 'short_line']",31.098810988109882
+"['open_pc', 'spinning_top']",39.66789667896679
+"['open_pc', 'stalled_pattern']",42.701927019270194
+"['open_pc', 'stick_sandwich']",28.761787617876177
+"['open_pc', 'takuri']",28.49528495284953
+"['open_pc', 'tasuki_gap']",42.66092660926609
+"['open_pc', 'thrusting']",42.61992619926199
+"['open_pc', 'tristar']",42.476424764247646
+"['open_pc', 'unique_3_river']",42.701927019270194
+"['open_pc', 'upside_gap_2_crows']",0.0
+"['open_pc', 'side_gap_3_methods']",42.66092660926609
+"['open_pc', 'ad']",29.233292332923327
+"['open_pc', 'adosc']",29.294792947929476
+"['open_pc', 'obv']",29.86879868798688
+"['open_pc', 'adx']",34.58384583845838
+"['open_pc', 'ht_trendline']",42.35342353423534
+"['open_pc', 'kama']",43.439934399344
+"['open_pc', 'mama']",42.14842148421484
+"['open_pc', 'fama']",31.42681426814268
+"['open_pc', 'sar']",40.56990569905699
+"['open_pc', 'volatility']",34.17384173841738
+"['high_pc', 'low_pc']",32.59532595325953
+"['high_pc', 'close_pc']",47.068470684706845
+"['high_pc', 'volume_pc']",30.38130381303813
+"['high_pc', 'vwap_pc']",44.52644526445265
+"['high_pc', 'fracocp']",30.565805658056583
+"['high_pc', 'frachp']",32.55432554325543
+"['high_pc', 'fraclp']",32.492824928249284
+"['high_pc', 'sma_1']",44.362443624436246
+"['high_pc', 'sma_2']",38.78638786387864
+"['high_pc', 'sma_3']",41.16441164411644
+"['high_pc', 'sma_4']",37.12587125871259
+"['high_pc', 'ema_1']",31.73431734317343
+"['high_pc', 'ema_2']",44.17794177941779
+"['high_pc', 'ema_3']",43.111931119311194
+"['high_pc', 'ema_4']",37.904879048790484
+"['high_pc', 'atr']",35.15785157851579
+"['high_pc', 'natr']",39.52439524395244
+"['high_pc', 'tr']",27.85977859778598
+"['high_pc', 'rsi']",41.90241902419024
+"['high_pc', 'slow_k']",39.87289872898729
+"['high_pc', 'slow_d']",35.629356293562935
+"['high_pc', 'three_black_crows']",28.782287822878228
+"['high_pc', 'three_inside']",42.94792947929479
+"['high_pc', 'three_lines']",42.76342763427634
+"['high_pc', 'three_outside']",42.435424354243544
+"['high_pc', 'three_stars']",0.0
+"['high_pc', 'three_whitesoldiers']",28.823288232882327
+"['high_pc', 'abandoned_baby']",28.761787617876177
+"['high_pc', 'advance_block']",28.884788847888476
+"['high_pc', 'belthold']",41.779417794177945
+"['high_pc', 'breakaway']",0.0
+"['high_pc', 'closing_marubozu']",42.025420254202544
+"['high_pc', 'conceal_baby']",43.15293152931529
+"['high_pc', 'counterattack']",28.782287822878228
+"['high_pc', 'dark_cloud_cover']",28.823288232882327
+"['high_pc', 'doji']",28.761787617876177
+"['high_pc', 'doji_star']",42.61992619926199
+"['high_pc', 'dragonfly_doji']",29.97129971299713
+"['high_pc', 'engulfing']",24.354243542435423
+"['high_pc', 'evening_doji_star']",28.700287002870027
+"['high_pc', 'evening_star']",28.700287002870027
+"['high_pc', 'gap_side_by_side']",42.61992619926199
+"['high_pc', 'gravestone_doji']",30.09430094300943
+"['high_pc', 'hammer']",28.51578515785158
+"['high_pc', 'hanging_man']",30.31980319803198
+"['high_pc', 'harami']",41.86141861418614
+"['high_pc', 'harami_cross']",29.110291102911027
+"['high_pc', 'high_wave']",41.348913489134894
+"['high_pc', 'hikkake']",40.30340303403034
+"['high_pc', 'homing_pigeon']",28.72078720787208
+"['high_pc', 'identical_three_crows']",28.761787617876177
+"['high_pc', 'in_neck']",28.761787617876177
+"['high_pc', 'inverted_hammer']",28.90528905289053
+"['high_pc', 'kicking']",42.701927019270194
+"['high_pc', 'kicking_by_length']",42.68142681426814
+"['high_pc', 'ladder_bottom']",28.24928249282493
+"['high_pc', 'long_leader']",34.132841328413285
+"['high_pc', 'long_line']",41.348913489134894
+"['high_pc', 'marubozu']",42.10742107421074
+"['high_pc', 'matching_low']",28.94628946289463
+"['high_pc', 'mat_hold']",42.701927019270194
+"['high_pc', 'morning_doji_star']",28.761787617876177
+"['high_pc', 'morning_star']",28.843788437884378
+"['high_pc', 'on_neck']",28.761787617876177
+"['high_pc', 'piercing']",28.782287822878228
+"['high_pc', 'rickshaw_man']",32.10332103321033
+"['high_pc', 'rise_fall_three_methods']",28.761787617876177
+"['high_pc', 'separating_lines']",42.72242722427224
+"['high_pc', 'shooting_star']",29.37679376793768
+"['high_pc', 'short_line']",28.59778597785978
+"['high_pc', 'spinning_top']",39.66789667896679
+"['high_pc', 'stalled_pattern']",28.761787617876177
+"['high_pc', 'stick_sandwich']",28.761787617876177
+"['high_pc', 'takuri']",30.463304633046327
+"['high_pc', 'tasuki_gap']",42.66092660926609
+"['high_pc', 'thrusting']",28.802788027880275
+"['high_pc', 'tristar']",42.476424764247646
+"['high_pc', 'unique_3_river']",28.761787617876177
+"['high_pc', 'upside_gap_2_crows']",28.26978269782698
+"['high_pc', 'side_gap_3_methods']",42.66092660926609
+"['high_pc', 'ad']",29.253792537925378
+"['high_pc', 'adosc']",29.581795817958177
+"['high_pc', 'obv']",41.20541205412054
+"['high_pc', 'adx']",34.952849528495285
+"['high_pc', 'ht_trendline']",37.392373923739235
+"['high_pc', 'kama']",41.28741287412874
+"['high_pc', 'mama']",30.217302173021732
+"['high_pc', 'fama']",43.111931119311194
+"['high_pc', 'sar']",33.25133251332513
+"['high_pc', 'volatility']",34.03034030340304
+"['low_pc', 'close_pc']",42.189421894218945
+"['low_pc', 'volume_pc']",32.86182861828618
+"['low_pc', 'vwap_pc']",39.77039770397704
+"['low_pc', 'fracocp']",48.25748257482575
+"['low_pc', 'frachp']",32.59532595325953
+"['low_pc', 'fraclp']",32.656826568265686
+"['low_pc', 'sma_1']",28.228782287822877
+"['low_pc', 'sma_2']",42.31242312423124
+"['low_pc', 'sma_3']",37.61787617876179
+"['low_pc', 'sma_4']",37.45387453874539
+"['low_pc', 'ema_1']",41.184911849118485
+"['low_pc', 'ema_2']",44.15744157441574
+"['low_pc', 'ema_3']",28.782287822878228
+"['low_pc', 'ema_4']",29.49979499794998
+"['low_pc', 'atr']",38.23288232882329
+"['low_pc', 'natr']",38.56088560885609
+"['low_pc', 'tr']",30.053300533005327
+"['low_pc', 'rsi']",41.758917589175894
+"['low_pc', 'slow_k']",33.00533005330053
+"['low_pc', 'slow_d']",33.37433374333743
+"['low_pc', 'three_black_crows']",42.64042640426404
+"['low_pc', 'three_inside']",42.94792947929479
+"['low_pc', 'three_lines']",42.76342763427634
+"['low_pc', 'three_outside']",42.435424354243544
+"['low_pc', 'three_stars']",0.0
+"['low_pc', 'three_whitesoldiers']",28.51578515785158
+"['low_pc', 'abandoned_baby']",28.49528495284953
+"['low_pc', 'advance_block']",28.49528495284953
+"['low_pc', 'belthold']",41.779417794177945
+"['low_pc', 'breakaway']",43.05043050430504
+"['low_pc', 'closing_marubozu']",28.228782287822877
+"['low_pc', 'conceal_baby']",0.0
+"['low_pc', 'counterattack']",28.474784747847476
+"['low_pc', 'dark_cloud_cover']",28.454284542845425
+"['low_pc', 'doji']",28.59778597785978
+"['low_pc', 'doji_star']",42.61992619926199
+"['low_pc', 'dragonfly_doji']",29.704797047970477
+"['low_pc', 'engulfing']",24.907749077490777
+"['low_pc', 'evening_doji_star']",42.68142681426814
+"['low_pc', 'evening_star']",42.66092660926609
+"['low_pc', 'gap_side_by_side']",42.61992619926199
+"['low_pc', 'gravestone_doji']",29.68429684296843
+"['low_pc', 'hammer']",31.07831078310783
+"['low_pc', 'hanging_man']",28.65928659286593
+"['low_pc', 'harami']",41.88191881918819
+"['low_pc', 'harami_cross']",28.49528495284953
+"['low_pc', 'high_wave']",41.348913489134894
+"['low_pc', 'hikkake']",39.72939729397294
+"['low_pc', 'homing_pigeon']",28.413284132841326
+"['low_pc', 'identical_three_crows']",28.65928659286593
+"['low_pc', 'in_neck']",28.49528495284953
+"['low_pc', 'inverted_hammer']",28.864288642886425
+"['low_pc', 'kicking']",28.49528495284953
+"['low_pc', 'kicking_by_length']",28.49528495284953
+"['low_pc', 'ladder_bottom']",43.21443214432144
+"['low_pc', 'long_leader']",34.31734317343174
+"['low_pc', 'long_line']",41.348913489134894
+"['low_pc', 'marubozu']",42.10742107421074
+"['low_pc', 'matching_low']",29.171791717917177
+"['low_pc', 'mat_hold']",28.51578515785158
+"['low_pc', 'morning_doji_star']",28.49528495284953
+"['low_pc', 'morning_star']",43.48093480934809
+"['low_pc', 'on_neck']",28.51578515785158
+"['low_pc', 'piercing']",28.51578515785158
+"['low_pc', 'rickshaw_man']",31.980319803198032
+"['low_pc', 'rise_fall_three_methods']",42.68142681426814
+"['low_pc', 'separating_lines']",42.72242722427224
+"['low_pc', 'shooting_star']",29.56129561295613
+"['low_pc', 'short_line']",31.098810988109882
+"['low_pc', 'spinning_top']",39.66789667896679
+"['low_pc', 'stalled_pattern']",28.49528495284953
+"['low_pc', 'stick_sandwich']",28.53628536285363
+"['low_pc', 'takuri']",30.44280442804428
+"['low_pc', 'tasuki_gap']",42.66092660926609
+"['low_pc', 'thrusting']",28.474784747847476
+"['low_pc', 'tristar']",42.476424764247646
+"['low_pc', 'unique_3_river']",28.51578515785158
+"['low_pc', 'upside_gap_2_crows']",0.0
+"['low_pc', 'side_gap_3_methods']",42.66092660926609
+"['low_pc', 'ad']",42.189421894218945
+"['low_pc', 'adosc']",28.228782287822877
+"['low_pc', 'obv']",29.97129971299713
+"['low_pc', 'adx']",34.829848298482986
+"['low_pc', 'ht_trendline']",35.67035670356704
+"['low_pc', 'kama']",38.37638376383764
+"['low_pc', 'mama']",30.29930299302993
+"['low_pc', 'fama']",42.476424764247646
+"['low_pc', 'sar']",31.918819188191883
+"['low_pc', 'volatility']",34.276342763427635
+"['close_pc', 'volume_pc']",34.132841328413285
+"['close_pc', 'vwap_pc']",46.658466584665845
+"['close_pc', 'fracocp']",45.05945059450595
+"['close_pc', 'frachp']",31.098810988109882
+"['close_pc', 'fraclp']",26.199261992619927
+"['close_pc', 'sma_1']",44.772447724477246
+"['close_pc', 'sma_2']",28.59778597785978
+"['close_pc', 'sma_3']",27.69577695776958
+"['close_pc', 'sma_4']",37.16687166871669
+"['close_pc', 'ema_1']",43.439934399344
+"['close_pc', 'ema_2']",44.42394423944239
+"['close_pc', 'ema_3']",39.134891348913484
+"['close_pc', 'ema_4']",37.72037720377204
+"['close_pc', 'atr']",33.55883558835588
+"['close_pc', 'natr']",41.656416564165646
+"['close_pc', 'tr']",27.900779007790078
+"['close_pc', 'rsi']",42.0869208692087
+"['close_pc', 'slow_k']",33.00533005330053
+"['close_pc', 'slow_d']",33.94833948339483
+"['close_pc', 'three_black_crows']",28.782287822878228
+"['close_pc', 'three_inside']",42.94792947929479
+"['close_pc', 'three_lines']",42.76342763427634
+"['close_pc', 'three_outside']",42.435424354243544
+"['close_pc', 'three_stars']",0.0
+"['close_pc', 'three_whitesoldiers']",42.64042640426404
+"['close_pc', 'abandoned_baby']",28.761787617876177
+"['close_pc', 'advance_block']",42.599425994259946
+"['close_pc', 'belthold']",41.779417794177945
+"['close_pc', 'breakaway']",0.0
+"['close_pc', 'closing_marubozu']",42.025420254202544
+"['close_pc', 'conceal_baby']",43.02993029930299
+"['close_pc', 'counterattack']",28.823288232882327
+"['close_pc', 'dark_cloud_cover']",28.823288232882327
+"['close_pc', 'doji']",28.761787617876177
+"['close_pc', 'doji_star']",42.61992619926199
+"['close_pc', 'dragonfly_doji']",41.88191881918819
+"['close_pc', 'engulfing']",24.108241082410824
+"['close_pc', 'evening_doji_star']",28.67978679786798
+"['close_pc', 'evening_star']",28.700287002870027
+"['close_pc', 'gap_side_by_side']",42.61992619926199
+"['close_pc', 'gravestone_doji']",28.925789257892582
+"['close_pc', 'hammer']",28.51578515785158
+"['close_pc', 'hanging_man']",30.278802788027882
+"['close_pc', 'harami']",41.86141861418614
+"['close_pc', 'harami_cross']",20.86920869208692
+"['close_pc', 'high_wave']",41.348913489134894
+"['close_pc', 'hikkake']",40.07790077900779
+"['close_pc', 'homing_pigeon']",42.4969249692497
+"['close_pc', 'identical_three_crows']",28.761787617876177
+"['close_pc', 'in_neck']",28.761787617876177
+"['close_pc', 'inverted_hammer']",28.90528905289053
+"['close_pc', 'kicking']",42.68142681426814
+"['close_pc', 'kicking_by_length']",42.68142681426814
+"['close_pc', 'ladder_bottom']",28.12628126281263
+"['close_pc', 'long_leader']",28.33128331283313
+"['close_pc', 'long_line']",41.348913489134894
+"['close_pc', 'marubozu']",42.10742107421074
+"['close_pc', 'matching_low']",28.94628946289463
+"['close_pc', 'mat_hold']",42.68142681426814
+"['close_pc', 'morning_doji_star']",42.66092660926609
+"['close_pc', 'morning_star']",27.77777777777778
+"['close_pc', 'on_neck']",28.761787617876177
+"['close_pc', 'piercing']",42.66092660926609
+"['close_pc', 'rickshaw_man']",28.63878638786388
+"['close_pc', 'rise_fall_three_methods']",28.761787617876177
+"['close_pc', 'separating_lines']",42.72242722427224
+"['close_pc', 'shooting_star']",42.14842148421484
+"['close_pc', 'short_line']",31.098810988109882
+"['close_pc', 'spinning_top']",39.66789667896679
+"['close_pc', 'stalled_pattern']",42.701927019270194
+"['close_pc', 'stick_sandwich']",28.74128741287413
+"['close_pc', 'takuri']",28.49528495284953
+"['close_pc', 'tasuki_gap']",42.66092660926609
+"['close_pc', 'thrusting']",42.68142681426814
+"['close_pc', 'tristar']",42.476424764247646
+"['close_pc', 'unique_3_river']",42.701927019270194
+"['close_pc', 'upside_gap_2_crows']",0.0
+"['close_pc', 'side_gap_3_methods']",42.66092660926609
+"['close_pc', 'ad']",29.294792947929476
+"['close_pc', 'adosc']",28.761787617876177
+"['close_pc', 'obv']",41.225912259122595
+"['close_pc', 'adx']",38.191881918819185
+"['close_pc', 'ht_trendline']",38.58138581385814
+"['close_pc', 'kama']",38.04838048380484
+"['close_pc', 'mama']",30.09430094300943
+"['close_pc', 'fama']",30.25830258302583
+"['close_pc', 'sar']",31.857318573185733
+"['close_pc', 'volatility']",38.76588765887659
+"['volume_pc', 'vwap_pc']",37.002870028700286
+"['volume_pc', 'fracocp']",28.884788847888476
+"['volume_pc', 'frachp']",35.342353423534234
+"['volume_pc', 'fraclp']",28.14678146781468
+"['volume_pc', 'sma_1']",28.72078720787208
+"['volume_pc', 'sma_2']",30.31980319803198
+"['volume_pc', 'sma_3']",30.77080770807708
+"['volume_pc', 'sma_4']",29.704797047970477
+"['volume_pc', 'ema_1']",46.41246412464125
+"['volume_pc', 'ema_2']",30.176301763017634
+"['volume_pc', 'ema_3']",28.823288232882327
+"['volume_pc', 'ema_4']",30.79130791307913
+"['volume_pc', 'atr']",33.29233292332923
+"['volume_pc', 'natr']",29.54079540795408
+"['volume_pc', 'tr']",37.02337023370234
+"['volume_pc', 'rsi']",30.278802788027882
+"['volume_pc', 'slow_k']",31.119311193111933
+"['volume_pc', 'slow_d']",30.66830668306683
+"['volume_pc', 'three_black_crows']",35.13735137351374
+"['volume_pc', 'three_inside']",28.51578515785158
+"['volume_pc', 'three_lines']",28.51578515785158
+"['volume_pc', 'three_outside']",28.761787617876177
+"['volume_pc', 'three_stars']",41.51291512915129
+"['volume_pc', 'three_whitesoldiers']",28.51578515785158
+"['volume_pc', 'abandoned_baby']",42.68142681426814
+"['volume_pc', 'advance_block']",28.51578515785158
+"['volume_pc', 'belthold']",28.51578515785158
+"['volume_pc', 'breakaway']",41.53341533415334
+"['volume_pc', 'closing_marubozu']",28.843788437884378
+"['volume_pc', 'conceal_baby']",41.53341533415334
+"['volume_pc', 'counterattack']",42.701927019270194
+"['volume_pc', 'dark_cloud_cover']",39.23739237392374
+"['volume_pc', 'doji']",42.68142681426814
+"['volume_pc', 'doji_star']",42.61992619926199
+"['volume_pc', 'dragonfly_doji']",28.72078720787208
+"['volume_pc', 'engulfing']",35.362853628536286
+"['volume_pc', 'evening_doji_star']",42.68142681426814
+"['volume_pc', 'evening_star']",42.66092660926609
+"['volume_pc', 'gap_side_by_side']",44.71094710947109
+"['volume_pc', 'gravestone_doji']",41.51291512915129
+"['volume_pc', 'hammer']",40.11890118901189
+"['volume_pc', 'hanging_man']",28.67978679786798
+"['volume_pc', 'harami']",29.991799917999177
+"['volume_pc', 'harami_cross']",28.90528905289053
+"['volume_pc', 'high_wave']",34.17384173841738
+"['volume_pc', 'hikkake']",41.86141861418614
+"['volume_pc', 'homing_pigeon']",28.433784337843377
+"['volume_pc', 'identical_three_crows']",42.53792537925379
+"['volume_pc', 'in_neck']",42.68142681426814
+"['volume_pc', 'inverted_hammer']",42.31242312423124
+"['volume_pc', 'kicking']",28.51578515785158
+"['volume_pc', 'kicking_by_length']",28.51578515785158
+"['volume_pc', 'ladder_bottom']",42.025420254202544
+"['volume_pc', 'long_leader']",42.68142681426814
+"['volume_pc', 'long_line']",28.782287822878228
+"['volume_pc', 'marubozu']",39.52439524395244
+"['volume_pc', 'matching_low']",42.025420254202544
+"['volume_pc', 'mat_hold']",28.51578515785158
+"['volume_pc', 'morning_doji_star']",28.51578515785158
+"['volume_pc', 'morning_star']",40.63140631406314
+"['volume_pc', 'on_neck']",42.68142681426814
+"['volume_pc', 'piercing']",28.51578515785158
+"['volume_pc', 'rickshaw_man']",39.21689216892169
+"['volume_pc', 'rise_fall_three_methods']",42.68142681426814
+"['volume_pc', 'separating_lines']",28.53628536285363
+"['volume_pc', 'shooting_star']",28.55678556785568
+"['volume_pc', 'short_line']",25.153751537515372
+"['volume_pc', 'spinning_top']",31.508815088150882
+"['volume_pc', 'stalled_pattern']",28.51578515785158
+"['volume_pc', 'stick_sandwich']",42.61992619926199
+"['volume_pc', 'takuri']",40.73390733907339
+"['volume_pc', 'tasuki_gap']",42.66092660926609
+"['volume_pc', 'thrusting']",28.49528495284953
+"['volume_pc', 'tristar']",28.49528495284953
+"['volume_pc', 'unique_3_river']",28.53628536285363
+"['volume_pc', 'upside_gap_2_crows']",41.53341533415334
+"['volume_pc', 'side_gap_3_methods']",42.66092660926609
+"['volume_pc', 'ad']",34.29684296842969
+"['volume_pc', 'adosc']",40.959409594095945
+"['volume_pc', 'obv']",30.66830668306683
+"['volume_pc', 'adx']",37.45387453874539
+"['volume_pc', 'ht_trendline']",32.369823698236985
+"['volume_pc', 'kama']",42.33292332923329
+"['volume_pc', 'mama']",39.134891348913484
+"['volume_pc', 'fama']",39.23739237392374
+"['volume_pc', 'sar']",30.75030750307503
+"['volume_pc', 'volatility']",41.53341533415334
+"['vwap_pc', 'fracocp']",25.19475194751947
+"['vwap_pc', 'frachp']",32.06232062320623
+"['vwap_pc', 'fraclp']",31.939319393193934
+"['vwap_pc', 'sma_1']",44.81344813448134
+"['vwap_pc', 'sma_2']",42.53792537925379
+"['vwap_pc', 'sma_3']",41.16441164411644
+"['vwap_pc', 'sma_4']",37.22837228372284
+"['vwap_pc', 'ema_1']",47.601476014760145
+"['vwap_pc', 'ema_2']",27.552275522755227
+"['vwap_pc', 'ema_3']",43.33743337433374
+"['vwap_pc', 'ema_4']",40.71340713407134
+"['vwap_pc', 'atr']",24.846248462484624
+"['vwap_pc', 'natr']",40.79540795407954
+"['vwap_pc', 'tr']",27.347273472734727
+"['vwap_pc', 'rsi']",42.0869208692087
+"['vwap_pc', 'slow_k']",33.41533415334153
+"['vwap_pc', 'slow_d']",34.29684296842969
+"['vwap_pc', 'three_black_crows']",28.782287822878228
+"['vwap_pc', 'three_inside']",42.94792947929479
+"['vwap_pc', 'three_lines']",42.76342763427634
+"['vwap_pc', 'three_outside']",42.435424354243544
+"['vwap_pc', 'three_stars']",42.94792947929479
+"['vwap_pc', 'three_whitesoldiers']",42.64042640426404
+"['vwap_pc', 'abandoned_baby']",28.761787617876177
+"['vwap_pc', 'advance_block']",42.33292332923329
+"['vwap_pc', 'belthold']",41.779417794177945
+"['vwap_pc', 'breakaway']",28.24928249282493
+"['vwap_pc', 'closing_marubozu']",42.025420254202544
+"['vwap_pc', 'conceal_baby']",0.0
+"['vwap_pc', 'counterattack']",28.823288232882327
+"['vwap_pc', 'dark_cloud_cover']",28.823288232882327
+"['vwap_pc', 'doji']",35.239852398523986
+"['vwap_pc', 'doji_star']",42.61992619926199
+"['vwap_pc', 'dragonfly_doji']",41.71791717917179
+"['vwap_pc', 'engulfing']",24.477244772447722
+"['vwap_pc', 'evening_doji_star']",28.65928659286593
+"['vwap_pc', 'evening_star']",28.700287002870027
+"['vwap_pc', 'gap_side_by_side']",28.61828618286183
+"['vwap_pc', 'gravestone_doji']",28.925789257892582
+"['vwap_pc', 'hammer']",28.761787617876177
+"['vwap_pc', 'hanging_man']",30.03280032800328
+"['vwap_pc', 'harami']",41.86141861418614
+"['vwap_pc', 'harami_cross']",28.413284132841326
+"['vwap_pc', 'high_wave']",41.348913489134894
+"['vwap_pc', 'hikkake']",31.18081180811808
+"['vwap_pc', 'homing_pigeon']",42.4969249692497
+"['vwap_pc', 'identical_three_crows']",28.761787617876177
+"['vwap_pc', 'in_neck']",28.761787617876177
+"['vwap_pc', 'inverted_hammer']",28.90528905289053
+"['vwap_pc', 'kicking']",42.701927019270194
+"['vwap_pc', 'kicking_by_length']",42.701927019270194
+"['vwap_pc', 'ladder_bottom']",28.228782287822877
+"['vwap_pc', 'long_leader']",28.33128331283313
+"['vwap_pc', 'long_line']",29.04879048790488
+"['vwap_pc', 'marubozu']",42.10742107421074
+"['vwap_pc', 'matching_low']",28.94628946289463
+"['vwap_pc', 'mat_hold']",42.68142681426814
+"['vwap_pc', 'morning_doji_star']",42.66092660926609
+"['vwap_pc', 'morning_star']",27.818778187781877
+"['vwap_pc', 'on_neck']",28.761787617876177
+"['vwap_pc', 'piercing']",42.66092660926609
+"['vwap_pc', 'rickshaw_man']",28.63878638786388
+"['vwap_pc', 'rise_fall_three_methods']",28.761787617876177
+"['vwap_pc', 'separating_lines']",42.72242722427224
+"['vwap_pc', 'shooting_star']",42.14842148421484
+"['vwap_pc', 'short_line']",31.098810988109882
+"['vwap_pc', 'spinning_top']",39.66789667896679
+"['vwap_pc', 'stalled_pattern']",42.701927019270194
+"['vwap_pc', 'stick_sandwich']",28.74128741287413
