@@ -1,6 +1,4 @@
-from hmmlearn.hmm import GaussianHMM
 import numpy as np
-from sklearn.preprocessing import StandardScaler
 from alpaca_trade_api.rest import REST, URL, TimeFrameUnit
 import datetime as dt
 import pytz
@@ -8,10 +6,8 @@ from constants import *
 import json
 import pandas as pd
 import itertools
-from tqdm import tqdm
 import matplotlib.pyplot as plt
 import Managers.base_manager
-from multiprocessing import Pool
 import time
 import saving
 import talib
@@ -20,235 +16,11 @@ from sklearn.feature_selection import f_classif, mutual_info_classif
 from scipy.stats import chi2_contingency
 import seaborn as sns
 from datetime import timedelta
+import HMM.models as models
+import HMM.feature_selection as feature_selection
 
-DATA_PATH = SAVE_DIR + "HMM\\bars-data-QQQ-1h_2019-1-1_2025-4-1.gz"
-TESTED_PATH = SAVE_DIR + "HMM\\tested-QQQ-1h_2019-1-1_2025-4-1.csv"
-
-
-class HMMRegimePrediction(object):
-    def __init__(self, feature_settings):
-        self.model = GaussianHMM(n_components=3, n_iter=10000)
-        self.scaler = StandardScaler()  # Store scaler for consistent transformation
-        self.regime_mapping = None  # Store regime mapping
-        self.feature_settings = feature_settings
-
-    def get_features(self, bars):
-        """Gets features from bars and scales features."""
-        bars.dropna(inplace=True)
-        features = bars[self.feature_settings].values
-        features_scaled = self.scaler.fit_transform(features)
-        return features_scaled, bars
-
-    def fit(self, bars):
-        bars.dropna(inplace=True)
-        """Fits the HMM model and maps regimes."""
-        features_scaled, bars = self.get_features(bars)
-        self.model.fit(features_scaled)
-        self.map_regimes(bars, features_scaled)
-
-    def predict_probability(self, bars):
-        features_scaled, bars = self.get_features(bars)
-        prediction_probs = self.model.predict_proba(features_scaled)
-        mapped_prediction = {}
-        for i in range(prediction_probs.shape[1]):
-            mapped_prediction[self.regime_mapping[np.int64(i)]] = float(prediction_probs[-1][i])
-        return mapped_prediction
-
-    def predict(self, bars):
-        """Predicts market regimes and returns them as mapped labels."""
-        features_scaled, bars = self.get_features(bars)
-        predicted_regimes = self.model.predict(features_scaled)
-        return np.array([self.regime_mapping[r] for r in predicted_regimes])
-
-    def map_regimes(self, bars, features):
-        """Assigns correct labels (Bull, Bear, Choppy) based on mean log return."""
-        predicted_regimes = self.model.predict(features)
-        bars["regime"] = predicted_regimes
-
-        regime_stats = bars.groupby("regime")["close_pc"].mean().sort_values()
-
-        self.regime_mapping = {
-            regime_stats.index[0]: "Bear",
-            regime_stats.index[1]: "Choppy",
-            regime_stats.index[2]: "Bull"
-        }
-
-    @staticmethod
-    def get_score(bars, std_deviation, threshold):
-        # NOTE: Sometimes terrible model just guessing one regime for entire period can get 50% accuracy
-        score = 0
-        for i in tqdm(range(bars.shape[0] - 1)):
-            predicted = bars.iloc[i].regime
-            actual_change = bars.iloc[i + 1].close_pc
-
-            if ((predicted == "Bull" and actual_change > threshold * std_deviation)
-                    or (predicted == "Bear" and actual_change < -threshold * std_deviation)
-                    or (predicted == "Choppy" and abs(actual_change) <= threshold * std_deviation)):
-                score += 1
-        return score
-
-    def validate(self, train_bars, test_bars, processes, plot):
-        """Trains HMM, evaluates accuracy, and visualizes results."""
-        print(f"Training HMM on {train_bars.shape[0]} bars with\nFeatures: {self.feature_settings}")
-        try:
-            self.fit(train_bars)
-        except IndexError as e:
-            print("Too little clusters to fit. Skipping validation...")
-            return 0.0
-
-        minimum, maximum, mean, median, std_deviation = get_stats(pd.concat([train_bars_df, test_bars_df]), "close_pc", False)
-        print(f"Predicting regimes on {test_bars.shape[0]} test bars with stdv {std_deviation}...")
-        predicted_labels = self.predict(test_bars)
-        test_bars["regime"] = predicted_labels
-
-        # Calculate Accuracy
-        correct_predictions = 0
-        total_predictions = len(test_bars) - 1  # Ignore last row due to comparing predicted with future price
-
-        if processes > 1:
-            pool = Pool(processes=processes)
-            args = []
-            bars_per_process = test_bars.shape[0] // processes
-
-            for i in range(processes):
-                args.append((test_bars[i*bars_per_process:(i+1)*bars_per_process], std_deviation, 0.25))
-
-            results_async = pool.starmap_async(self.get_score, args)
-            results = results_async.get()
-            for result in results:
-                correct_predictions += result
-
-            pool.close()
-            pool.join()
-        else:
-            total_predictions = self.get_score(test_bars, std_deviation, 0.25)
-
-        accuracy = (correct_predictions / total_predictions) * 100
-        print(f"Accuracy: {accuracy:.2f}%")
-
-        # Plot stock prices with color-coded regimes
-        if plot:
-            plt.figure(figsize=(15, 6))
-            plt.plot(test_bars.index, test_bars["close"], color="black", label="Stock Price")
-
-            colors = {"Bull": "green", "Bear": "red", "Choppy": "yellow"}
-            for regime, color in colors.items():
-                plt.fill_between(
-                    test_bars.index,
-                    test_bars["close"].min(),
-                    test_bars["close"].max(),
-                    where=test_bars["regime"] == regime,
-                    color=color,
-                    alpha=0.3,
-                    label=regime
-                )
-
-            plt.legend()
-            plt.title(f"Stock Price with Predicted Market Regimes (Accuracy: {accuracy:.2f}%)")
-            plt.show()
-
-        return accuracy
-
-
-class HMMPricePrediction(object):
-    def __init__(self, num_components, num_latent_bars):
-        self.model = GaussianHMM(n_components=num_components, init_params="")
-        self.model.startprob_ = np.full(num_components, 1 / num_components)  # Uniform probabilities
-        self.model.transmat_ = np.full((num_components, num_components), 1 / num_components)  # Equal transition probabilities
-        self.model.means_ = np.random.rand(num_components, 3)  # Random means for each state
-        self.model.covars_ = np.full((num_components, 3), 0.1)  # Small diagonal covariance values
-        self.num_latent_bars = num_latent_bars
-        self.pool = Pool(processes=4)
-
-    def augment_bars(self, bars):
-        fracocp = (bars["close"] - bars["open"]) / bars["open"]
-        frachp = (bars["high"] - bars["open"]) / bars["open"]
-        fraclp = (bars["open"] - bars["low"]) / bars["open"]
-        new_dataframe = pd.DataFrame(data={"delOpenClose": fracocp,
-                                           "delHighOpen": frachp,
-                                           "delLowOpen": fraclp},
-                                     index=bars.index)
-
-        return new_dataframe
-
-    def get_features(self, dataframe):
-        return np.column_stack((dataframe["delOpenClose"], dataframe["delHighOpen"], dataframe["delLowOpen"]))
-
-    def fit_augmented(self, augmented_bars):
-        features = self.get_features(augmented_bars)
-        self.model.fit(features)
-
-    def fit(self, bars):
-        augmented_bars = self.augment_bars(bars)
-        features = self.get_features(augmented_bars)
-        self.model.fit(features)
-
-    def get_possible_outcomes(self, augmented_bars):
-        fracocp = augmented_bars["delOpenClose"]
-        frachp = augmented_bars["delHighOpen"]
-        fraclp = augmented_bars["delLowOpen"]
-
-        sample_space_fracocp = np.linspace(fracocp.min(), fracocp.max(), 50)
-        sample_space_fraclp = np.linspace(fraclp.min(), frachp.max(), 10)
-        sample_space_frachp = np.linspace(frachp.min(), frachp.max(), 10)
-
-        return pd.DataFrame(data={"outcome": list(itertools.product(sample_space_fracocp, sample_space_fraclp, sample_space_frachp))})
-
-    def predict(self, open_price, possible_outcomes, features):
-        outcome_scores = possible_outcomes["outcome"].apply(lambda outcome: self.model.score(np.vstack((features, outcome))))
-
-        # Take the most probable outcome as the one with the highest score
-        most_probable_outcome = possible_outcomes["outcome"].iloc[np.argmax(outcome_scores)]
-        return open_price * (1 + most_probable_outcome[0])
-
-    def predict_augmented(self, open_price, augmented_bars):
-        augmented_bars = augmented_bars[max(0, augmented_bars.shape[0] - self.num_latent_bars):]
-        possible_outcomes = self.get_possible_outcomes(augmented_bars)
-        features = self.get_features(augmented_bars)
-        return self.predict(open_price, possible_outcomes, features)
-
-    def predict_latest(self, bars):
-        augmented_bars = self.augment_bars(bars[max(0, bars.shape[0] - self.num_latent_bars):])
-        possible_outcomes = self.get_possible_outcomes(augmented_bars)
-        features = self.get_features(augmented_bars)
-        return self.predict(bars.iloc[-1].open, possible_outcomes, features)
-
-    def validate(self, bars):
-        print("Validating HMM Price Prediction...")
-
-        possible_outcomes = self.get_possible_outcomes(self.augment_bars(bars))
-        predicted_close_prices = []
-
-        for i in tqdm(range(self.num_latent_bars, bars.shape[0])):
-            # Calculate start and end indices
-            previous_data_start_index = max(0, i - self.num_latent_bars)
-            # Acquire test data features for these days
-            previous_data = self.get_features(self.augment_bars(bars[previous_data_start_index:i]))
-
-            predicted_close_prices.append(self.predict(bars.iloc[i].open, possible_outcomes, previous_data))
-
-        plt.figure(figsize=(30, 10), dpi=80)
-        plt.rcParams.update({'font.size': 18})
-
-        x_axis = np.array(bars.index[self.num_latent_bars:], dtype='datetime64[ms]')
-        plt.plot(x_axis, bars[self.num_latent_bars:]["close"], 'b+-', label="Actual close prices")
-        plt.plot(x_axis, predicted_close_prices, 'ro-', label="Predicted close prices")
-        plt.legend(prop={'size': 20})
-        plt.show()
-
-        ae = abs(bars[self.num_latent_bars:]["close"] - predicted_close_prices)
-        min_ae = min(ae)
-        max_ae = max(ae)
-        avg_ae = sum(ae) / ae.shape[0]
-
-        plt.figure(figsize=(30, 10), dpi=80)
-
-        print("Min Error: ", min_ae)
-        print("Max Error: ", max_ae)
-        print("Avg Error: ", avg_ae)
-        plt.plot(x_axis, ae, 'go-', label="Error")
-        plt.legend(prop={'size': 20})
-        plt.show()
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-QQQ-1h_2019-1-1_2025-4-1.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-QQQ-1h_2019-1-1_2025-4-1.csv"
 
 
 class CorrelationAnalysis(object):
@@ -297,7 +69,7 @@ class CorrelationAnalysis(object):
 def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df):
     print(f"{num_components} components and {num_latent_bars} latent: ")
 
-    hmm_predictor = HMMPricePrediction(num_components, num_latent_bars)
+    hmm_predictor = models.HMMPricePrediction(num_components, num_latent_bars)
     hmm_predictor.fit(train_bars_df)
     hmm_predictor.validate(test_bars_df)
     start_time = time.time()
@@ -308,20 +80,21 @@ def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df)
     print(f"Finished in {time.time() - start_time} seconds")
 
 
-def run_regime_test(train_bars_df, test_bars_df, features):
-    regime_predictor = HMMRegimePrediction(features)
-    regime_predictor.validate(train_bars_df, test_bars_df, 2, True)
+def run_regime_test(train_bars, test_bars, features, plot):
+    regime_predictor = models.HMMRegimePrediction(features)
+    regime_predictor.validate(train_bars, test_bars, 2, plot)
     start_time = time.time()
-    predicted_regime = regime_predictor.predict_probability(test_bars_df)
-    print(f"Predicted:", predicted_regime)
+    predicted_regimes = regime_predictor.predict_probability(test_bars_df)
+    print(f"Regime probabilities:\n", predicted_regimes)
     print("Finished in ", time.time() - start_time)
+    print()
 
 
 def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterations=-1):
     feature_combinations = []
     print("Generating combinations")
-    for i in tqdm(range(1, 5)):
-        feature_combinations.extend(itertools.combinations(all_features, i))
+    for i in range(1, 5):
+        feature_combinations.extend(itertools.combinations(features, i))
     print(f"Generated {len(feature_combinations)} combinations")
 
     best_features = []
@@ -353,7 +126,7 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
 
         key = str(features_list)
         if key not in tested:
-            regime_predictor = HMMRegimePrediction(features_list)
+            regime_predictor = models.HMMRegimePrediction(features_list)
             accuracy = regime_predictor.validate(train_bars, test_bars, val_processes, False)
             tested[key] = accuracy
             saving.SaveSystem.save_to_csv([features_list, accuracy], TESTED_PATH, "a")
@@ -406,8 +179,14 @@ def get_stats(bars, column, plot):
     return minimum, maximum, mean, median, std_deviation
 
 
+def run_random_forest(bars, features):
+    run_regime_test(bars, bars, features, False)
+    random_forest = feature_selection.RandomForestFeatureSelection()
+    print(random_forest.evaluate(bars, features))
+
+
 if __name__ == "__main__":
-    user_input = input("Enter command (search, test, correlation): ")
+    user_input = input("Enter command (search, price test, reg test, reg best, correlation, stats, random forest): ")
     if not os.path.exists(DATA_PATH):
         symbol = input("Enter symbol: ")
         start = input("Enter start date (YYYY-MM-DD): ")
@@ -599,18 +378,26 @@ if __name__ == "__main__":
 
     if user_input == "search":
         run_regime_search(train_bars_df, test_bars_df, all_features, 2)
-    elif user_input == "test":
-        # ["close_pc", "ema_1"] accuracy isn't good but looking at the graph it actually seems the most accurate
-
-        run_regime_test(train_bars_df, test_bars_df, ["close_pc", "ema_2"])
+    elif user_input == "price test":
+        run_price_test(input("Number of components: "), int(input("Number of latent bars: ")), train_bars_df, test_bars_df)
+    elif user_input == "reg test":
+        # ["close_pc", "ema_1"] accuracy isn't good but looking at the graph it actually seems the best
+        test_features = ast.literal_eval(input("Type features, Ex: ['close_pc', 'ema_1']: "))
+        run_regime_test(train_bars_df, test_bars_df, test_features, True)
     elif user_input == "correlation":
-        features = all_features
-        run_regime_test(train_bars_df, test_bars_df, features)
-        correlation = CorrelationAnalysis(features)
+        feature_input = input("Type features or 'all', Ex: ['close_pc', 'ema_1']: ")
+        if feature_input == "all":
+            corr_features = all_features
+        else:
+            corr_features = ast.literal_eval(feature_input)
+        run_regime_test(train_bars_df, test_bars_df, corr_features, True)
+        correlation = CorrelationAnalysis(corr_features)
         correlation_matrix = correlation.compute_feature_correlation(test_bars_df)
-        print("Correlation matrix:\n", correlation_matrix)
+        print("Correlation matrix:")
+        with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+            print(correlation_matrix)
         correlation.plot_correlation(correlation_matrix)
-    elif user_input == "get_best":
+    elif user_input == "reg best":
         results = []
         rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
         for row in rows:
@@ -630,10 +417,10 @@ if __name__ == "__main__":
 
         sorted_features = []
         sorted_accuracies = []
-        for features, accuracy in results:
-            sorted_features.append(features)
+        for feature_settings, accuracy in results:
+            sorted_features.append(feature_settings)
             sorted_accuracies.append(accuracy)
-            saving.SaveSystem.save_to_csv([features, accuracy], save_path, "a")
+            saving.SaveSystem.save_to_csv([feature_settings, accuracy], save_path, "a")
 
         plt.figure(figsize=(12, 6))
         plt.barh(sorted_features[:200], sorted_accuracies[:200], color="skyblue")
@@ -643,13 +430,13 @@ if __name__ == "__main__":
         plt.gca().invert_yaxis()  # Best at top
         plt.show()
 
-        run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(best_features))
-    elif user_input == "get_stats":
-        get_stats(pd.concat([train_bars_df, test_bars_df]), "tr", True)
+        run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(best_features), True)
+    elif user_input == "stats":
+        get_stats(pd.concat([train_bars_df, test_bars_df]), input("Enter column: "), True)
+    elif user_input == "random forest":
+        run_random_forest(bars_df, all_features)
 
     '''run_test_price_predict(16, 50, train_bars, bars_df[train_size + 1:])
     run_test_price_predict(8, 50, train_bars, bars_df[train_size + 1:])
     run_test_price_predict(4, 50, train_bars, bars_df[train_size + 1:])
     run_test_price_predict(2, 50, train_bars, bars_df[train_size + 1:])'''
-
-

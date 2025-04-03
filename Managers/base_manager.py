@@ -7,7 +7,7 @@ import requests
 import talib
 import pandas as pd
 from constants import *
-import hmm
+from HMM.models import HMMRegimePrediction
 
 
 class Profile(object):
@@ -199,21 +199,20 @@ class Manager(object):
         backtest_bars["sentiment"] = 0.0
         if gen_hmm:
             print(f" {symbol}{i}: Generating {backtest_bars.shape[0]} sentiments and HMM predictions from {start_date} to {end_date}")
-            hmm_predictor = hmm.HMMPricePrediction(10, 100)
+            regime_predictor = HMMRegimePrediction(["close_pc", "ema_k_pc"])
 
-            augmented_bars = hmm_predictor.augment_bars(bars)
-            backtest_bars["hmm_prediction"] = 0.0
+            backtest_bars["hmm_regime"] = 0.0
             j = 0
             for row in backtest_bars.itertuples():
                 backtest_date = row.Index.to_pydatetime()
                 sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
                 backtest_bars.at[row.Index, "sentiment"] = sentiment
 
-                previous_data = augmented_bars[:row.Index]
                 if j % 100 == 0:
                     print(f" {symbol}{i}: Fitting HMM {j}/{backtest_bars.shape[0]}")
-                    hmm_predictor.fit_augmented(previous_data)
-                backtest_bars.at[row.Index, "hmm_prediction"] = hmm_predictor.predict_augmented(row.open, previous_data)
+                    regime_predictor.fit(bars[:row.Index])
+                regime_prediction = regime_predictor.predict_latest_probability(bars[:row.Index])
+                backtest_bars.at[row.Index, "hmm_regime"] = regime_prediction["Bull"] - regime_prediction["Bear"]
                 j += 1
             print(f" {symbol}{i}: Finished generating {bars.shape[0]} sentiments and HMM predictions in {(time.time() - start_time):.2f}s")
         else:

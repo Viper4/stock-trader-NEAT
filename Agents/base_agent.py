@@ -37,7 +37,7 @@ class Agent:
             row.volume_pc,
             row.vwap_pc,
             row.sentiment,  # -1 = negative, 0 = neutral, 1 = positive
-            row.hmm_prediction,
+            row.hmm_regime,  # -1 = Bear, 0 = Choppy, 1 = Bull
             (row.slow_k - 50) / 50,
             (row.slow_d - 50) / 50,
             (row.rsi - 50) / 50,
