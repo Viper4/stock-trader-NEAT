@@ -6,6 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import itertools
 import hmm_test
+from sklearn.preprocessing import StandardScaler
 
 
 class HMMRegimePrediction(object):
@@ -15,19 +16,27 @@ class HMMRegimePrediction(object):
         self.processes = processes
         self.fitted_feature_settings = None
         self.feature_index_map = {}
+        self.scaler = StandardScaler()
 
-    def get_features(self, bars, feature_settings):
-        """Gets features from bars dataframe and scales features."""
-        return bars[feature_settings].values
+    def get_features_fit(self, bars, feature_settings):
+        """Gets features from bars dataframe, fits scaler, and scales features."""
+        return self.scaler.fit_transform(bars[feature_settings].values)
+
+    def get_features_df(self, bars, feature_settings):
+        """Gets features from bars dataframe and scales features using scaler calculated with the training data."""
+        return (bars[feature_settings].values - self.scaler.mean_) / self.scaler.scale_
 
     def get_features_array(self, bars, feature_settings):
-        """Gets features from an array of bars and scales features."""
+        """Gets features from an array of bars and scales features using scaler calculated with the training data."""
         feature_indices = [self.feature_index_map[feature] for feature in feature_settings]
 
         # Extract the required columns from the NumPy array
         features = bars[:, feature_indices]
 
-        return features
+        # Use mean and stdv from scaler calculated with the training data
+        features_scaled = (features - self.scaler.mean_) / self.scaler.scale_
+
+        return features_scaled
 
     def fit(self, bars, feature_settings, seed=42):
         """Fits the HMM model and maps regimes."""
@@ -36,23 +45,23 @@ class HMMRegimePrediction(object):
         np.random.seed(seed)  # For reproducibility
 
         # Set initial parameters dynamically based on number of features
-        # When switching from n features to n+1 features, error occurs sometimes
+        # When switching from n features to n+1 features, error occurs due to mismatch in dimensions
         self.model.startprob_ = np.full(3, 1.0 / 3)  # Uniform probabilities
         self.model.transmat_ = np.full((3, 3), 1.0 / 3)  # Equal transition probabilities
         self.model.means_ = np.random.rand(3, len(feature_settings))  # Random means with correct shape
         self.model.covars_ = np.full((3, len(feature_settings)), 0.1)  # Small diagonal covariance values
 
-        features = self.get_features(bars, feature_settings)
+        features_scaled = self.get_features_fit(bars, feature_settings)
         for i in range(len(bars.columns)):
             self.feature_index_map[bars.columns[i]] = i
-        self.model.fit(features)
-        self.map_regimes(bars, features)
+        self.model.fit(features_scaled)
+        self.map_regimes(bars, features_scaled)
 
     def predict_latest_probability(self, bars):
         if self.fitted_feature_settings is None:
             raise ValueError("Model has not been fitted yet.")
-        features = self.get_features(bars[-1:], self.fitted_feature_settings)
-        prediction_probs = self.model.predict_proba(features)[-1]
+        features_scaled = self.get_features_df(bars[-1:], self.fitted_feature_settings)
+        prediction_probs = self.model.predict_proba(features_scaled)[-1]
         mapped_prediction = {}
         for i in range(prediction_probs.shape[0]):
             mapped_prediction[self.regime_mapping[np.int64(i)]] = float(prediction_probs[i])
@@ -61,8 +70,8 @@ class HMMRegimePrediction(object):
     def predict_probability(self, bars):
         if self.fitted_feature_settings is None:
             raise ValueError("Model has not been fitted yet.")
-        features = self.get_features(bars, self.fitted_feature_settings)
-        prediction_probs = self.model.predict_proba(features)
+        features_scaled = self.get_features_df(bars, self.fitted_feature_settings)
+        prediction_probs = self.model.predict_proba(features_scaled)
         mapped_predictions = [
             {self.regime_mapping[np.int64(i)]: float(prob[i]) for i in range(len(prob))}
             for prob in prediction_probs
@@ -73,19 +82,19 @@ class HMMRegimePrediction(object):
         """Predicts market regimes and returns them as mapped labels."""
         if self.fitted_feature_settings is None:
             raise ValueError("Model has not been fitted yet.")
-        features = self.get_features(bars, self.fitted_feature_settings)
-        predicted_regimes = self.model.predict(features)
+        features_scaled = self.get_features_df(bars, self.fitted_feature_settings)
+        predicted_regimes = self.model.predict(features_scaled)
         return np.array([self.regime_mapping[r] for r in predicted_regimes])
 
-    def predict_array(self, features):
+    def predict_array(self, features_scaled):
         if self.fitted_feature_settings is None:
             raise ValueError("Model has not been fitted yet.")
-        predicted_regimes = self.model.predict(features)
+        predicted_regimes = self.model.predict(features_scaled)
         return np.array([self.regime_mapping[r] for r in predicted_regimes])
 
-    def map_regimes(self, bars, features):
+    def map_regimes(self, bars, features_scaled):
         """Assigns correct labels (Bull, Bear, Choppy) based on mean log return."""
-        predicted_regimes = self.model.predict(features)
+        predicted_regimes = self.model.predict(features_scaled)
         bars["regime"] = predicted_regimes
 
         regime_stats = bars.groupby("regime")["close_pc"].mean().sort_values()
@@ -108,11 +117,7 @@ class HMMRegimePrediction(object):
         bars_array = bars.to_numpy()
         bars_index_list = list(bars.index)
         predicted_regimes = []
-        # NOTE: sklearn Standard scaler causes look ahead bias.
-        # When comparing features calculation once vs. iteratively, the results were different.
-        # This is because the scaler got all future data to scale the features while iterative did not.
-        # Since our feature data should be normalized between -1 and 1 already, we can just get rid of the scaler.
-        features = self.get_features_array(bars_array, self.fitted_feature_settings)
+        features_scaled = self.get_features_array(bars_array, self.fitted_feature_settings)
 
         for i in tqdm(range(len(bars_array) - 1)):
             row = bars_array[i]
@@ -123,7 +128,7 @@ class HMMRegimePrediction(object):
             row_close = row[self.feature_index_map["close"]]
             actual_change = next_row[self.feature_index_map["close_pc"]]
 
-            predicted = self.predict_array(features[:i+1])[-1]
+            predicted = self.predict_array(features_scaled[:i+1])[-1]
             predicted_regimes.append(predicted)
 
             if predicted == "Bull":
@@ -141,7 +146,7 @@ class HMMRegimePrediction(object):
                 correct_predictions += abs(actual_change) <= threshold * std_deviation
 
         # Update dataframe with predicted regimes
-        predicted_regimes.append(self.predict_array(features)[-1])  # Add the last predicted regime
+        predicted_regimes.append(self.predict_array(features_scaled)[-1])  # Add the last predicted regime
         bars["regime"] = predicted_regimes
 
         return correct_predictions, (cash + shares * bars.iloc[-1].close) - start_cash
