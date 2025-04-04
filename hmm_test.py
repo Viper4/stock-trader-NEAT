@@ -19,8 +19,8 @@ from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-TSLA-1d_2019-1-1_2025-4-1.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-TSLA-1d_2019-1-1_2025-4-1.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-SPY-1d_2019-1-1_2025-4-1.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-SPY-1d_2019-1-1_2025-4-1.csv"
 
 
 class CorrelationAnalysis(object):
@@ -53,7 +53,8 @@ class CorrelationAnalysis(object):
                 f_stat, _ = f_classif(bars[[feature]], bars["regime_encoded"])
                 mi = mutual_info_classif(bars[[feature]], bars["regime_encoded"])[0]
                 results[feature] = {"ANOVA F-Score": f_stat[0], "Mutual Info": mi}
-            else:  # Categorical Features
+            else:
+                # Categorical Features
                 cramers_v_score = self.cramers_v(bars[feature], bars["regime"])
                 results[feature] = {"Cramér’s V": cramers_v_score}
 
@@ -86,7 +87,7 @@ def run_regime_test(train_bars, test_bars, features, seed, plot):
     start_time = time.time()
     predicted_regimes = regime_predictor.predict_probability(test_bars_df)
     print(f"Most recent prediction:\n", predicted_regimes[-1])
-    print("Finished in ", time.time() - start_time)
+    print("Finished in", time.time() - start_time, "seconds")
     print()
 
 
@@ -97,24 +98,18 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
         feature_combinations.extend(itertools.combinations(features, i))
     print(f"Generated {len(feature_combinations)} combinations")
 
-    best_features = []
-    best_seed = 0
-    best_accuracy = 0
-
     tested = {}
+    best_accuracy = 0.0
+    best_profit = -999999.0
 
     if not os.path.exists(TESTED_PATH):
-        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy"], TESTED_PATH)
+        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit"], TESTED_PATH)
     rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
     for row in rows:
         if row[0] == "Features":
             continue
         key = row[0] + row[1]
-        tested[key] = float(row[2])
-        if tested[key] > best_accuracy:
-            best_features = ast.literal_eval(row[0])
-            best_seed = int(row[1])
-            best_accuracy = tested[key]
+        tested[key] = (float(row[2]), float(row[3]))
 
     print("Starting search")
     regime_predictor = models.HMMRegimePrediction(processes=val_processes)
@@ -123,7 +118,6 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
         start_time = time.time()
         print(f"\nTest {i}/{len(feature_combinations)} {100 * i / len(feature_combinations):.4f}%:")
         for j in range(n_seeds):
-            print(f"-{j}-")
             features_list = list(features)
 
             if n_iterations != -1 and i >= n_iterations:
@@ -131,27 +125,26 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
 
             key = str(features_list) + str(j)
             if key not in tested:
-                accuracy = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
+                accuracy, profit = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
                 tested[key] = accuracy
-                saving.SaveSystem.save_to_csv([features_list, j, accuracy], TESTED_PATH, "a")
+                saving.SaveSystem.save_to_csv([features_list, j, accuracy, profit], TESTED_PATH, "a")
             else:
-                accuracy = tested[key]
+                accuracy, profit = tested[key]
                 print(f"Already tested: {key} - {tested[key]}%")
 
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
-                best_features = features_list
-                best_seed = j
                 print(f"New best accuracy: {best_accuracy}%")
+
+            if profit > best_profit:
+                best_profit = profit
+                print(f"New best profit: {best_profit}")
         i += 1
         iteration_time = time.time() - start_time
         eta = (len(feature_combinations) - i) * iteration_time
         print(f"Finished in {iteration_time:.2f} seconds. ETA: {str(timedelta(seconds=eta))}")
 
     print(f"Search finished")
-    print(f"Best features: {best_features}")
-    print(f"Best seed: {best_seed}")
-    print(f"Best accuracy: {best_accuracy}%")
 
 
 def get_stats(bars, column, plot):
@@ -185,8 +178,8 @@ def get_stats(bars, column, plot):
     return minimum, maximum, mean, median, std_deviation
 
 
-def run_random_forest(bars, features):
-    run_regime_test(bars, bars, features, False)
+def run_random_forest(bars, features, seed):
+    run_regime_test(bars, bars, features, seed, False)
     random_forest = feature_selection.RandomForestFeatureSelection()
     print(random_forest.evaluate(bars, features))
 
@@ -392,9 +385,10 @@ if __name__ == "__main__":
     elif user_input == "price test":
         run_price_test(int(input("Number of components: ")), int(input("Number of latent bars: ")), train_bars_df, test_bars_df)
     elif user_input == "reg test":
-        # ["close_pc", "ema_1"] accuracy isn't good but looking at the graph it actually seems the best
+        # ['high_pc', 'vwap_pc', 'stick_sandwich'] seed 3 looks really good
         test_features = ast.literal_eval(input("Type features, Ex: ['close_pc', 'ema_1']: "))
-        run_regime_test(train_bars_df, test_bars_df, test_features, True)
+        test_seed = int(input("Seed: "))
+        run_regime_test(train_bars_df, test_bars_df, test_features, test_seed, True)
     elif user_input == "correlation":
         feature_input = input("Type features or 'all', Ex: ['close_pc', 'ema_1']: ")
         seed = int(input("Seed: "))
@@ -402,7 +396,7 @@ if __name__ == "__main__":
             corr_features = all_features
         else:
             corr_features = ast.literal_eval(feature_input)
-        run_regime_test(train_bars_df, test_bars_df, corr_features, True, seed)
+        run_regime_test(train_bars_df, test_bars_df, corr_features, seed, True)
         correlation = CorrelationAnalysis(corr_features)
         correlation_matrix = correlation.compute_feature_correlation(test_bars_df)
         print("Correlation matrix:")
@@ -410,42 +404,61 @@ if __name__ == "__main__":
             print(correlation_matrix)
         correlation.plot_correlation(correlation_matrix)
     elif user_input == "reg best":
+        sort_by = int(input("Sort by accuracy (1) or profit (2): "))
         results = []
         rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
         for row in rows:
             if row[0] == "Features":
                 continue
-            results.append((row[0], int(row[1]), float(row[2])))
-        results.sort(key=lambda x: x[2], reverse=True)
-        best_features, best_seed, best_accuracy = results[0]
-        print("Best features: ", best_features)
-        print("Best seed: ", best_seed)
-        print("Best accuracy: ", best_accuracy)
+            results.append((row[0], int(row[1]), float(row[2]), float(row[3])))
+
+        if sort_by == 1:
+            results.sort(key=lambda x: x[2], reverse=True)
+        else:
+            results.sort(key=lambda x: x[3], reverse=True)
+        res_features, res_seed, res_accuracy, res_profit = results[0]
+        print("Best features: ", res_features)
+        print("Best seed: ", res_seed)
+        print("Best accuracy: ", res_accuracy)
+        print("Best profit: ", res_profit)
 
         save_path = TESTED_PATH.replace(".csv", "_sorted.csv")
         saving.SaveSystem.delete_file(save_path)
-        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy"], save_path)
+        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit"], save_path)
 
         sorted_keys = []
         sorted_accuracies = []
-        for feature_settings, seed, accuracy in results:
+        sorted_profits = []
+        for feature_settings, seed, accuracy, profit in results:
             sorted_keys.append(feature_settings + " " + str(seed))
             sorted_accuracies.append(accuracy)
-            saving.SaveSystem.save_to_csv([feature_settings, seed, accuracy], save_path, "a")
+            sorted_profits.append(profit)
+            saving.SaveSystem.save_to_csv([feature_settings, seed, accuracy, profit], save_path, "a")
 
-        plt.figure(figsize=(12, 6))
-        plt.barh(sorted_keys[:200], sorted_accuracies[:200], color="skyblue")
-        plt.xlabel("Accuracy (%)")
-        plt.ylabel("Feature Combinations")
-        plt.title("Feature Combination Accuracy Rankings")
-        plt.gca().invert_yaxis()  # Best at top
-        plt.show()
+        if sort_by == 1:
+            plt.figure(figsize=(12, 6))
+            plt.barh(sorted_keys[:100], sorted_accuracies[:100], color="skyblue")
+            plt.xlabel("Accuracy (%)")
+            plt.ylabel("Feature Combinations")
+            plt.title("Feature Combination Accuracy Rankings")
+            plt.gca().invert_yaxis()  # Best at top
+            plt.show()
+        else:
+            plt.figure(figsize=(12, 6))
+            plt.barh(sorted_keys[:100], sorted_profits[:100], color="skyblue")
+            plt.xlabel("Profit ($)")
+            plt.ylabel("Feature Combinations")
+            plt.title("Feature Combination Profit Rankings")
+            plt.gca().invert_yaxis()  # Best at top
+            plt.show()
 
-        run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(best_features), True, best_seed)
+        run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(res_features), res_seed, True)
     elif user_input == "stats":
         get_stats(pd.concat([train_bars_df, test_bars_df]), input("Enter column: "), True)
     elif user_input == "random forest":
-        run_random_forest(bars_df, all_features)
+        for i in range(10):
+            print(f"Seed {i}")
+            run_random_forest(bars_df, all_features, i)
 
     '''run_test_price_predict(16, 50, train_bars, bars_df[train_size + 1:])
     run_test_price_predict(8, 50, train_bars, bars_df[train_size + 1:])

@@ -49,7 +49,7 @@ class Validation(Agent):
                 consecutive_days += 1
                 while not pending_sales.is_empty():
                     sale_price, sale_day = pending_sales.head.value
-                    if consecutive_days - sale_day > 1:
+                    if consecutive_days - sale_day >= 1:
                         settled_cash += sale_price
                         unsettled_cash -= sale_price
                         pending_sales.dequeue()

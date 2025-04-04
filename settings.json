@@ -89,7 +89,7 @@
   ],
   "training_reset": 3,
   "gen_stagger": 8,
-  "processes": 16,
+  "processes": 8,
   "gpu": false,
   "print_stats": true,
   "log_training": false,

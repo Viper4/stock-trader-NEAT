@@ -31,7 +31,8 @@ class HMMRegimePrediction(object):
 
         np.random.seed(seed)  # For reproducibility
 
-        # Set initial parameters dynamically based on n_dim
+        # Set initial parameters dynamically based on number of features
+        # When switching from n features to n+1 features, error occurs sometimes
         self.model.startprob_ = np.full(3, 1.0 / 3)  # Uniform probabilities
         self.model.transmat_ = np.full((3, 3), 1.0 / 3)  # Equal transition probabilities
         self.model.means_ = np.random.rand(3, len(feature_settings))  # Random means with correct shape
@@ -86,16 +87,38 @@ class HMMRegimePrediction(object):
     @staticmethod
     def get_score(bars, std_deviation, threshold):
         # NOTE: Sometimes terrible model just guessing one regime for entire period can get 50% accuracy
-        score = 0
-        for i in tqdm(range(bars.shape[0] - 1)):
-            predicted = bars.iloc[i].regime
-            actual_change = bars.iloc[i + 1].close_pc
+        correct_predictions = 0
+        start_cash = bars.iloc[0].close * 50
+        cash = start_cash
+        shares = 0.0
+        sell_time = None
+        for row, next_row in tqdm(zip(bars[:-1].itertuples(), bars[1:].itertuples()), total=bars.shape[0] - 1):
+            predicted = row.regime
+            actual_change = next_row.close_pc
 
-            if ((predicted == "Bull" and actual_change > threshold * std_deviation)
-                    or (predicted == "Bear" and actual_change < -threshold * std_deviation)
-                    or (predicted == "Choppy" and abs(actual_change) <= threshold * std_deviation)):
-                score += 1
-        return score
+            if predicted == "Bull":
+                if actual_change > threshold * std_deviation:
+                    correct_predictions += 1
+
+                # Buy
+                if cash > 0 and (sell_time is None or row.Index.to_pydatetime().date() != sell_time.date()):
+                    shares += cash / row.close
+                    cash = 0.0
+            elif predicted == "Bear":
+                if actual_change < -threshold * std_deviation:
+                    correct_predictions += 1
+
+                # Sell
+                if shares > 0:
+                    cash += (shares * row.close) * 0.995  # 0.5% fee
+                    shares = 0.0
+                    sell_time = row.Index.to_pydatetime()
+            else:
+                # Hold
+                if abs(actual_change) <= threshold * std_deviation:
+                    correct_predictions += 1
+
+        return correct_predictions, (cash + shares * bars.iloc[-1].close) - start_cash
 
     def validate(self, train_bars, test_bars, feature_settings, plot, seed=0):
         """Trains HMM, evaluates accuracy, and visualizes results."""
@@ -105,7 +128,7 @@ class HMMRegimePrediction(object):
             self.fit(train_bars, feature_settings, seed=seed)
         except IndexError as e:
             print(f"Too little clusters to fit. Skipping validation...")
-            return 0.0
+            return 0.0, 0.0
 
         minimum, maximum, mean, median, std_deviation = hmm_test.get_stats(pd.concat([train_bars, test_bars]), "close_pc", False)
         print(f"Predicting regimes on {test_bars.shape[0]} test bars with stdv {std_deviation}...")
@@ -114,6 +137,7 @@ class HMMRegimePrediction(object):
 
         # Calculate Accuracy
         correct_predictions = 0
+        total_profit = 0.0
         total_predictions = len(test_bars) - 1  # Ignore last row due to comparing predicted with future price
 
         pool = Pool(processes=self.processes)
@@ -122,22 +146,23 @@ class HMMRegimePrediction(object):
             bars_per_process = test_bars.shape[0] // self.processes
 
             for i in range(self.processes):
-                # Threshold for Choppy of within 0.25*stdv or ~19.75% of data assuming normal (which it is from close_pc histogram)
-                # Hopefully this means a bad combination that guesses Choppy for everything can only get ~20% accuracy
-                args.append((test_bars[i*bars_per_process:(i+1)*bars_per_process], std_deviation, 0.25))
+                # Threshold for Choppy needs to be small assuming normal (which it is from close_pc histogram)
+                # Hopefully this means a bad combination that guesses Choppy for everything cant get high accuracy
+                args.append((test_bars[i*bars_per_process:(i+1)*bars_per_process], std_deviation, 0.1))
 
             results_async = pool.starmap_async(self.get_score, args)
             results = results_async.get()
-            for result in results:
-                correct_predictions += result
+            for correct, profit in results:
+                correct_predictions += correct
+                total_profit += profit
 
             pool.close()
             pool.join()
         else:
-            correct_predictions = self.get_score(test_bars, std_deviation, 0.25)
+            correct_predictions, total_profit = self.get_score(test_bars, std_deviation, 0.1)
 
         accuracy = (correct_predictions / total_predictions) * 100
-        print(f"Accuracy: {accuracy:.2f}%")
+        print(f"Accuracy: {accuracy:.2f}%, profit: {total_profit:.2f}")
 
         # Plot stock prices with color-coded regimes
         if plot:
@@ -157,10 +182,10 @@ class HMMRegimePrediction(object):
                 )
 
             plt.legend()
-            plt.title(f"Stock Price with Predicted Market Regimes (Accuracy: {accuracy:.2f}%)")
+            plt.title(f"Stock Price with Predicted Market Regimes (Accuracy: {accuracy:.2f}%, profit: {total_profit:.2f})")
             plt.show()
 
-        return accuracy
+        return accuracy, total_profit
 
 
 class HMMPricePrediction(object):

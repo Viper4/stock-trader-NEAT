@@ -208,11 +208,13 @@ class Manager(object):
                 sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
                 backtest_bars.at[row.Index, "sentiment"] = sentiment
 
-                if j % 100 == 0:
-                    print(f" {symbol}{i}: Fitting HMM {j}/{backtest_bars.shape[0]}")
-                    regime_predictor.fit(bars[:row.Index], ["close_pc", "ema_k_pc"])
+                regime_predictor.fit(bars[:row.Index], ['high_pc', 'vwap_pc', 'stick_sandwich'], 3)
                 regime_prediction = regime_predictor.predict_latest_probability(bars[:row.Index])
+
                 backtest_bars.at[row.Index, "hmm_regime"] = regime_prediction["Bull"] - regime_prediction["Bear"]
+                if i % 1000 == 0:
+                    print(f" {symbol}{i}: Finished generating {j} sentiments and HMM predictions in {(time.time() - start_time):.2f}s")
+
                 j += 1
             print(f" {symbol}{i}: Finished generating {bars.shape[0]} sentiments and HMM predictions in {(time.time() - start_time):.2f}s")
         else:
