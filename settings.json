@@ -1,13 +1,13 @@
 {
   "profiles": [
     {
-      "name": "5m 5pw Profile",
+      "name": "30m 5pw Profile",
       "public_key": "PKIQGRDTI7JBAIHD3C86",
       "secret_key": "AOzVWc6gXeD6YBQTlvGUACGiSsEhgl7SAHvmf341",
       "data_batch_size": 243,
       "data_batches": 4,
       "profit_window": 5,
-      "interval": 5,
+      "interval": 30,
       "k_period": 14,
       "d_period": 3,
       "rsi_period": 14,
@@ -26,7 +26,7 @@
           "cash_at_risk": 0.15,
           "population_filename": "5pw-population-COIN.gz",
           "genome_filename": "5pw-genome-COIN.gz",
-          "training_filename": "5m-data-COIN.gz",
+          "training_filename": "30m-data-COIN.gz",
           "trading": true,
           "transaction_fee": 0.0095
         },
@@ -35,7 +35,7 @@
           "cash_at_risk": 0.15,
           "population_filename": "5pw-population-NVDA.gz",
           "genome_filename": "5pw-genome-NVDA.gz",
-          "training_filename": "5m-data-NVDA.gz",
+          "training_filename": "30m-data-NVDA.gz",
           "trading": true,
           "transaction_fee": 0.0095
         },
@@ -44,7 +44,7 @@
           "cash_at_risk": 0.15,
           "population_filename": "5pw-population-TSLA.gz",
           "genome_filename": "5pw-genome-TSLA.gz",
-          "training_filename": "5m-data-TSLA.gz",
+          "training_filename": "30m-data-TSLA.gz",
           "trading": true,
           "transaction_fee": 0.001
         },
@@ -53,7 +53,7 @@
           "cash_at_risk": 0.15,
           "population_filename": "5pw-population-UVXY.gz",
           "genome_filename": "5pw-genome-UVXY.gz",
-          "training_filename": "5m-data-UVXY.gz",
+          "training_filename": "30m-data-UVXY.gz",
           "trading": true,
           "transaction_fee": 0.0095
         },
@@ -62,7 +62,7 @@
           "cash_at_risk": 0.15,
           "population_filename": "5pw-population-GGLS.gz",
           "genome_filename": "5pw-genome-GGLS.gz",
-          "training_filename": "5m-data-GGLS.gz",
+          "training_filename": "30m-data-GGLS.gz",
           "trading": false,
           "transaction_fee": 0.0095
         },
@@ -71,7 +71,7 @@
           "cash_at_risk": 0.15,
           "population_filename": "5pw-population-PLTD.gz",
           "genome_filename": "5pw-genome-PLTD.gz",
-          "training_filename": "5m-data-PLTD.gz",
+          "training_filename": "30m-data-PLTD.gz",
           "trading": false,
           "transaction_fee": 0.0095
         },
@@ -80,7 +80,7 @@
           "cash_at_risk": 0.15,
           "population_filename": "5pw-population-METD.gz",
           "genome_filename": "5pw-genome-METD.gz",
-          "training_filename": "5m-data-METD.gz",
+          "training_filename": "30m-data-METD.gz",
           "trading": false,
           "transaction_fee": 0.0095
         }

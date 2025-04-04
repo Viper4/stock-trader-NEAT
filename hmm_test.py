@@ -19,8 +19,8 @@ from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-SPY-1d_2019-1-1_2025-4-1.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-SPY-1d_2019-1-1_2025-4-1.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-SPY-1d_2019-1-1_2025-4-3.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-SPY-1d_2019-1-1_2025-4-3.csv"
 
 
 class CorrelationAnalysis(object):
@@ -209,6 +209,7 @@ if __name__ == "__main__":
         bars_df["close_pc"] = bars_df["close"].pct_change(fill_method=None)
         bars_df["volume_pc"] = bars_df["volume"].pct_change(fill_method=None)
         bars_df["vwap_pc"] = bars_df["vwap"].pct_change(fill_method=None)
+        bars_df["trade_count_pc"] = bars_df["trade_count"].pct_change(fill_method=None)
         bars_df["fracocp"] = (bars_df["close"] - bars_df["open"]) / bars_df["open"]
         bars_df["frachp"] = (bars_df["high"] - bars_df["open"]) / bars_df["open"]
         bars_df["fraclp"] = (bars_df["open"] - bars_df["low"]) / bars_df["open"]
@@ -354,7 +355,7 @@ if __name__ == "__main__":
     print("Total bars: ", bars_df.shape[0])
 
     all_features = [
-        "open_pc", "high_pc", "low_pc", "close_pc", "volume_pc", "vwap_pc",
+        "open_pc", "high_pc", "low_pc", "close_pc", "volume_pc", "vwap_pc", "trade_count_pc",
         "fracocp", "frachp", "fraclp",
         "sma_1", "sma_2", "sma_3", "sma_4",
         "ema_1", "ema_2", "ema_3", "ema_4",

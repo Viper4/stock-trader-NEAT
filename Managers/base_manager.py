@@ -208,7 +208,7 @@ class Manager(object):
                 sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
                 backtest_bars.at[row.Index, "sentiment"] = sentiment
 
-                regime_predictor.fit(bars[:row.Index], ['high_pc', 'vwap_pc', 'stick_sandwich'], 3)
+                regime_predictor.fit(bars[:row.Index], ['open_pc', 'low_pc', 'in_neck'], 8)
                 regime_prediction = regime_predictor.predict_latest_probability(bars[:row.Index])
 
                 backtest_bars.at[row.Index, "hmm_regime"] = regime_prediction["Bull"] - regime_prediction["Bear"]

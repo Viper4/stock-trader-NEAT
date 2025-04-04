@@ -29,15 +29,15 @@ class Agent:
 
         return [
             # Stock data
-            plpc,  # plpc
+            plpc,
             row.open_pc,
             row.high_pc,
             row.low_pc,
             row.close_pc,
             row.volume_pc,
             row.vwap_pc,
-            row.sentiment,  # -1 = negative, 0 = neutral, 1 = positive
-            row.hmm_regime,  # -1 = Bear, 0 = Choppy, 1 = Bull
+            row.sentiment,  # -1.0 = negative, 0.0 = neutral, 1.0 = positive
+            row.hmm_regime,  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
             (row.slow_k - 50) / 50,
             (row.slow_d - 50) / 50,
             (row.rsi - 50) / 50,

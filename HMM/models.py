@@ -1,5 +1,4 @@
 from hmmlearn.hmm import GaussianHMM
-from sklearn.preprocessing import StandardScaler
 import numpy as np
 from multiprocessing import Pool
 from tqdm import tqdm
@@ -12,21 +11,26 @@ import hmm_test
 class HMMRegimePrediction(object):
     def __init__(self, processes):
         self.model = GaussianHMM(n_components=3, n_iter=10000, covariance_type="diag", init_params="")
-        self.scaler = StandardScaler()  # Store scaler for consistent transformation
         self.regime_mapping = None  # Store regime mapping
         self.processes = processes
         self.fitted_feature_settings = None
+        self.feature_index_map = {}
 
     def get_features(self, bars, feature_settings):
-        """Gets features from bars and scales features."""
-        bars.dropna(inplace=True)
-        features = bars[feature_settings].values
-        features_scaled = self.scaler.fit_transform(features)
-        return features_scaled, bars
+        """Gets features from bars dataframe and scales features."""
+        return bars[feature_settings].values
+
+    def get_features_array(self, bars, feature_settings):
+        """Gets features from an array of bars and scales features."""
+        feature_indices = [self.feature_index_map[feature] for feature in feature_settings]
+
+        # Extract the required columns from the NumPy array
+        features = bars[:, feature_indices]
+
+        return features
 
     def fit(self, bars, feature_settings, seed=42):
         """Fits the HMM model and maps regimes."""
-        bars.dropna(inplace=True)
         self.fitted_feature_settings = feature_settings
 
         np.random.seed(seed)  # For reproducibility
@@ -38,15 +42,17 @@ class HMMRegimePrediction(object):
         self.model.means_ = np.random.rand(3, len(feature_settings))  # Random means with correct shape
         self.model.covars_ = np.full((3, len(feature_settings)), 0.1)  # Small diagonal covariance values
 
-        features_scaled, bars = self.get_features(bars, feature_settings)
-        self.model.fit(features_scaled)
-        self.map_regimes(bars, features_scaled)
+        features = self.get_features(bars, feature_settings)
+        for i in range(len(bars.columns)):
+            self.feature_index_map[bars.columns[i]] = i
+        self.model.fit(features)
+        self.map_regimes(bars, features)
 
     def predict_latest_probability(self, bars):
         if self.fitted_feature_settings is None:
             raise ValueError("Model has not been fitted yet.")
-        features_scaled, bars = self.get_features(bars[-1:], self.fitted_feature_settings)
-        prediction_probs = self.model.predict_proba(features_scaled)[-1]
+        features = self.get_features(bars[-1:], self.fitted_feature_settings)
+        prediction_probs = self.model.predict_proba(features)[-1]
         mapped_prediction = {}
         for i in range(prediction_probs.shape[0]):
             mapped_prediction[self.regime_mapping[np.int64(i)]] = float(prediction_probs[i])
@@ -55,8 +61,8 @@ class HMMRegimePrediction(object):
     def predict_probability(self, bars):
         if self.fitted_feature_settings is None:
             raise ValueError("Model has not been fitted yet.")
-        features_scaled, bars = self.get_features(bars, self.fitted_feature_settings)
-        prediction_probs = self.model.predict_proba(features_scaled)
+        features = self.get_features(bars, self.fitted_feature_settings)
+        prediction_probs = self.model.predict_proba(features)
         mapped_predictions = [
             {self.regime_mapping[np.int64(i)]: float(prob[i]) for i in range(len(prob))}
             for prob in prediction_probs
@@ -67,8 +73,14 @@ class HMMRegimePrediction(object):
         """Predicts market regimes and returns them as mapped labels."""
         if self.fitted_feature_settings is None:
             raise ValueError("Model has not been fitted yet.")
-        features_scaled, bars = self.get_features(bars, self.fitted_feature_settings)
-        predicted_regimes = self.model.predict(features_scaled)
+        features = self.get_features(bars, self.fitted_feature_settings)
+        predicted_regimes = self.model.predict(features)
+        return np.array([self.regime_mapping[r] for r in predicted_regimes])
+
+    def predict_array(self, features):
+        if self.fitted_feature_settings is None:
+            raise ValueError("Model has not been fitted yet.")
+        predicted_regimes = self.model.predict(features)
         return np.array([self.regime_mapping[r] for r in predicted_regimes])
 
     def map_regimes(self, bars, features):
@@ -84,45 +96,62 @@ class HMMRegimePrediction(object):
             regime_stats.index[2]: "Bull"
         }
 
-    @staticmethod
-    def get_score(bars, std_deviation, threshold):
+    def get_score(self, bars, std_deviation, threshold):
         # NOTE: Sometimes terrible model just guessing one regime for entire period can get 50% accuracy
         correct_predictions = 0
         start_cash = bars.iloc[0].close * 50
         cash = start_cash
         shares = 0.0
         sell_time = None
-        for row, next_row in tqdm(zip(bars[:-1].itertuples(), bars[1:].itertuples()), total=bars.shape[0] - 1):
-            predicted = row.regime
-            actual_change = next_row.close_pc
+
+        # Convert to np array for faster processing
+        bars_array = bars.to_numpy()
+        bars_index_list = list(bars.index)
+        predicted_regimes = []
+        # NOTE: sklearn Standard scaler causes look ahead bias.
+        # When comparing features calculation once vs. iteratively, the results were different.
+        # This is because the scaler got all future data to scale the features while iterative did not.
+        # Since our feature data should be normalized between -1 and 1 already, we can just get rid of the scaler.
+        features = self.get_features_array(bars_array, self.fitted_feature_settings)
+
+        for i in tqdm(range(len(bars_array) - 1)):
+            row = bars_array[i]
+            next_row = bars_array[i + 1]
+
+            # Extract values (assuming column order: Index, Close, Close_pc, etc.)
+            row_index = bars_index_list[i]  # Retrieve the original index
+            row_close = row[self.feature_index_map["close"]]
+            actual_change = next_row[self.feature_index_map["close_pc"]]
+
+            predicted = self.predict_array(features[:i+1])[-1]
+            predicted_regimes.append(predicted)
 
             if predicted == "Bull":
-                if actual_change > threshold * std_deviation:
-                    correct_predictions += 1
-
-                # Buy
-                if cash > 0 and (sell_time is None or row.Index.to_pydatetime().date() != sell_time.date()):
-                    shares += cash / row.close
+                correct_predictions += actual_change > threshold * std_deviation
+                if cash > 0 and (sell_time is None or row_index.date() != sell_time):
+                    shares = cash / row_close
                     cash = 0.0
             elif predicted == "Bear":
-                if actual_change < -threshold * std_deviation:
-                    correct_predictions += 1
-
-                # Sell
+                correct_predictions += actual_change < -threshold * std_deviation
                 if shares > 0:
-                    cash += (shares * row.close) * 0.995  # 0.5% fee
+                    cash = (shares * row_close) * 0.995  # 0.5% fee
                     shares = 0.0
-                    sell_time = row.Index.to_pydatetime()
+                    sell_time = row_index.date()
             else:
-                # Hold
-                if abs(actual_change) <= threshold * std_deviation:
-                    correct_predictions += 1
+                correct_predictions += abs(actual_change) <= threshold * std_deviation
+
+        # Update dataframe with predicted regimes
+        predicted_regimes.append(self.predict_array(features)[-1])  # Add the last predicted regime
+        bars["regime"] = predicted_regimes
 
         return correct_predictions, (cash + shares * bars.iloc[-1].close) - start_cash
 
     def validate(self, train_bars, test_bars, feature_settings, plot, seed=0):
         """Trains HMM, evaluates accuracy, and visualizes results."""
         print(f"Training HMM on {train_bars.shape[0]} bars at {seed} seed with\nFeatures: {feature_settings}")
+
+        train_bars.dropna(inplace=True)
+        test_bars.dropna(inplace=True)
 
         try:
             self.fit(train_bars, feature_settings, seed=seed)
@@ -132,8 +161,6 @@ class HMMRegimePrediction(object):
 
         minimum, maximum, mean, median, std_deviation = hmm_test.get_stats(pd.concat([train_bars, test_bars]), "close_pc", False)
         print(f"Predicting regimes on {test_bars.shape[0]} test bars with stdv {std_deviation}...")
-        predicted_labels = self.predict(test_bars)
-        test_bars["regime"] = predicted_labels
 
         # Calculate Accuracy
         correct_predictions = 0
@@ -166,6 +193,12 @@ class HMMRegimePrediction(object):
 
         # Plot stock prices with color-coded regimes
         if plot:
+            profit_percent = (total_profit / (test_bars.iloc[0].close * 50)) * 100
+            stock_change = ((test_bars.iloc[-1].close - test_bars.iloc[0].close) / test_bars.iloc[0].close) * 100
+            print(f"Profit percentage: {profit_percent:.2f}%")
+            print(f"Stock change: {stock_change:.2f}%")
+            print(f"Beat market by: {profit_percent - stock_change:.2f}%")
+
             plt.figure(figsize=(15, 6))
             plt.plot(test_bars.index, test_bars["close"], color="black", label="Stock Price")
 
