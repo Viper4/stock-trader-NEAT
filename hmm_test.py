@@ -18,8 +18,8 @@ from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-UVXY-1d_2019-1-1_2025-4-4.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-UVXY-1d_2019-1-1_2025-4-4.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-QQQ-1d_2019-1-1_2025-4-4.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-QQQ-1d_2019-1-1_2025-4-4.csv"
 
 
 class CorrelationAnalysis(object):
@@ -81,7 +81,7 @@ def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df)
 
 
 def run_regime_test(train_bars, test_bars, features, seed, plot):
-    regime_predictor = models.HMMRegimePrediction(processes=1)
+    regime_predictor = models.HMMRegimePrediction()
     regime_predictor.validate(train_bars, test_bars, features, plot, seed)
     start_time = time.time()
     predicted_regimes = regime_predictor.predict_probability(test_bars_df)
@@ -110,8 +110,6 @@ def run_regime_search(train_bars, test_bars, features, n_iterations=-1, n_seeds=
     for row in rows:
         if row[0] == "Features":
             continue
-        if len(row) != 4:
-            print("Problem:", row, i)
         key = row[0] + row[1]
         tested[key] = (float(row[2]), float(row[3]))
         i += 1

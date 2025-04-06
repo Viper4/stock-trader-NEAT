@@ -211,8 +211,8 @@ class Manager(object):
 
         # Cant vectorize since GPU memory is too small
         print(f"\r {symbol}{i}: Generating {backtest_bars.shape[0]} sentiments and regime predictions from {start_date} to {end_date}")
-        long_regime_predictor = HMMRegimePrediction(processes=1)
-        short_regime_predictor = HMMRegimePrediction(processes=1)
+        long_regime_predictor = HMMRegimePrediction()
+        short_regime_predictor = HMMRegimePrediction()
         unit_map = {"minute": TimeFrameUnit.Minute, "hour": TimeFrameUnit.Hour, "day": TimeFrameUnit.Day,
                     "week": TimeFrameUnit.Week, "month": TimeFrameUnit.Month}
         regime_bars = self.get_bars(symbol, profile.alpaca_api, profile.regime_settings["interval"],

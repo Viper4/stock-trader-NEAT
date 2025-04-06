@@ -341,7 +341,7 @@ class HMMRegimePrediction(object):
             elif predicted == 1:
                 # Bear, -Bull, Choppy
                 correct_predictions[0] += bull_correct
-                if shares[0] > 0:
+                if cash[0] > 0:
                     shares[0] = cash[0] / row_close
                     cash[0] = 0.0
 
@@ -350,7 +350,7 @@ class HMMRegimePrediction(object):
 
                 # Bull, -Bear, Choppy
                 correct_predictions[2] += bear_correct
-                if cash[2] > 0:
+                if shares[2] > 0:
                     cash[2] = (shares[2] * row_close) * 0.995  # 0.5% fee
                     shares[2] = 0.0
 
@@ -359,13 +359,13 @@ class HMMRegimePrediction(object):
 
                 # Choppy, -Bear, Bull
                 correct_predictions[4] += bear_correct
-                if cash[4] > 0:
+                if shares[4] > 0:
                     cash[4] = (shares[4] * row_close) * 0.995  # 0.5% fee
                     shares[4] = 0.0
 
                 # Choppy, -Bull, Bear
                 correct_predictions[5] += bull_correct
-                if shares[5] > 0:
+                if cash[5] > 0:
                     shares[5] = cash[5] / row_close
                     cash[5] = 0.0
             else:
@@ -374,7 +374,7 @@ class HMMRegimePrediction(object):
 
                 # Bear, Choppy, -Bull
                 correct_predictions[1] += bull_correct
-                if shares[1] > 0:
+                if cash[1] > 0:
                     shares[1] = cash[1] / row_close
                     cash[1] = 0.0
 
@@ -383,19 +383,19 @@ class HMMRegimePrediction(object):
 
                 # Bull, Choppy, -Bear
                 correct_predictions[3] += bear_correct
-                if cash[3] > 0:
+                if shares[3] > 0:
                     cash[3] = (shares[3] * row_close) * 0.995  # 0.5% fee
                     shares[3] = 0.0
 
                 # Choppy, Bear, -Bull
                 correct_predictions[4] += bull_correct
-                if shares[4] > 0:
+                if cash[4] > 0:
                     shares[4] = cash[4] / row_close
                     cash[4] = 0.0
 
                 # Choppy, Bull, -Bear
                 correct_predictions[5] += bear_correct
-                if cash[5] > 0:
+                if shares[5] > 0:
                     cash[5] = (shares[5] * row_close) * 0.995  # 0.5% fee
                     shares[5] = 0.0
 
