@@ -1,18 +1,18 @@
 {
   "profiles": [
     {
-      "name": "30m 5pw Profile",
+      "name": "15m 5pw Profile",
       "public_key": "PKIQGRDTI7JBAIHD3C86",
       "secret_key": "AOzVWc6gXeD6YBQTlvGUACGiSsEhgl7SAHvmf341",
       "data_batch_size": 243,
       "data_batches": 4,
       "profit_window": 5,
-      "interval": 30,
+      "interval": 15,
       "k_period": 14,
       "d_period": 3,
       "rsi_period": 14,
       "atr_period": 10,
-      "sma_periods": [30, 60, 200, 1000],
+      "ma_periods": [10, 30, 60, 200, 500],
       "start_cash": 100000.0,
       "cash_limit": 999999999.0,
       "fitness_multipliers": {
@@ -20,69 +20,58 @@
         "total": 1.0,
         "risk": 0.0
       },
+      "regime_settings": {
+        "fit_days": 1825,
+        "interval": 1,
+        "unit": "day",
+        "qqq_long_term_features": ["sma_d", "slow_k", "rickshaw_man"],
+        "qqq_long_term_seed": 8,
+        "qqq_short_term_features": ["atr", "tr", "long_line"],
+        "qqq_short_term_seed": 2,
+        "spy_long_term_features": ["sma_d", "slow_k", "rickshaw_man"],
+        "spy_long_term_seed": 8,
+        "spy_short_term_features": ["atr", "tr", "long_line"],
+        "spy_short_term_seed": 2
+      },
       "stocks": [
-        {
-          "symbol": "COIN",
-          "cash_at_risk": 0.15,
-          "population_filename": "5pw-population-COIN.gz",
-          "genome_filename": "5pw-genome-COIN.gz",
-          "training_filename": "30m-data-COIN.gz",
-          "trading": true,
-          "transaction_fee": 0.0095
-        },
-        {
-          "symbol": "NVDA",
-          "cash_at_risk": 0.15,
-          "population_filename": "5pw-population-NVDA.gz",
-          "genome_filename": "5pw-genome-NVDA.gz",
-          "training_filename": "30m-data-NVDA.gz",
-          "trading": true,
-          "transaction_fee": 0.0095
-        },
         {
           "symbol": "TSLA",
           "cash_at_risk": 0.15,
           "population_filename": "5pw-population-TSLA.gz",
           "genome_filename": "5pw-genome-TSLA.gz",
-          "training_filename": "30m-data-TSLA.gz",
+          "training_filename": "15m-data-TSLA.gz",
           "trading": true,
-          "transaction_fee": 0.001
+          "transaction_fee": 0.001,
+          "long_term_features": ["sma_d", "slow_k", "rickshaw_man"],
+          "long_term_seed": 8,
+          "short_term_features": ["atr", "tr", "long_line"],
+          "short_term_seed": 2
+        },
+        {
+          "symbol": "TSLS",
+          "cash_at_risk": 0.15,
+          "population_filename": "5pw-population-TSLS.gz",
+          "genome_filename": "5pw-genome-TSLS.gz",
+          "training_filename": "15m-data-TSLS.gz",
+          "trading": true,
+          "transaction_fee": 0.001,
+          "long_term_features": ["vwap_pc", "trade_count_pc"],
+          "long_term_seed": 6,
+          "short_term_features": ["trade_count_pc", "natr"],
+          "short_term_seed": 1
         },
         {
           "symbol": "UVXY",
           "cash_at_risk": 0.15,
           "population_filename": "5pw-population-UVXY.gz",
           "genome_filename": "5pw-genome-UVXY.gz",
-          "training_filename": "30m-data-UVXY.gz",
+          "training_filename": "15m-data-UVXY.gz",
           "trading": true,
-          "transaction_fee": 0.0095
-        },
-        {
-          "symbol": "GGLS",
-          "cash_at_risk": 0.15,
-          "population_filename": "5pw-population-GGLS.gz",
-          "genome_filename": "5pw-genome-GGLS.gz",
-          "training_filename": "30m-data-GGLS.gz",
-          "trading": false,
-          "transaction_fee": 0.0095
-        },
-        {
-          "symbol": "PLTD",
-          "cash_at_risk": 0.15,
-          "population_filename": "5pw-population-PLTD.gz",
-          "genome_filename": "5pw-genome-PLTD.gz",
-          "training_filename": "30m-data-PLTD.gz",
-          "trading": false,
-          "transaction_fee": 0.0095
-        },
-        {
-          "symbol": "METD",
-          "cash_at_risk": 0.15,
-          "population_filename": "5pw-population-METD.gz",
-          "genome_filename": "5pw-genome-METD.gz",
-          "training_filename": "30m-data-METD.gz",
-          "trading": false,
-          "transaction_fee": 0.0095
+          "transaction_fee": 0.0095,
+          "long_term_features": ["sma_d", "slow_k", "rickshaw_man"],
+          "long_term_seed": 8,
+          "short_term_features": ["atr", "tr", "long_line"],
+          "short_term_seed": 2
         }
       ]
     }

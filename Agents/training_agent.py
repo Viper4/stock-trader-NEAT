@@ -9,6 +9,7 @@ import plot
 from Agents.base_agent import Agent
 from data_structures import Queue
 from constants import POPULATION_DIR, GENOME_DIR
+from tqdm import tqdm
 
 
 def eval_genome(args):
@@ -32,7 +33,7 @@ def eval_genome(args):
     last_index = stock_bars.index[-1]
     prev_date = None
 
-    for row in stock_bars.itertuples():
+    for row in tqdm(stock_bars.itertuples(), total=stock_bars.shape[0]):
         date = row.Index.to_pydatetime()
 
         # Check to settle cash after each day

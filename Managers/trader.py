@@ -26,19 +26,14 @@ class Trader(Manager):
     def create_agents(self):
         print("Trader: Creating agents")
 
-        symbols = []
-        for stock in self.profile.stocks:
+        for symbol, stock in self.profile.stocks.items():
             if stock["trading"]:
-                symbols.append(stock["symbol"])
-
-        for stock in self.profile.stocks:
-            if stock["trading"]:
-                if stock["symbol"] not in self.profile.agents:
-                    self.profile.logs[stock["symbol"]] = []
-                    self.profile.agents[stock["symbol"]] = Trading(self.settings, stock, self)
+                if symbol not in self.profile.agents:
+                    self.profile.logs[symbol] = []
+                    self.profile.agents[symbol] = Trading(self.settings, stock, self)
 
                     if stock["genome_filename"] is None:
-                        print(f"No genome filename provided for {stock['symbol']}")
+                        print(f"No genome filename provided for {symbol}")
                         exit(0)
                     else:
                         try:
@@ -47,9 +42,9 @@ class Trader(Manager):
                         except FileNotFoundError:
                             print(f" No genome file found for {stock['genome_filename']}")
                 else:
-                    self.profile.agents[stock["symbol"]].profile = self.profile
-                    self.profile.agents[stock["symbol"]].settings = self.settings
-                    self.profile.agents[stock["symbol"]].stock = stock
+                    self.profile.agents[symbol].profile = self.profile
+                    self.profile.agents[symbol].settings = self.settings
+                    self.profile.agents[symbol].stock = stock
 
         print(f"Created {', '.join(self.profile.agents.keys())} trading agents\n")
         for symbol in self.profile.agents:
@@ -80,15 +75,15 @@ class Trader(Manager):
             self.profile.update()
             if market_status:
                 # Update agents with profile
-                for stock in self.profile.stocks:
+                for symbol, stock in self.profile.stocks.items():
                     if stock["trading"]:
-                        if stock["symbol"] not in self.profile.agents:
+                        if symbol not in self.profile.agents:
                             self.create_agents()
                             break
                         else:
-                            self.profile.agents[stock["symbol"]].profile = self.profile
-                            self.profile.agents[stock["symbol"]].settings = self.settings
-                            self.profile.agents[stock["symbol"]].stock = stock
+                            self.profile.agents[symbol].profile = self.profile
+                            self.profile.agents[symbol].settings = self.settings
+                            self.profile.agents[symbol].stock = stock
 
                 # Stop training
                 if self.trainer.running:
@@ -113,7 +108,7 @@ class Trader(Manager):
                         if qqq_bars is None:
                             qqq_bars = self.generate_data("QQQ", "-T", self.profile, start_date, end_date)
 
-                        bars = self.generate_data(symbol, "-T", self.profile, start_date, end_date, None, spy_bars, qqq_bars, training=False, gen_hmm=True)
+                        bars = self.generate_data(symbol, "-T", self.profile, start_date, end_date, None, spy_bars, qqq_bars, training=False)
 
                         self.profile.agents[symbol].update_net(bars, 30)
                         self.save_memory(self.profile.agents[symbol].net, f"{self.profile.name.replace(' ', '-')}-{symbol}")

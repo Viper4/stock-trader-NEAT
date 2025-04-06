@@ -79,7 +79,7 @@ class FinBERTNews(object):
 
                 with torch.amp.autocast(self.device):  # Enable mixed precision
                     sentiment_probs = self.model(tokens["input_ids"], attention_mask=tokens["attention_mask"])["logits"]
-                    sentiment_probs = torch.nn.functional.softmax(torch.sum(sentiment_probs, 0), dim=-1).numpy()
+                    sentiment_probs = torch.nn.functional.softmax(torch.sum(sentiment_probs, 0), dim=-1).to(torch.float64).numpy()
                     sentiment = sentiment_probs[0] - sentiment_probs[1]  # positive% - negative%
         else:
             with torch.no_grad():  # Don't need gradients since we aren't training

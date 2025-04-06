@@ -39,15 +39,15 @@ class Validator(Manager):
             stock_bars = {}
             genomes = {}
             start_cashes = {}
-            for stock in profile.stocks:
-                if input(f"Run simulation for {stock['symbol']}? (y/n): ") == "y":
+            for symbol, stock in profile.stocks.items():
+                if input(f"Run simulation for {symbol}? (y/n): ") == "y":
                     if stock["genome_filename"] is None:
-                        print(f" No genome filename provided for {stock['symbol']}")
+                        print(f" No genome filename provided for {symbol}")
                     else:
                         try:
                             best_genome = saving.SaveSystem.load_data(os.path.join(profile.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
                             start_cash = input(" Enter starting cash: ")
-                            validation_filename = f"{stock['symbol']}-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
+                            validation_filename = f"{symbol}-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
                             file_path = f"{self.settings['save_path']}\\ValidationData\\{validation_filename}"
                             if os.path.exists(file_path):
                                 stock_bars[stock["symbol"]] = self.load_data(stock["symbol"], "-V", file_path)
@@ -67,7 +67,7 @@ class Validator(Manager):
                                     else:
                                         stock_bars["QQQ"] = self.generate_data("QQQ", "-V", profile, start_date, end_date, qqq_path)
 
-                                stock_bars[stock["symbol"]] = self.generate_data(stock["symbol"], "-V", profile, start_date, end_date, file_path, stock_bars["SPY"], stock_bars["QQQ"], False)
+                                stock_bars[stock["symbol"]] = self.generate_data(stock["symbol"], "-V", profile, start_date, end_date, file_path, bars_spy=stock_bars["SPY"], bars_qqq=stock_bars["QQQ"], training=False)
                             genomes[stock["symbol"]] = best_genome
                             start_cashes[stock["symbol"]] = start_cash
                         except FileNotFoundError:
@@ -89,7 +89,7 @@ class Validator(Manager):
                 asset = profile.alpaca_api.get_asset(symbol=symbol)
                 jobs.append((symbol, pool.apply_async(profile.agents[symbol].validate,
                                                       (stock_bars[symbol],
-                                                       profile.sma_periods,
+                                                       profile.ma_periods,
                                                        genomes[symbol],
                                                        asset.fractionable,
                                                        start_cashes[symbol]))))
@@ -109,29 +109,8 @@ class Validator(Manager):
                             for key in action:
                                 if key == "inputs":
                                     print("-Inputs")
-                                    print(f" |Short/Long: {action[key][0]}")
-                                    print(f" |PLPC: {action[key][1]}")
-                                    print(f" |Open: {action[key][2]}")
-                                    print(f" |High: {action[key][3]}")
-                                    print(f" |Low: {action[key][4]}")
-                                    print(f" |Close: {action[key][5]}")
-                                    print(f" |Volume: {action[key][6]}")
-                                    print(f" |VWAP: {action[key][7]}")
-                                    print(f" |{symbol} Sentiment: {action[key][8]}")
-                                    print(f" |S&P 500 Close: {action[key][9]}")
-                                    print(f" |S&P 500 Volume: {action[key][10]}")
-                                    print(f" |S&P 500 Sentiment: {action[key][11]}")
-                                    print(f" |NASDAQ Close: {action[key][12]}")
-                                    print(f" |NASDAQ Volume: {action[key][13]}")
-                                    print(f" |NASDAQ Sentiment: {action[key][14]}")
-                                    print(f" |Slow K: {action[key][15]}")
-                                    print(f" |Slow D: {action[key][16]}")
-                                    print(f" |{profile.k_period}-day EMA: {action[key][17]}")
-                                    print(f" |{profile.d_period}-day EMA: {action[key][18]}")
-                                    print(f" |{profile.rsi_period}-day RSI: {action[key][19]}")
-                                    print(f" |{profile.atr_period}-day ATR: {action[key][20]}")
-                                    for i in range(len(profile.sma_periods)):
-                                        print(f" |{profile.sma_periods[i]}-day SMA: {action[key][21 + i]}")
+                                    for j in range(len(action[key])):
+                                        print(f" |{j}: {action[key][j]}")
 
                                 elif key == "outputs":
                                     print("-Outputs")

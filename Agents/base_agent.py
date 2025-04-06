@@ -18,14 +18,20 @@ class Agent:
         self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, CONFIG_PATH)
 
     @staticmethod
-    def generate_inputs(row, plpc, sma_periods):
+    def generate_inputs(row, plpc, ma_periods):
+        stock_ema_pcs = []
+        spy_ema_pcs = []
+        qqq_ema_pcs = []
         stock_sma_pcs = []
         spy_sma_pcs = []
         qqq_sma_pcs = []
-        for sma_period in sma_periods:
-            stock_sma_pcs.append(getattr(row, f"sma_{sma_period}_pc"))
-            spy_sma_pcs.append(getattr(row, f"sma_{sma_period}_spy_pc"))
-            qqq_sma_pcs.append(getattr(row, f"sma_{sma_period}_qqq_pc"))
+        for ma_period in ma_periods:
+            stock_ema_pcs.append(getattr(row, f"ema_{ma_period}_pc"))
+            spy_ema_pcs.append(getattr(row, f"ema_{ma_period}_spy_pc"))
+            qqq_ema_pcs.append(getattr(row, f"ema_{ma_period}_qqq_pc"))
+            stock_sma_pcs.append(getattr(row, f"sma_{ma_period}_pc"))
+            spy_sma_pcs.append(getattr(row, f"sma_{ma_period}_spy_pc"))
+            qqq_sma_pcs.append(getattr(row, f"sma_{ma_period}_qqq_pc"))
 
         return [
             # Stock data
@@ -37,37 +43,47 @@ class Agent:
             row.volume_pc,
             row.vwap_pc,
             row.sentiment,  # -1.0 = negative, 0.0 = neutral, 1.0 = positive
-            row.hmm_regime,  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
-            (row.slow_k - 50) / 50,
-            (row.slow_d - 50) / 50,
-            (row.rsi - 50) / 50,
+            row.long_term_regime,  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
+            row.short_term_regime,  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
+            row.slow_k,
+            row.slow_d,
+            row.rsi,
             row.atr_pc,
-            row.ema_k_pc,
-            row.ema_d_pc,
+            *stock_ema_pcs,
             *stock_sma_pcs,
 
             # SPY data
+            row.open_spy_pc,
+            row.high_spy_pc,
+            row.low_spy_pc,
             row.close_spy_pc,
             row.volume_spy_pc,
+            row.vwap_spy_pc,
             row.sentiment_spy,
-            (row.slow_k_spy - 50) / 50,
-            (row.slow_d_spy - 50) / 50,
-            (row.rsi_spy - 50) / 50,
+            row.long_term_regime_spy,
+            row.short_term_regime_spy,
+            row.slow_k_spy,
+            row.slow_d_spy,
+            row.rsi_spy,
             row.atr_spy_pc,
-            row.ema_k_spy_pc,
-            row.ema_d_spy_pc,
+            *spy_sma_pcs,
             *spy_sma_pcs,
 
             # QQQ data
+            row.open_qqq_pc,
+            row.high_qqq_pc,
+            row.low_qqq_pc,
             row.close_qqq_pc,
             row.volume_qqq_pc,
+            row.vwap_qqq_pc,
             row.sentiment_qqq,
-            (row.slow_k_spy - 50) / 50,
-            (row.slow_d_spy - 50) / 50,
-            (row.rsi_spy - 50) / 50,
-            row.atr_spy_pc,
-            row.ema_k_spy_pc,
-            row.ema_d_spy_pc,
+            row.long_term_regime_qqq,
+            row.short_term_regime_qqq,
+            row.slow_k_spy,
+            row.slow_d_spy,
+            row.rsi_spy,
+            row.atr_spy_pc, # 40 inputs without ema, sma
+            *qqq_ema_pcs,
             *qqq_sma_pcs
         ]
 

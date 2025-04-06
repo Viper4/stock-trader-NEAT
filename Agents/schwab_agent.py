@@ -4,6 +4,7 @@ import pytz
 import time
 from Agents.base_agent import Agent
 from neat import nn
+from HMM import models
 
 
 class Trading(Agent):
@@ -22,7 +23,7 @@ class Trading(Agent):
         print(f"{self.profile.name} {self.stock['symbol']}: Running network over {days} days")
 
         for row in bars.itertuples():
-            inputs = Agent.generate_inputs(row, 0.0, self.profile.sma_periods)
+            inputs = Agent.generate_inputs(row, 0.0, self.profile.ma_periods)
 
             self.net.activate(inputs)
 
@@ -34,9 +35,11 @@ class Trading(Agent):
         print(f"{self.trader.profile['name']} {self.stock['symbol']}: Starting trading")
         self.running = True
 
-        max_sma_period = max(self.trader.profile.sma_periods)
+        max_ma_period = max(self.trader.profile.ma_periods)
         max_period = max(self.trader.profile["k_period"], self.trader.profile["d_period"],
-                         self.trader.profile["rsi_period"], self.trader.profile["atr_period"], max_sma_period)
+                         self.trader.profile["rsi_period"], self.trader.profile["atr_period"], max_ma_period)
+
+        regime_predictor = models.HMMRegimePrediction(processes=1)
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
@@ -62,7 +65,7 @@ class Trading(Agent):
                 end_date = now_date - dt.timedelta(days=1)
                 spy_bars = self.trader.generate_data("SPY", "-SA", self.trader.profile, start_date, end_date)
                 qqq_bars = self.trader.generate_data("QQQ", "-SA", self.trader.profile, start_date, end_date)
-                bars = self.trader.generate_data(self.stock["symbol"], "-SA", self.trader.profile, start_date, end_date, spy_bars=spy_bars, qqq_bars=qqq_bars, gen_hmm=True)
+                bars = self.trader.generate_data(self.stock["symbol"], "-SA", self.trader.profile, start_date, end_date, spy_bars=spy_bars, qqq_bars=qqq_bars)
 
                 bars = pd.concat([bars, candles], ignore_index=False).drop_duplicates()
 
@@ -71,7 +74,7 @@ class Trading(Agent):
                 current_bar["sentiment_spy"] = self.trader.finbert.get_api_sentiment("SPY", now_date - dt.timedelta(days=3), now_date)
                 current_bar["sentiment_qqq"] = self.trader.finbert.get_api_sentiment("QQQ", now_date - dt.timedelta(days=3), now_date)
 
-                inputs = self.generate_inputs(current_bar, position["longOpenProfitLoss"] / position["averagePrice"], self.trader.profile.sma_periods)
+                inputs = self.generate_inputs(current_bar, position["longOpenProfitLoss"] / position["averagePrice"], self.trader.profile.ma_periods)
 
                 outputs = self.net.activate(inputs)
 

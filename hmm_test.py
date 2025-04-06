@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import Managers.base_manager
 import time
 import saving
-import talib
 import ast
 from sklearn.feature_selection import f_classif, mutual_info_classif
 from scipy.stats import chi2_contingency
@@ -19,8 +18,8 @@ from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-SPY-1d_2019-1-1_2025-4-3.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-SPY-1d_2019-1-1_2025-4-3.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-UVXY-1d_2019-1-1_2025-4-4.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-UVXY-1d_2019-1-1_2025-4-4.csv"
 
 
 class CorrelationAnalysis(object):
@@ -61,7 +60,7 @@ class CorrelationAnalysis(object):
         return pd.DataFrame(results).T
 
     def plot_correlation(self, correlation_matrix):
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(10, 6))
         sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm", fmt=".2f", robust=True, yticklabels=True, xticklabels=True)
         plt.title("Feature Correlation with Market Regime")
         plt.show()
@@ -86,15 +85,17 @@ def run_regime_test(train_bars, test_bars, features, seed, plot):
     regime_predictor.validate(train_bars, test_bars, features, plot, seed)
     start_time = time.time()
     predicted_regimes = regime_predictor.predict_probability(test_bars_df)
-    print(f"Most recent prediction:\n", predicted_regimes[-1])
+    print(f"Last 10 predictions:")
+    for i in range(10):
+        print(str(i+1) + ": " + str(predicted_regimes[-10 + i]))
     print("Finished in", time.time() - start_time, "seconds")
     print()
 
 
-def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterations=-1, n_seeds=20):
+def run_regime_search(train_bars, test_bars, features, n_iterations=-1, n_seeds=20):
     feature_combinations = []
     print("Generating combinations")
-    for i in range(1, 5):
+    for i in range(2, 5):
         feature_combinations.extend(itertools.combinations(features, i))
     print(f"Generated {len(feature_combinations)} combinations")
 
@@ -103,34 +104,37 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
     best_profit = -999999.0
 
     if not os.path.exists(TESTED_PATH):
-        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit"], TESTED_PATH)
+        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit", "Label Order"], TESTED_PATH)
     rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
+    i = 0
     for row in rows:
         if row[0] == "Features":
             continue
+        if len(row) != 4:
+            print("Problem:", row, i)
         key = row[0] + row[1]
         tested[key] = (float(row[2]), float(row[3]))
+        i += 1
 
     print("Starting search")
-    regime_predictor = models.HMMRegimePrediction(processes=val_processes)
+    regime_predictor = models.HMMRegimePrediction()
     i = 0
     for features in feature_combinations:
+        if n_iterations != -1 and i >= n_iterations:
+            break
         start_time = time.time()
         print(f"\nTest {i}/{len(feature_combinations)} {100 * i / len(feature_combinations):.4f}%:")
+        features_list = list(features)
+
         for j in range(n_seeds):
-            features_list = list(features)
-
-            if n_iterations != -1 and i >= n_iterations:
-                break
-
             key = str(features_list) + str(j)
             if key not in tested:
-                accuracy, profit = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
+                accuracy, profit, label_order = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
                 tested[key] = accuracy
-                saving.SaveSystem.save_to_csv([features_list, j, accuracy, profit], TESTED_PATH, "a")
+                saving.SaveSystem.save_to_csv([features_list, j, accuracy, profit, label_order], TESTED_PATH, "a")
             else:
                 accuracy, profit = tested[key]
-                print(f"Already tested: {key} - {tested[key]}%")
+                print(f"Already tested: {key} - {tested[key]}")
 
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
@@ -147,41 +151,107 @@ def run_regime_search(train_bars, test_bars, features, val_processes=1, n_iterat
     print(f"Search finished")
 
 
-def get_stats(bars, column, plot):
-    minimum = min(bars[column])
-    maximum = max(bars[column])
-    mean = bars[column].mean()
-    median = bars[column].median()
-    std_deviation = bars[column].std()
+def get_stats(bars, columns, plot):
+    minimums = []
+    maximums = []
+    means = []
+    medians = []
+    standard_deviations = []
+    for i in range(len(columns)):
+        minimums.append(min(bars[columns[i]]))
+        maximums.append(max(bars[columns[i]]))
+        means.append(bars[columns[i]].mean())
+        medians.append(bars[columns[i]].median())
+        standard_deviations.append(bars[columns[i]].std())
+
+        if plot:
+            print(f"Statistics for {columns[i]}:")
+            print(" Min: ", minimums[i])
+            print(" Max: ", maximums[i])
+            print(" Mean: ", means[i])
+            print(" Median: ", medians[i])
+            print(" Standard Deviation: ", standard_deviations[i])
+
+            plt.figure(figsize=(10, 6))
+            plt.hist(bars[columns[i]], bins=50)
+            plt.xlabel(columns[i])
+            plt.ylabel("Frequency")
+            plt.title(f"Histogram of {columns[i]}")
+            plt.show()
 
     if plot:
-        print("Min: ", minimum)
-        print("Max: ", maximum)
-        print("Mean: ", mean)
-        print("Median: ", median)
-        print("Standard Deviation: ", std_deviation)
-
         plt.figure(figsize=(12, 6))
-        plt.hist(bars[column], bins=50)
-        plt.xlabel(column)
-        plt.ylabel("Frequency")
-        plt.title(f"Histogram of {column}")
-        plt.show()
 
-        plt.figure(figsize=(15, 6))
-        plt.plot(bars.index, bars[column], color="black", label=column)
+        for column in columns:
+            # Plot column
+            plt.plot(bars.index, bars[column], color="blue", label=column, alpha=0.7)
 
         plt.legend()
-        plt.title(f"{column} over time")
+        plt.title(f"{columns} over time")
+        plt.xlabel("Date")
+        plt.ylabel("Value")
+        plt.grid(True)
         plt.show()
 
-    return minimum, maximum, mean, median, std_deviation
+    return minimums, maximums, means, medians, standard_deviations
 
 
 def run_random_forest(bars, features, seed):
     run_regime_test(bars, bars, features, seed, False)
     random_forest = feature_selection.RandomForestFeatureSelection()
-    print(random_forest.evaluate(bars, features))
+    random_forest.evaluate(bars, features)
+
+
+def get_best(sort_by):
+    results = []
+    rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
+    for row in rows:
+        if row[0] == "Features":
+            continue
+        # Features, Seed, Accuracy, Profit
+        results.append((row[0], int(row[1]), float(row[2]), float(row[3])))
+
+    if sort_by == 1:
+        results.sort(key=lambda x: x[2], reverse=True)
+    else:
+        results.sort(key=lambda x: x[3], reverse=True)
+    res_features, res_seed, res_accuracy, res_profit = results[0]
+    print("Best features:", res_features)
+    print("Best seed:", res_seed)
+    print("Best accuracy:", res_accuracy)
+    print("Best profit:", res_profit)
+
+    save_path = TESTED_PATH.replace(".csv", "_sorted.csv")
+    saving.SaveSystem.delete_file(save_path)
+    saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit"], save_path)
+
+    sorted_keys = []
+    sorted_accuracies = []
+    sorted_profits = []
+    for feature_settings, seed, accuracy, profit in results:
+        sorted_keys.append(feature_settings + " " + str(seed))
+        sorted_accuracies.append(accuracy)
+        sorted_profits.append(profit)
+        saving.SaveSystem.save_to_csv([feature_settings, seed, accuracy, profit], save_path, "a")
+
+    if sort_by == 1:
+        plt.figure(figsize=(10, 6))
+        plt.barh(sorted_keys[:100], sorted_accuracies[:100], color="skyblue")
+        plt.xlabel("Accuracy (%)")
+        plt.ylabel("Feature Combinations")
+        plt.title("Feature Combination Accuracy Rankings")
+        plt.gca().invert_yaxis()  # Best at top
+        plt.show()
+    else:
+        plt.figure(figsize=(10, 6))
+        plt.barh(sorted_keys[:100], sorted_profits[:100], color="skyblue")
+        plt.xlabel("Profit ($)")
+        plt.ylabel("Feature Combinations")
+        plt.title("Feature Combination Profit Rankings")
+        plt.gca().invert_yaxis()  # Best at top
+        plt.show()
+
+    return results
 
 
 if __name__ == "__main__":
@@ -200,165 +270,29 @@ if __name__ == "__main__":
             settings = json.load(file)
         alpaca_api = REST(settings["profiles"][0]["public_key"], settings["profiles"][0]["secret_key"],
                           base_url=URL("https://paper-api.alpaca.markets"))
+        now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+        if end_date >= now_date - dt.timedelta(minutes=16):
+            end_date = now_date - dt.timedelta(minutes=16)
         bars_df = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval, start_date, end_date, 500000, unit_map[unit_input])
 
-        # Calculate percentage changes and indicators
-        bars_df["open_pc"] = bars_df["open"].pct_change(fill_method=None)
-        bars_df["high_pc"] = bars_df["high"].pct_change(fill_method=None)
-        bars_df["low_pc"] = bars_df["low"].pct_change(fill_method=None)
-        bars_df["close_pc"] = bars_df["close"].pct_change(fill_method=None)
-        bars_df["volume_pc"] = bars_df["volume"].pct_change(fill_method=None)
-        bars_df["vwap_pc"] = bars_df["vwap"].pct_change(fill_method=None)
-        bars_df["trade_count_pc"] = bars_df["trade_count"].pct_change(fill_method=None)
-        bars_df["fracocp"] = (bars_df["close"] - bars_df["open"]) / bars_df["open"]
-        bars_df["frachp"] = (bars_df["high"] - bars_df["open"]) / bars_df["open"]
-        bars_df["fraclp"] = (bars_df["open"] - bars_df["low"]) / bars_df["open"]
-
-        bars_df["sma_1"] = talib.SMA(bars_df["close"], timeperiod=10)
-        bars_df["sma_2"] = talib.SMA(bars_df["close"], timeperiod=30)
-        bars_df["sma_3"] = talib.SMA(bars_df["close"], timeperiod=50)
-        bars_df["sma_4"] = talib.SMA(bars_df["close"], timeperiod=200)
-        bars_df["sma_1"] = bars_df["sma_1"].pct_change(fill_method=None)
-        bars_df["sma_2"] = bars_df["sma_2"].pct_change(fill_method=None)
-        bars_df["sma_3"] = bars_df["sma_3"].pct_change(fill_method=None)
-        bars_df["sma_4"] = bars_df["sma_4"].pct_change(fill_method=None)
-
-        bars_df["ema_1"] = talib.EMA(bars_df["close"], timeperiod=10)
-        bars_df["ema_2"] = talib.EMA(bars_df["close"], timeperiod=30)
-        bars_df["ema_3"] = talib.EMA(bars_df["close"], timeperiod=50)
-        bars_df["ema_4"] = talib.EMA(bars_df["close"], timeperiod=200)
-        bars_df["ema_1"] = bars_df["ema_1"].pct_change(fill_method=None)
-        bars_df["ema_2"] = bars_df["ema_2"].pct_change(fill_method=None)
-        bars_df["ema_3"] = bars_df["ema_3"].pct_change(fill_method=None)
-        bars_df["ema_4"] = bars_df["ema_4"].pct_change(fill_method=None)
-
-        bars_df["atr"] = talib.ATR(bars_df["high"], bars_df["low"], bars_df["close"], timeperiod=14)
-        bars_df["atr"] = bars_df["atr"].pct_change(fill_method=None)
-        bars_df["natr"] = talib.NATR(bars_df["high"], bars_df["low"], bars_df["close"], timeperiod=14)
-        bars_df["natr"] = bars_df["natr"].pct_change(fill_method=None)
-        bars_df["tr"] = talib.TRANGE(bars_df["high"], bars_df["low"], bars_df["close"])
-        bars_df["tr"] = bars_df["tr"].pct_change(fill_method=None).replace(np.inf, 1).replace(-np.inf, -1)
-        bars_df["rsi"] = (talib.RSI(bars_df["close"], timeperiod=14) - 50) / 50
-
-        slow_k, slow_d = talib.STOCH(bars_df["high"], bars_df["low"], bars_df["close"], fastk_period=5,
-                                     slowk_period=3, slowd_period=3)
-        bars_df["slow_k"] = (slow_k - 50) / 50
-        bars_df["slow_d"] = (slow_d - 50) / 50
-
-        bars_df["three_black_crows"] = talib.CDL3BLACKCROWS(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["three_inside"] = talib.CDL3INSIDE(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["three_lines"] = talib.CDL3LINESTRIKE(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["three_outside"] = talib.CDL3OUTSIDE(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["three_stars"] = talib.CDL3STARSINSOUTH(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["three_whitesoldiers"] = talib.CDL3WHITESOLDIERS(bars_df["open"], bars_df["high"], bars_df["low"],
-                                                              bars_df["close"]) / 100
-        bars_df["abandoned_baby"] = talib.CDLABANDONEDBABY(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"],
-                                                        penetration=0.3) / 100
-        bars_df["advance_block"] = talib.CDLADVANCEBLOCK(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["belthold"] = talib.CDLBELTHOLD(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["breakaway"] = talib.CDLBREAKAWAY(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["closing_marubozu"] = talib.CDLCLOSINGMARUBOZU(bars_df["open"], bars_df["high"], bars_df["low"],
-                                                            bars_df["close"]) / 100
-        bars_df["conceal_baby"] = talib.CDLCONCEALBABYSWALL(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["counterattack"] = talib.CDLCOUNTERATTACK(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["dark_cloud_cover"] = talib.CDLDARKCLOUDCOVER(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"],
-                                                           penetration=0.5) / 100
-        bars_df["doji"] = talib.CDLDOJI(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["doji_star"] = talib.CDLDOJISTAR(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["dragonfly_doji"] = talib.CDLDRAGONFLYDOJI(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["engulfing"] = talib.CDLENGULFING(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["evening_doji_star"] = talib.CDLEVENINGDOJISTAR(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["evening_star"] = talib.CDLEVENINGSTAR(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["gap_side_by_side"] = talib.CDLGAPSIDESIDEWHITE(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["gravestone_doji"] = talib.CDLGRAVESTONEDOJI(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["hammer"] = talib.CDLHAMMER(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["hanging_man"] = talib.CDLHANGINGMAN(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["harami"] = talib.CDLHARAMI(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["harami_cross"] = talib.CDLHARAMICROSS(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["high_wave"] = talib.CDLHIGHWAVE(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["hikkake"] = talib.CDLHIKKAKE(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["homing_pigeon"] = talib.CDLHOMINGPIGEON(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["identical_three_crows"] = talib.CDLIDENTICAL3CROWS(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["in_neck"] = talib.CDLINNECK(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["inverted_hammer"] = talib.CDLINVERTEDHAMMER(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["kicking"] = talib.CDLKICKING(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["kicking_by_length"] = talib.CDLKICKINGBYLENGTH(bars_df["open"], bars_df["high"], bars_df["low"],
-                                                             bars_df["close"]) / 100
-        bars_df["ladder_bottom"] = talib.CDLLADDERBOTTOM(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["long_leader"] = talib.CDLLONGLEGGEDDOJI(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["long_line"] = talib.CDLLONGLINE(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["marubozu"] = talib.CDLMARUBOZU(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["matching_low"] = talib.CDLMATCHINGLOW(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["mat_hold"] = talib.CDLMATHOLD(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["morning_doji_star"] = talib.CDLMORNINGDOJISTAR(bars_df["open"], bars_df["high"], bars_df["low"],
-                                                             bars_df["close"]) / 100
-        bars_df["morning_star"] = talib.CDLMORNINGSTAR(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["on_neck"] = talib.CDLONNECK(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["piercing"] = talib.CDLPIERCING(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["rickshaw_man"] = talib.CDLRICKSHAWMAN(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["rise_fall_three_methods"] = talib.CDLRISEFALL3METHODS(bars_df["open"], bars_df["high"], bars_df["low"],
-                                                                    bars_df["close"]) / 100
-        bars_df["separating_lines"] = talib.CDLSEPARATINGLINES(bars_df["open"], bars_df["high"], bars_df["low"],
-                                                            bars_df["close"]) / 100
-        bars_df["shooting_star"] = talib.CDLSHOOTINGSTAR(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["short_line"] = talib.CDLSHORTLINE(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["spinning_top"] = talib.CDLSPINNINGTOP(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["stalled_pattern"] = talib.CDLSTALLEDPATTERN(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["stick_sandwich"] = talib.CDLSTICKSANDWICH(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["takuri"] = talib.CDLTAKURI(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["tasuki_gap"] = talib.CDLTASUKIGAP(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["thrusting"] = talib.CDLTHRUSTING(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["tristar"] = talib.CDLTRISTAR(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["unique_3_river"] = talib.CDLUNIQUE3RIVER(bars_df["open"], bars_df["high"], bars_df["low"], bars_df["close"]) / 100
-        bars_df["upside_gap_2_crows"] = talib.CDLUPSIDEGAP2CROWS(bars_df["open"], bars_df["high"], bars_df["low"],
-                                                              bars_df["close"]) / 100
-        bars_df["side_gap_3_methods"] = talib.CDLXSIDEGAP3METHODS(bars_df["open"], bars_df["high"], bars_df["low"],
-                                                               bars_df["close"]) / 100
-
-        bars_df["ad"] = talib.AD(bars_df["high"], bars_df["low"], bars_df["close"], bars_df["volume"])
-        bars_df["adosc"] = talib.ADOSC(bars_df["high"], bars_df["low"], bars_df["close"], bars_df["volume"],
-                                       fastperiod=3, slowperiod=10)
-        bars_df["obv"] = talib.OBV(bars_df["close"], bars_df["volume"])
-        bars_df["ad"] = bars_df["ad"].pct_change(fill_method=None)
-        bars_df["adosc"] = bars_df["adosc"].pct_change(fill_method=None)
-        bars_df["obv"] = bars_df["obv"].pct_change(fill_method=None)
-
-        bars_df["adx"] = talib.ADX(bars_df["high"], bars_df["low"], bars_df["close"], timeperiod=14)
-        bars_df["adx"] = bars_df["adx"].pct_change(fill_method=None)
-
-        bars_df["ht_trendline"] = talib.HT_TRENDLINE(bars_df["close"])
-        bars_df["ht_trendline"] = bars_df["ht_trendline"].pct_change()
-
-        bars_df["kama"] = talib.KAMA(bars_df["close"], timeperiod=30)
-        bars_df["kama"] = bars_df["kama"].pct_change(fill_method=None)
-
-        bars_df["mama"], bars_df["fama"] = talib.MAMA(bars_df["close"], fastlimit=0.5, slowlimit=0.05)
-        bars_df["mama"] = bars_df["mama"].pct_change(fill_method=None)
-        bars_df["fama"] = bars_df["fama"].pct_change(fill_method=None)
-
-        bars_df["sar"] = talib.SAR(bars_df["high"], bars_df["low"], acceleration=0.02, maximum=0.2)
-        bars_df["sar"] = bars_df["sar"].pct_change(fill_method=None)
-
-        bars_df["volatility"] = bars_df["close_pc"].rolling(window=30).std()
-        bars_df.dropna(inplace=True)
+        models.HMMRegimePrediction.augment_bars(bars_df)
 
         saving.SaveSystem.save_data(bars_df, DATA_PATH)
     else:
         bars_df = saving.SaveSystem.load_data(DATA_PATH)
-        bars_df.dropna(inplace=True)
 
     train_size = int(bars_df.shape[0] * 0.8)
     train_bars_df = bars_df[:train_size].copy()
     test_bars_df = bars_df[train_size + 1:].copy()
-    print("Train bars: ", train_bars_df.shape[0])
-    print("Test bars: ", test_bars_df.shape[0])
-    print("Total bars: ", bars_df.shape[0])
+    print("Train bars:", train_bars_df.shape[0])
+    print("Test bars:", test_bars_df.shape[0])
+    print("Total bars:", bars_df.shape[0])
 
     all_features = [
         "open_pc", "high_pc", "low_pc", "close_pc", "volume_pc", "vwap_pc", "trade_count_pc",
         "fracocp", "frachp", "fraclp",
-        "sma_1", "sma_2", "sma_3", "sma_4",
-        "ema_1", "ema_2", "ema_3", "ema_4",
+        "sma_a", "sma_b", "sma_c", "sma_d",
+        "ema_a", "ema_b", "ema_c", "ema_d",
         "atr", "natr", "tr", "rsi", "slow_k", "slow_d",
         "three_black_crows", "three_inside", "three_lines", "three_outside",
         "three_stars", "three_whitesoldiers", "abandoned_baby", "advance_block",
@@ -376,17 +310,15 @@ if __name__ == "__main__":
         "takuri", "tasuki_gap", "thrusting", "tristar", "unique_3_river",
         "upside_gap_2_crows", "side_gap_3_methods",
         "ad", "adosc", "obv", "adx", "ht_trendline", "kama", "mama", "fama", "sar",
-        "volatility"
+        "volatility", "macd", "macdsignal", "macdhist"
     ]
 
     if user_input == "brute force":
-        num_processes = int(input("Number of processes (1 best for small test set, >1 better for big test set): "))
         num_seeds = int(input("Number of seeds to check (10 is good): "))
-        run_regime_search(train_bars_df, test_bars_df, all_features, val_processes=num_processes, n_seeds=num_seeds)
+        run_regime_search(train_bars_df, test_bars_df, all_features, n_seeds=num_seeds)
     elif user_input == "price test":
         run_price_test(int(input("Number of components: ")), int(input("Number of latent bars: ")), train_bars_df, test_bars_df)
     elif user_input == "reg test":
-        # ['high_pc', 'vwap_pc', 'stick_sandwich'] seed 3 looks really good
         test_features = ast.literal_eval(input("Type features, Ex: ['close_pc', 'ema_1']: "))
         test_seed = int(input("Seed: "))
         run_regime_test(train_bars_df, test_bars_df, test_features, test_seed, True)
@@ -405,63 +337,20 @@ if __name__ == "__main__":
             print(correlation_matrix)
         correlation.plot_correlation(correlation_matrix)
     elif user_input == "reg best":
-        sort_by = int(input("Sort by accuracy (1) or profit (2): "))
-        results = []
-        rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
-        for row in rows:
-            if row[0] == "Features":
-                continue
-            results.append((row[0], int(row[1]), float(row[2]), float(row[3])))
+        results = get_best(int(input("Sort by 1 for accuracy or 2 for profit: ")))
 
-        if sort_by == 1:
-            results.sort(key=lambda x: x[2], reverse=True)
-        else:
-            results.sort(key=lambda x: x[3], reverse=True)
-        res_features, res_seed, res_accuracy, res_profit = results[0]
-        print("Best features: ", res_features)
-        print("Best seed: ", res_seed)
-        print("Best accuracy: ", res_accuracy)
-        print("Best profit: ", res_profit)
-
-        save_path = TESTED_PATH.replace(".csv", "_sorted.csv")
-        saving.SaveSystem.delete_file(save_path)
-        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit"], save_path)
-
-        sorted_keys = []
-        sorted_accuracies = []
-        sorted_profits = []
+        i = 1
+        last_feature_settings = None
         for feature_settings, seed, accuracy, profit in results:
-            sorted_keys.append(feature_settings + " " + str(seed))
-            sorted_accuracies.append(accuracy)
-            sorted_profits.append(profit)
-            saving.SaveSystem.save_to_csv([feature_settings, seed, accuracy, profit], save_path, "a")
-
-        if sort_by == 1:
-            plt.figure(figsize=(12, 6))
-            plt.barh(sorted_keys[:100], sorted_accuracies[:100], color="skyblue")
-            plt.xlabel("Accuracy (%)")
-            plt.ylabel("Feature Combinations")
-            plt.title("Feature Combination Accuracy Rankings")
-            plt.gca().invert_yaxis()  # Best at top
-            plt.show()
-        else:
-            plt.figure(figsize=(12, 6))
-            plt.barh(sorted_keys[:100], sorted_profits[:100], color="skyblue")
-            plt.xlabel("Profit ($)")
-            plt.ylabel("Feature Combinations")
-            plt.title("Feature Combination Profit Rankings")
-            plt.gca().invert_yaxis()  # Best at top
-            plt.show()
-
-        run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(res_features), res_seed, True)
+            if feature_settings != last_feature_settings:
+                print(f"#{i}:")
+                run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(feature_settings), seed, True)
+                last_feature_settings = feature_settings
+            i += 1
     elif user_input == "stats":
-        get_stats(pd.concat([train_bars_df, test_bars_df]), input("Enter column: "), True)
+        columns = ast.literal_eval(input("Enter columns, Ex: ['close_pc', 'ema_1']: "))
+        get_stats(pd.concat([train_bars_df, test_bars_df]), columns, True)
     elif user_input == "random forest":
         for i in range(10):
             print(f"Seed {i}")
             run_random_forest(bars_df, all_features, i)
-
-    '''run_test_price_predict(16, 50, train_bars, bars_df[train_size + 1:])
-    run_test_price_predict(8, 50, train_bars, bars_df[train_size + 1:])
-    run_test_price_predict(4, 50, train_bars, bars_df[train_size + 1:])
-    run_test_price_predict(2, 50, train_bars, bars_df[train_size + 1:])'''

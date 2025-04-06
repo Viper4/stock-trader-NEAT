@@ -32,8 +32,8 @@ class Trainer(Manager):
         for profile in self.profiles:
             profile.update()
 
-            for stock in profile.stocks:
-                self.symbols.append(stock["symbol"])
+            for symbol in profile.stocks:
+                self.symbols.append(symbol)
                 if self.largest_backtest < profile.data_batch_size:
                     self.largest_backtest = profile.data_batch_size
                 if self.largest_data_batch_size < profile.data_batches:
@@ -105,8 +105,7 @@ class Trainer(Manager):
                                                                 training=True))
 
             used_substitutions = {}
-            for stock in profile.stocks:
-                symbol = stock["symbol"]
+            for symbol, stock in profile.stocks.items():
                 stock_bars[symbol] = []
                 used_substitutions[symbol] = set()
 
@@ -150,10 +149,9 @@ class Trainer(Manager):
                                                                      end_date - time_delta,
                                                                      file_path,
                                                                      stock_bars["SPY"][i], stock_bars["QQQ"][i],
-                                                                     training=True, gen_hmm=True))
+                                                                     training=True))
 
-            for stock in profile.stocks:
-                symbol = stock["symbol"]
+            for symbol, stock in profile.stocks.items():
                 profile.agents[symbol] = Training(self.settings, profile, stock, stock_bars[symbol])
 
         print(f"Trainer: Created {self.symbols} training agents\n")

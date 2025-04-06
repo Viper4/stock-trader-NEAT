@@ -5,14 +5,45 @@ import datetime as dt
 import saving
 import os
 from constants import LOG_DIR, TRAINING_DIR
+from tqdm import tqdm
 
 
-def plot_bars(bars, lines=None):
-    fig = go.Figure(data=[go.Candlestick(x=bars.index, open=bars["open"], high=bars["high"], low=bars["low"], close=bars["close"])])
+def plot_bars(bars, lines=None, fills=None):
+    fig = go.Figure(
+        data=[go.Candlestick(x=bars.index, open=bars["open"], high=bars["high"], low=bars["low"], close=bars["close"])])
 
     if lines is not None:
         for line in lines:
             fig.add_trace(go.Scatter(x=bars.index, y=bars[line], mode="lines", name=line))
+
+    if fills is not None:
+        for fill in fills:
+            print(f"Adding fill: {fill}")
+            for row in tqdm(bars.itertuples(), total=bars.shape[0]):
+                value = getattr(row, fill)
+                time_start = row.Index
+                time_end = row.Index + dt.timedelta(minutes=15)
+
+                # Choose color based on value
+                if value > 0.2:
+                    color = "rgba(0, 255, 0, 0.1)"  # Light green
+                elif value < -0.2:
+                    color = "rgba(255, 0, 0, 0.1)"  # Light red
+                else:
+                    color = "rgba(255, 255, 0, 0.1)"  # Yellow (neutral)
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=[time_start, time_start, time_end, time_end, time_start],
+                        y=[row.close - 10, row.close + 10, row.close + 10, row.close - 10, row.close - 10],
+                        name=fill,
+                        fill="toself",
+                        fillcolor=color,
+                        line_color=color,
+                        mode='lines',
+                        showlegend=False
+                    )
+                )
 
     fig.update_layout(title=f"Bars", xaxis_rangeslider_visible=False, xaxis_title="Time", yaxis_title="Price ($)")
     fig.show()
@@ -116,19 +147,19 @@ if __name__ == "__main__":
     filename = input("Enter file name: ")
 
     bars_df = saving.SaveSystem.load_data(os.path.join(TRAINING_DIR, f"{filename}.gz"))
-    plot_bars(bars_df, ["vwap",
-                        "rsi",
-                        "slow_k",
-                        "slow_d",
-                        "atr",
-                        "ema_k",
-                        "ema_d",
-                        "sma_30",
-                        "sma_60",
-                        "sma_200",
-                        "sentiment",
-                        "sentiment_spy",
-                        "sentiment_qqq"])
+    plot_bars(bars_df,
+              lines=[
+                  "vwap",
+                  "ema_10",
+                  "ema_30",
+                  "ema_60",
+                  "ema_200",
+                  "sma_10",
+                  "sma_30",
+                  "sma_60",
+                  "sma_200",
+              ],
+              fills=["short_term_regime"])
 
     '''log_path = f"{settings['save_path']}\\Logs"
     logs = saving.SaveSystem.load_data(os.path.join(log_path, f"{filename}.gz"))

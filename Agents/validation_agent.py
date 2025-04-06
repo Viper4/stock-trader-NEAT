@@ -3,6 +3,7 @@ import time
 import plot
 from Agents.base_agent import Agent
 from data_structures import Queue
+from tqdm import tqdm
 
 
 class Validation(Agent):
@@ -10,7 +11,7 @@ class Validation(Agent):
         super().__init__(settings, profile, stock)
         self.finbert = finbert
 
-    def validate(self, bars, sma_periods,
+    def validate(self, bars, ma_periods,
                  genome, fractionable,
                  start_cash):
         start_time = time.time()
@@ -33,15 +34,8 @@ class Validation(Agent):
         last_index = bars.index[-1]
         log = []
 
-        i = 0
         prev_date = None
-        for row in bars.itertuples():
-            if i % 1000 == 0:
-                elapsed = time.time() - start_time
-                eta = (elapsed / i) * (bars.shape[0] - i)
-                print(f" {self.stock['symbol']}: {i}/{bars.shape[0]} ({elapsed:.2f}s elapsed {eta:.2f}s remaining)")
-            i += 1
-
+        for row in tqdm(bars.itertuples(), total=bars.shape[0]):
             date = row.Index.to_pydatetime()
 
             # Check to settle cash after each day
@@ -56,7 +50,7 @@ class Validation(Agent):
                     else:
                         break
 
-            inputs = self.generate_inputs(row, Agent.rel_change(cost, row.close * shares), sma_periods)
+            inputs = self.generate_inputs(row, Agent.rel_change(cost, row.close * shares), ma_periods)
 
             outputs = net.activate(inputs)
 
