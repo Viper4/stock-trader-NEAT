@@ -5,6 +5,7 @@ import saving
 from Managers.base_manager import Manager, Profile
 from Agents.validation_agent import Validation
 from multiprocessing import Pool
+from constants import GENOME_DIR, VALIDATION_DIR
 
 
 class Validator(Manager):
@@ -13,12 +14,10 @@ class Validator(Manager):
 
         self.profiles = []
         for i in range(len(settings["profiles"])):
-            profile = settings["profiles"][i]
-
             self.profiles.append(Profile(settings, i))
 
-            for stock in profile["stocks"]:
-                profile.agents[stock["symbol"]] = Validation(settings, profile, stock, finbert)
+            for symbol, stock in self.profiles[i].stocks.items():
+                self.profiles[i].agents[symbol] = Validation(settings, self.profiles[i], stock, finbert)
 
     def start(self):
         self.running = True
@@ -26,7 +25,7 @@ class Validator(Manager):
             print("Accounts:")
             i = 1
             for profile in self.profiles:
-                print(f" {i}: {profile}")
+                print(f" {i}: {profile.name}")
                 i += 1
             index = int(input("Enter account index: ")) - 1
             profile = self.profiles[index]
@@ -45,35 +44,35 @@ class Validator(Manager):
                         print(f" No genome filename provided for {symbol}")
                     else:
                         try:
-                            best_genome = saving.SaveSystem.load_data(os.path.join(profile.agents[stock["symbol"]].genome_path, stock["genome_filename"]))
+                            best_genome = saving.SaveSystem.load_data(os.path.join(GENOME_DIR, stock["genome_filename"]))
                             start_cash = input(" Enter starting cash: ")
                             validation_filename = f"{symbol}-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
-                            file_path = f"{self.settings['save_path']}\\ValidationData\\{validation_filename}"
+                            file_path = VALIDATION_DIR + validation_filename
                             if os.path.exists(file_path):
-                                stock_bars[stock["symbol"]] = self.load_data(stock["symbol"], "-V", file_path)
+                                stock_bars[symbol] = self.load_data(symbol, "-V", file_path)
                             else:
                                 if "SPY" not in stock_bars:
                                     spy_filename = f"SPY-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
-                                    spy_path = os.path.join(self.settings["save_path"], "ValidationData", spy_filename)
+                                    spy_path = VALIDATION_DIR + spy_filename
                                     if os.path.exists(spy_path):
                                         stock_bars["SPY"] = self.load_data("SPY", "-V", spy_path)
                                     else:
                                         stock_bars["SPY"] = self.generate_data("SPY", "-V", profile, start_date, end_date, spy_path)
                                 if "QQQ" not in stock_bars:
                                     qqq_filename = f"QQQ-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
-                                    qqq_path = os.path.join(self.settings["save_path"], "ValidationData", qqq_filename)
+                                    qqq_path = VALIDATION_DIR + qqq_filename
                                     if os.path.exists(qqq_path):
                                         stock_bars["QQQ"] = self.load_data("QQQ", "-V", qqq_path)
                                     else:
                                         stock_bars["QQQ"] = self.generate_data("QQQ", "-V", profile, start_date, end_date, qqq_path)
 
-                                stock_bars[stock["symbol"]] = self.generate_data(stock["symbol"], "-V", profile, start_date, end_date, file_path, bars_spy=stock_bars["SPY"], bars_qqq=stock_bars["QQQ"], training=False)
-                            genomes[stock["symbol"]] = best_genome
-                            start_cashes[stock["symbol"]] = start_cash
+                                stock_bars[symbol] = self.generate_data(symbol, "-V", profile, start_date, end_date, file_path, bars_spy=stock_bars["SPY"], bars_qqq=stock_bars["QQQ"], training=False)
+                            genomes[symbol] = best_genome
+                            start_cashes[symbol] = start_cash
                         except FileNotFoundError:
                             print(f" No genome file found for {stock['genome_filename']}")
 
-            simulations = len(stock_bars) - 2  # SPY and QQQ
+            simulations = len(stock_bars)
             if simulations <= 0:
                 print("No simulations selected")
                 continue
@@ -85,10 +84,19 @@ class Validator(Manager):
                 if len(stock_bars[symbol]) == 0:
                     print(f"{symbol}: No bars, skipping...")
                     continue
-                print(f"{symbol}: Validating over {len(stock_bars[symbol])} bars from {stock_bars[symbol][0]['timestamp']} to {stock_bars[symbol][-1]['timestamp']}...")
+                if symbol not in profile.agents:
+                    print(f"{symbol}: No agent, skipping...")
+                    continue
+                print(f"{symbol}: Validating over {len(stock_bars[symbol])} bars from {stock_bars[symbol].index[0]} to {stock_bars[symbol].index[-1]}...")
                 asset = profile.alpaca_api.get_asset(symbol=symbol)
+
+                columns = {}
+                for column in stock_bars[symbol].columns:
+                    columns[column] = stock_bars[symbol][column].tolist()
+                columns["index"] = stock_bars[symbol].index.tolist()
+
                 jobs.append((symbol, pool.apply_async(profile.agents[symbol].validate,
-                                                      (stock_bars[symbol],
+                                                      (columns,
                                                        profile.ma_periods,
                                                        genomes[symbol],
                                                        asset.fractionable,

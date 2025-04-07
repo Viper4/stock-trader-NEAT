@@ -16,7 +16,7 @@ class Validation(Agent):
                  start_cash):
         start_time = time.time()
         net = nn.RecurrentNetwork.create(genome, self.config)
-        start_date = columns["index"][0].date()
+        start_date = columns["index"][0].to_pydatetime()
         settled_cash = float(start_cash)
         start_equity = float(start_cash)
         unsettled_cash = 0.0
