@@ -223,35 +223,44 @@ class Manager(object):
         sentiments = []
         short_term_regimes = []
         long_term_regimes = []
-        bars_index_list = list(backtest_bars.index)
         prev_regime_slice = None
         prev_long_term_regime = None
         prev_short_term_regime = None
         if symbol == "SPY":
             long_term_features = profile.regime_settings["spy_long_term_features"]
             long_term_seed = profile.regime_settings["spy_long_term_seed"]
+            long_label_order = profile.regime_settings["spy_long_label_order"]
+
             short_term_features = profile.regime_settings["spy_short_term_features"]
             short_term_seed = profile.regime_settings["spy_short_term_seed"]
+            short_label_order = profile.regime_settings["spy_short_label_order"]
         elif symbol == "QQQ":
             long_term_features = profile.regime_settings["qqq_long_term_features"]
             long_term_seed = profile.regime_settings["qqq_long_term_seed"]
+            long_label_order = profile.regime_settings["qqq_long_label_order"]
+
             short_term_features = profile.regime_settings["qqq_short_term_features"]
             short_term_seed = profile.regime_settings["qqq_short_term_seed"]
+            short_label_order = profile.regime_settings["qqq_short_label_order"]
+
         else:
             long_term_features = profile.stocks[symbol]["long_term_features"]
             long_term_seed = profile.stocks[symbol]["long_term_seed"]
+            long_label_order = profile.stocks[symbol]["long_label_order"]
+
             short_term_features = profile.stocks[symbol]["short_term_features"]
             short_term_seed = profile.stocks[symbol]["short_term_seed"]
+            short_label_order = profile.stocks[symbol]["short_label_order"]
 
         for j in tqdm(range(backtest_bars.shape[0])):
-            backtest_date = bars_index_list[j].to_pydatetime()
+            backtest_date = backtest_bars.index[j].to_pydatetime()
 
             # Sentiment
             sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
             sentiments.append(sentiment)
 
             # Regime
-            regime_slice = regime_bars[:bars_index_list[j]]
+            regime_slice = regime_bars[:backtest_bars.index[j]]
             if regime_slice.shape[0] == 0:
                 long_term_regimes.append(0.0)
             else:
@@ -263,30 +272,37 @@ class Manager(object):
                         long_term_regime = long_regime_predictor.predict_probability(sliced_regime_bars)[-1]
                     except IndexError as e:
                         print(f"\rToo little clusters to fit. Skipping validation...")
-                        long_term_regime = {"Bull": 0.0, "Bear": 0.0}
+                        long_term_regime = [0.0, 0.0, 0.0]
                     except ValueError as e:
                         print("\rProblem with data. Skipping...")
-                        long_term_regime = {"Bull": 0.0, "Bear": 0.0}
+                        long_term_regime = [0.0, 0.0, 0.0]
 
                     try:
                         short_regime_predictor.fit(sliced_regime_bars, short_term_features, short_term_seed)
                         short_term_regime = short_regime_predictor.predict_probability(sliced_regime_bars)[-1]
                     except IndexError as e:
                         print(f"\rToo little clusters to fit. Skipping validation...")
-                        short_term_regime = {"Bull": 0.0, "Bear": 0.0}
+                        short_term_regime = [0.0, 0.0, 0.0]
                     except ValueError as e:
                         print("\rProblem with data. Skipping...")
-                        short_term_regime = {"Bull": 0.0, "Bear": 0.0}
+                        short_term_regime = [0.0, 0.0, 0.0]
 
-                    long_term_regimes.append(long_term_regime["Bull"] - long_term_regime["Bear"])
-                    short_term_regimes.append(short_term_regime["Bull"] - short_term_regime["Bear"])
+                    if len(long_term_regime) < 3:
+                        for i in range(len(long_term_regime) - 1, 3):
+                            long_term_regime.append(0.0)
+                    if len(short_term_regime) < 3:
+                        for i in range(len(short_term_regime) - 1, 3):
+                            short_term_regime.append(0.0)
+
+                    long_term_regimes.append(long_term_regime[long_label_order["bull"]] - long_term_regime[long_label_order["bear"]])
+                    short_term_regimes.append(short_term_regime[short_label_order["bull"]] - short_term_regime[short_label_order["bear"]])
 
                     prev_regime_slice = sliced_regime_bars
                     prev_long_term_regime = long_term_regime
                     prev_short_term_regime = short_term_regime
                 else:
-                    long_term_regimes.append(prev_long_term_regime["Bull"] - prev_long_term_regime["Bear"])
-                    short_term_regimes.append(prev_short_term_regime["Bull"] - prev_short_term_regime["Bear"])
+                    long_term_regimes.append(prev_long_term_regime[long_label_order["bull"]] - prev_long_term_regime[long_label_order["bear"]])
+                    short_term_regimes.append(prev_short_term_regime[short_label_order["bull"]] - prev_short_term_regime[short_label_order["bear"]])
 
         backtest_bars["sentiment"] = sentiments
         backtest_bars["long_term_regime"] = long_term_regimes

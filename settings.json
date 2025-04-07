@@ -24,16 +24,35 @@
         "fit_days": 1825,
         "interval": 1,
         "unit": "day",
-        "qqq_long_term_features": ["sma_d", "slow_k", "rickshaw_man"],
-        "qqq_long_term_seed": 8,
-        "qqq_short_term_features": ["atr", "tr", "long_line"],
-        "qqq_short_term_seed": 2,
-        "spy_long_term_features": ["sma_d", "slow_k", "rickshaw_man"],
-        "spy_long_term_seed": 8,
-        "spy_short_term_features": ["atr", "tr", "long_line"],
-        "spy_short_term_seed": 2
+        "spy_long_term_features": ["open_pc", "hammer", "marubozu"],
+        "spy_long_term_seed": 4,
+        "spy_long_label_order": {"bull": 0, "bear": 1, "choppy": 2},
+        "spy_short_term_features": ["closing_marubozu", "mama"],
+        "spy_short_term_seed": 1,
+        "spy_short_label_order": {"bear": 0, "bull": 1, "choppy": 2},
+        "qqq_long_term_features": ["ema_a", "high_wave"],
+        "qqq_long_term_seed": 3,
+        "qqq_long_label_order": {"choppy": 0, "bear": 1, "bull": 2},
+        "qqq_short_term_features": ["tr", "long_line"],
+        "qqq_short_term_seed": 3,
+        "qqq_short_label_order": {"bull": 0, "choppy": 1, "bear": 2}
       },
       "stocks": [
+        {
+          "symbol": "UVXY",
+          "cash_at_risk": 0.15,
+          "population_filename": "5pw-population-UVXY.gz",
+          "genome_filename": "5pw-genome-UVXY.gz",
+          "training_filename": "15m-data-UVXY.gz",
+          "trading": true,
+          "transaction_fee": 0.0095,
+          "long_term_features": ["close_pc", "hanging_man", "matching_low"],
+          "long_term_seed": 4,
+          "long_label_order": {"bull": 0, "choppy": 1, "bear": 2},
+          "short_term_features": ["trade_count_pc", "sma_a"],
+          "short_term_seed": 6,
+          "short_label_order": {"bull": 0, "choppy": 1, "bear": 2}
+        },
         {
           "symbol": "TSLA",
           "cash_at_risk": 0.15,
@@ -42,10 +61,12 @@
           "training_filename": "15m-data-TSLA.gz",
           "trading": true,
           "transaction_fee": 0.001,
-          "long_term_features": ["sma_d", "slow_k", "rickshaw_man"],
-          "long_term_seed": 8,
-          "short_term_features": ["atr", "tr", "long_line"],
-          "short_term_seed": 2
+          "long_term_features": ["doji_star", "mama"],
+          "long_term_seed": 1,
+          "long_label_order": {"bull": 0, "bear": 1, "choppy": 2},
+          "short_term_features": ["short_line", "spinning_top"],
+          "short_term_seed": 8,
+          "short_label_order": {"bear": 0, "bull": 1, "choppy": 2}
         },
         {
           "symbol": "TSLS",
@@ -55,30 +76,19 @@
           "training_filename": "15m-data-TSLS.gz",
           "trading": true,
           "transaction_fee": 0.001,
-          "long_term_features": ["vwap_pc", "trade_count_pc"],
-          "long_term_seed": 6,
-          "short_term_features": ["trade_count_pc", "natr"],
-          "short_term_seed": 1
-        },
-        {
-          "symbol": "UVXY",
-          "cash_at_risk": 0.15,
-          "population_filename": "5pw-population-UVXY.gz",
-          "genome_filename": "5pw-genome-UVXY.gz",
-          "training_filename": "15m-data-UVXY.gz",
-          "trading": true,
-          "transaction_fee": 0.0095,
-          "long_term_features": ["sma_d", "slow_k", "rickshaw_man"],
-          "long_term_seed": 8,
-          "short_term_features": ["atr", "tr", "long_line"],
-          "short_term_seed": 2
+          "long_term_features": ["volume_pc", "marubozu", "adosc"],
+          "long_term_seed": 9,
+          "long_label_order": {"bull": 0, "choppy": 1, "bear": 2},
+          "short_term_features": ["trade_count_pc", "rickshaw_man", "adosc"],
+          "short_term_seed": 8,
+          "short_label_order": {"bull": 0, "choppy": 1, "bear": 2}
         }
       ]
     }
   ],
   "training_reset": 3,
   "gen_stagger": 8,
-  "processes": 8,
+  "processes": 16,
   "gpu": false,
   "print_stats": true,
   "log_training": false,

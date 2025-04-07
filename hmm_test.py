@@ -18,8 +18,8 @@ from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-QQQ-1d_2019-1-1_2025-4-4.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-QQQ-1d_2019-1-1_2025-4-4.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-UVXY-1d_2019-1-1_2025-4-4.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-UVXY-1d_2019-1-1_2025-4-4.csv"
 
 
 class CorrelationAnalysis(object):
@@ -95,7 +95,7 @@ def run_regime_test(train_bars, test_bars, features, seed, plot):
 def run_regime_search(train_bars, test_bars, features, n_iterations=-1, n_seeds=20):
     feature_combinations = []
     print("Generating combinations")
-    for i in range(2, 5):
+    for i in range(3, 5):
         feature_combinations.extend(itertools.combinations(features, i))
     print(f"Generated {len(feature_combinations)} combinations")
 
@@ -279,7 +279,7 @@ if __name__ == "__main__":
     else:
         bars_df = saving.SaveSystem.load_data(DATA_PATH)
 
-    train_size = int(bars_df.shape[0] * 0.8)
+    train_size = int(bars_df.shape[0] * 0.7)
     train_bars_df = bars_df[:train_size].copy()
     test_bars_df = bars_df[train_size + 1:].copy()
     print("Train bars:", train_bars_df.shape[0])

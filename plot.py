@@ -159,7 +159,7 @@ if __name__ == "__main__":
                   "sma_60",
                   "sma_200",
               ],
-              fills=["short_term_regime"])
+              fills=["long_term_regime"])
 
     '''log_path = f"{settings['save_path']}\\Logs"
     logs = saving.SaveSystem.load_data(os.path.join(log_path, f"{filename}.gz"))

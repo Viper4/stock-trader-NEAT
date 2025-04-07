@@ -13,11 +13,11 @@ from tqdm import tqdm
 
 
 def eval_genome(args):
-    (stock_bars, sma_periods,
+    (columns, ma_periods,
      start_cash, genome, config, cash_at_risk, log_training, profit_window, fitness_multipliers,
      fractionable, transaction_fee) = args
     net = neat.nn.RecurrentNetwork.create(genome, config)
-    start_date = stock_bars.index[0].to_pydatetime()
+    start_date = columns["index"][0].to_pydatetime()
     settled_cash = start_cash
     unsettled_cash = 0
     pending_sales = Queue()
@@ -28,54 +28,51 @@ def eval_genome(args):
     num_windows = 0
     shares = 0.0
     cost = 0.0
-    consecutive_days = 1
     log = []
-    last_index = stock_bars.index[-1]
     prev_date = None
 
-    for row in tqdm(stock_bars.itertuples(), total=stock_bars.shape[0]):
-        date = row.Index.to_pydatetime()
+    for i in tqdm(range(len(columns["index"]))):
+        date = columns["index"][i]
 
         # Check to settle cash after each day
-        if prev_date is not None and (date - prev_date).days > 1:
-            consecutive_days += 1
+        if prev_date is not None and (date - prev_date).days >= 1:
             while not pending_sales.is_empty():
-                sale_price, sale_day = pending_sales.head.value
-                if consecutive_days - sale_day >= 1:
+                sale_price, sale_date = pending_sales.head.value
+                if (date - sale_date).days >= 1:
                     settled_cash += sale_price
                     unsettled_cash -= sale_price
                     pending_sales.dequeue()
                 else:
                     break
 
-        inputs = Agent.generate_inputs(row, Agent.rel_change(cost, row.close * shares), sma_periods)
+        inputs = Agent.generate_inputs_fast(columns, i, Agent.rel_change(cost, columns["close"][i] * shares), ma_periods)
 
-        outputs = net.activate(inputs)
+        outputs = net.activate(inputs)  # MAJOR SLOWDOWN
 
         qty_percent = (outputs[1] + 1) * 0.5
         if outputs[0] > 0.5:  # Buy
-            quantity = qty_percent * settled_cash * cash_at_risk / row.close
+            quantity = qty_percent * settled_cash * cash_at_risk / columns["close"][i]
             if not fractionable:
                 quantity = round(quantity)
-            price = quantity * row.close
+            price = quantity * columns["close"][i]
             if price >= 1:  # Alpaca doesn't allow trades under $1
                 cost += price
                 shares += quantity
                 settled_cash -= price
 
                 if log_training:
-                    action = {"side": "Buy", "type": "long", "quantity": quantity, "price": row.close,
+                    action = {"side": "Buy", "type": "long", "quantity": quantity, "price": columns["close"][i],
                               "settled_cash": settled_cash, "unsettled_cash": unsettled_cash,
-                              "datetime": row.Index.to_pydatetime()}
+                              "datetime": date.to_pydatetime()}
                     log.append(action)
         elif outputs[0] < -0.5:  # Sell
             quantity = qty_percent * shares
             if not fractionable:
                 quantity = round(quantity)
-            price = quantity * row.close * (1 - transaction_fee)
+            price = quantity * columns["close"][i] * (1 - transaction_fee)
             if price >= 1:
                 if shares - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
-                    price = shares * row.close * (1 - transaction_fee)
+                    price = shares * columns["close"][i] * (1 - transaction_fee)
                     profit = price - cost
                     shares = 0.0
                     cost = 0.0
@@ -85,17 +82,17 @@ def eval_genome(args):
                     cost = avg_cost * shares
                     profit = price - (avg_cost * quantity)
                 unsettled_cash += price
-                pending_sales.enqueue((price, consecutive_days))
+                pending_sales.enqueue((price, date))
 
                 if log_training:
-                    action = {"side": "Sell", "type": "long", "quantity": quantity, "price": row.close,
+                    action = {"side": "Sell", "type": "long", "quantity": quantity, "price": columns["close"][i],
                               "profit": profit, "settled_cash": settled_cash,
                               "unsettled_cash": unsettled_cash,
-                              "datetime": row.Index.to_pydatetime()}
+                              "datetime": date.to_pydatetime()}
                     log.append(action)
 
-        if row.Index == last_index or (date - start_date).days >= profit_window:
-            equity = unsettled_cash + settled_cash + row.close * shares
+        if i == len(columns["index"]) - 1 or (date - start_date).days >= profit_window:
+            equity = unsettled_cash + settled_cash + columns["close"][i] * shares
             profit_sum += equity - start_equity
             num_windows += 1
             start_equity = equity
@@ -137,13 +134,19 @@ class Training(Agent):
             print(f"Evaluating genomes on data batch {self.data_batch_index}")
             b_stock_bars = self.stock_bars[self.data_batch_index]
 
+        columns = {}
+        for column in b_stock_bars.columns:
+            columns[column] = b_stock_bars[column].tolist()
+
+        columns["index"] = b_stock_bars.index.tolist()
+
         pool = Pool(processes=self.settings["processes"])
         args = []
         for genome_id, genome in genomes:
             args.append(
                 (
-                    b_stock_bars,
-                    self.profile.sma_periods,
+                    columns,
+                    self.profile.ma_periods,
                     self.profile.start_cash,
                     genome,
                     self.config,

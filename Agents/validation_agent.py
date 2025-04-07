@@ -11,12 +11,12 @@ class Validation(Agent):
         super().__init__(settings, profile, stock)
         self.finbert = finbert
 
-    def validate(self, bars, ma_periods,
+    def validate(self, columns, ma_periods,
                  genome, fractionable,
                  start_cash):
         start_time = time.time()
         net = nn.RecurrentNetwork.create(genome, self.config)
-        start_date = bars.index[0].date()
+        start_date = columns["index"][0].date()
         settled_cash = float(start_cash)
         start_equity = float(start_cash)
         unsettled_cash = 0.0
@@ -31,12 +31,11 @@ class Validation(Agent):
         min_date = None
         max_profit = (-9999999, -9999999)
         max_date = None
-        last_index = bars.index[-1]
         log = []
 
         prev_date = None
-        for row in tqdm(bars.itertuples(), total=bars.shape[0]):
-            date = row.Index.to_pydatetime()
+        for i in tqdm(range(len(columns["index"]))):
+            date = columns["index"][i].to_pydatetime()
 
             # Check to settle cash after each day
             if prev_date is not None and (date - prev_date).days > 1:
@@ -50,23 +49,23 @@ class Validation(Agent):
                     else:
                         break
 
-            inputs = self.generate_inputs(row, Agent.rel_change(cost, row.close * shares), ma_periods)
+            inputs = self.generate_inputs_fast(columns, i, Agent.rel_change(cost, columns["close"][i] * shares), ma_periods)
 
             outputs = net.activate(inputs)
 
             qty_percent = (outputs[1] + 1) * 0.5
             if outputs[0] > 0.5:  # Buy
-                quantity = qty_percent * settled_cash * self.stock["cash_at_risk"] / row.close
+                quantity = qty_percent * settled_cash * self.stock["cash_at_risk"] / columns["close"][i]
                 if not fractionable:
                     quantity = round(quantity)
-                price = quantity * row.close
+                price = quantity * columns["close"][i]
                 if price >= 1:  # Alpaca doesn't allow trades under $1
                     cost += price
                     shares += quantity
                     settled_cash -= price
 
                     action = {"inputs": inputs, "outputs": outputs,
-                              "side": "Buy", "type": "long", "quantity": quantity, "price": row.close,
+                              "side": "Buy", "type": "long", "quantity": quantity, "price": columns["close"][i],
                               "settled_cash": settled_cash, "unsettled_cash": unsettled_cash,
                               "datetime": date}
                     log.append(action)
@@ -75,12 +74,12 @@ class Validation(Agent):
                 quantity = qty_percent * shares
                 if not fractionable:
                     quantity = round(quantity)
-                price = quantity * row.close * (1 - self.stock["transaction_fee"])
+                price = quantity * columns["close"][i] * (1 - self.stock["transaction_fee"])
                 if price >= 1:
                     if shares - quantity < 0.001:  # Alpaca doesn't allow selling < 1e-9 qty
-                        price = shares * row.close * (1 - self.stock["transaction_fee"])
+                        price = shares * columns["close"][i] * (1 - self.stock["transaction_fee"])
                         action = {"inputs": inputs, "outputs": outputs,
-                                  "side": "Sell", "type": "long", "quantity": quantity, "price": row.close,
+                                  "side": "Sell", "type": "long", "quantity": quantity, "price": columns["close"][i],
                                   "profit": price - cost, "settled_cash": settled_cash,
                                   "unsettled_cash": unsettled_cash + price,
                                   "datetime": date}
@@ -92,7 +91,7 @@ class Validation(Agent):
                         shares -= quantity
                         cost = avg_cost * shares
                         action = {"inputs": inputs, "outputs": outputs,
-                                  "side": "Sell", "type": "long", "quantity": quantity, "price": row.close,
+                                  "side": "Sell", "type": "long", "quantity": quantity, "price": columns["close"][i],
                                   "profit": price - (avg_cost * quantity), "settled_cash": settled_cash,
                                   "unsettled_cash": unsettled_cash + price,
                                   "datetime": date}
@@ -101,8 +100,8 @@ class Validation(Agent):
                     pending_sales.enqueue((price, consecutive_days))
                     long_sells += 1
 
-            if row.Index == last_index or (date - start_date).days >= self.profile.profit_window:
-                equity = unsettled_cash + settled_cash + row.close * shares
+            if i == len(columns["index"]) - 1 or (date - start_date).days >= self.profile.profit_window:
+                equity = unsettled_cash + settled_cash + columns["close"][i] * shares
                 profit = equity - start_equity
                 if profit < min_profit[0]:
                     min_profit = (profit, 100 * (profit / start_equity))
@@ -116,17 +115,15 @@ class Validation(Agent):
 
             prev_date = date
 
-        first_row = bars.iloc[0]
-        last_row = bars.iloc[-1]
         if shares < 0:
-            equity = unsettled_cash + settled_cash + shares * last_row.close - cost
+            equity = unsettled_cash + settled_cash + shares * columns["close"][-1] - cost
         else:
-            equity = unsettled_cash + settled_cash + last_row.close * shares
+            equity = unsettled_cash + settled_cash + columns["close"][-1] * shares
         total_profit = equity - float(start_cash)
         avg_profit = total_profit / num_windows
-        stock_change = last_row.close - first_row.close
+        stock_change = columns["close"][-1] - columns["close"][0]
         print(f"{self.stock['symbol']} simulation finished in {(time.time() - start_time):.2f}s over {consecutive_days} trading days and {num_windows} profit windows"
-              f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / first_row.close), 4)}%"
+              f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / columns['close'][0]), 4)}%"
               f"\n Total profit: ${round(total_profit, 2)} {round(100 * (total_profit / float(start_cash)), 4)}%"
               f"\n Average {self.profile.profit_window} day profit: ${round(avg_profit, 2)} {round(avg_profit / float(start_cash), 4)}%"
               f"\n Min profit: ${round(min_profit[0], 2)} {round(min_profit[1], 4)}% on {min_date}"
@@ -136,4 +133,3 @@ class Validation(Agent):
               f"\n Average actions/day: {len(log) / consecutive_days}")
         plot.plot_log(self.profile.alpaca_api, self.stock["symbol"], log, self.profile.interval)
         return log
-

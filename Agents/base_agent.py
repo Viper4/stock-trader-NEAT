@@ -18,6 +18,76 @@ class Agent:
         self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, CONFIG_PATH)
 
     @staticmethod
+    def generate_inputs_fast(columns, i, plpc, ma_periods):
+        stock_ema_pcs = []
+        spy_ema_pcs = []
+        qqq_ema_pcs = []
+        stock_sma_pcs = []
+        spy_sma_pcs = []
+        qqq_sma_pcs = []
+        for ma_period in ma_periods:
+            stock_ema_pcs.append(columns[f"ema_{ma_period}_pc"][i])
+            spy_ema_pcs.append(columns[f"ema_{ma_period}_spy_pc"][i])
+            qqq_ema_pcs.append(columns[f"ema_{ma_period}_qqq_pc"][i])
+            stock_sma_pcs.append(columns[f"sma_{ma_period}_pc"][i])
+            spy_sma_pcs.append(columns[f"sma_{ma_period}_spy_pc"][i])
+            qqq_sma_pcs.append(columns[f"sma_{ma_period}_qqq_pc"][i])
+
+        return [
+            # Stock data
+            plpc,
+            columns["open_pc"][i],
+            columns["high_pc"][i],
+            columns["low_pc"][i],
+            columns["close_pc"][i],
+            columns["volume_pc"][i],
+            columns["vwap_pc"][i],
+            columns["sentiment"][i],  # -1.0 = negative, 0.0 = neutral, 1.0 = positive
+            columns["long_term_regime"][i],  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
+            columns["short_term_regime"][i],  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
+            columns["slow_k"][i],
+            columns["slow_d"][i],
+            columns["rsi"][i],
+            columns["atr_pc"][i],
+            *stock_ema_pcs,
+            *stock_sma_pcs,
+
+            # SPY data
+            columns["open_spy_pc"][i],
+            columns["high_spy_pc"][i],
+            columns["low_spy_pc"][i],
+            columns["close_spy_pc"][i],
+            columns["volume_spy_pc"][i],
+            columns["vwap_spy_pc"][i],
+            columns["sentiment_spy"][i],
+            columns["long_term_regime_spy"][i],
+            columns["short_term_regime_spy"][i],
+            columns["slow_k_spy"][i],
+            columns["slow_d_spy"][i],
+            columns["rsi_spy"][i],
+            columns["atr_spy_pc"][i],
+            *spy_sma_pcs,
+            *spy_sma_pcs,
+
+            # QQQ data
+            columns["open_qqq_pc"][i],
+            columns["high_qqq_pc"][i],
+            columns["low_qqq_pc"][i],
+            columns["close_qqq_pc"][i],
+            columns["volume_qqq_pc"][i],
+            columns["vwap_qqq_pc"][i],
+            columns["sentiment_qqq"][i],
+            columns["long_term_regime_qqq"][i],
+            columns["short_term_regime_qqq"][i],
+            columns["slow_k_spy"][i],
+            columns["slow_d_spy"][i],
+            columns["rsi_spy"][i],
+            columns["atr_spy_pc"][i],
+            *qqq_ema_pcs,
+            *qqq_sma_pcs
+        ]
+
+    @staticmethod
     def generate_inputs(row, plpc, ma_periods):
         stock_ema_pcs = []
         spy_ema_pcs = []
@@ -82,7 +152,7 @@ class Agent:
             row.slow_k_spy,
             row.slow_d_spy,
             row.rsi_spy,
-            row.atr_spy_pc, # 40 inputs without ema, sma
+            row.atr_spy_pc,
             *qqq_ema_pcs,
             *qqq_sma_pcs
         ]

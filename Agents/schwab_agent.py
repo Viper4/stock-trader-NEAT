@@ -39,7 +39,8 @@ class Trading(Agent):
         max_period = max(self.trader.profile["k_period"], self.trader.profile["d_period"],
                          self.trader.profile["rsi_period"], self.trader.profile["atr_period"], max_ma_period)
 
-        regime_predictor = models.HMMRegimePrediction(processes=1)
+        long_regime_predictor = models.HMMRegimePrediction()
+        short_regime_predictor = models.HMMRegimePrediction()
 
         while self.running:
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
@@ -73,6 +74,12 @@ class Trading(Agent):
                 current_bar["sentiment"] = self.trader.finbert.get_api_sentiment(self.stock["symbol"], now_date - dt.timedelta(days=3), now_date)
                 current_bar["sentiment_spy"] = self.trader.finbert.get_api_sentiment("SPY", now_date - dt.timedelta(days=3), now_date)
                 current_bar["sentiment_qqq"] = self.trader.finbert.get_api_sentiment("QQQ", now_date - dt.timedelta(days=3), now_date)
+
+                long_regime_predictor.fit(bars, self.stock["long_term_features"], self.stock["long_term_seed"])
+                current_bar["long_regime"] = long_regime_predictor.predict_probability(bars)[-1]
+
+                short_regime_predictor.fit(bars, self.stock["short_term_features"], self.stock["short_term_seed"])
+                current_bar["short_regime"] = short_regime_predictor.predict_probability(bars)[-1]
 
                 inputs = self.generate_inputs(current_bar, position["longOpenProfitLoss"] / position["averagePrice"], self.trader.profile.ma_periods)
 
