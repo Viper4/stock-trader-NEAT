@@ -96,7 +96,7 @@ class Validator(Manager):
                 columns["index"] = stock_bars[symbol].index.tolist()
 
                 jobs.append((symbol, pool.apply_async(profile.agents[symbol].validate,
-                                                      (columns,
+                                                      (columns, stock_bars[symbol],
                                                        profile.ma_periods,
                                                        genomes[symbol],
                                                        asset.fractionable,

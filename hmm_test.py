@@ -18,8 +18,8 @@ from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-UVXY-1d_2019-1-1_2025-4-4.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-UVXY-1d_2019-1-1_2025-4-4.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-TSLS-1d_2019-1-1_2025-4-4.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-TSLS-1d_2019-1-1_2025-4-4.csv"
 
 
 class CorrelationAnalysis(object):

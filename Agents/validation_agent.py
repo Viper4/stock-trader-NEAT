@@ -1,9 +1,11 @@
 from neat import nn
 import time
 import plot
+import saving
 from Agents.base_agent import Agent
 from data_structures import Queue
 from tqdm import tqdm
+from constants import VALIDATION_DIR
 
 
 class Validation(Agent):
@@ -11,7 +13,7 @@ class Validation(Agent):
         super().__init__(settings, profile, stock)
         self.finbert = finbert
 
-    def validate(self, columns, ma_periods,
+    def validate(self, columns, bars, ma_periods,
                  genome, fractionable,
                  start_cash):
         start_time = time.time()
@@ -49,7 +51,8 @@ class Validation(Agent):
                     else:
                         break
 
-            inputs = self.generate_inputs_fast(columns, i, Agent.rel_change(cost, columns["close"][i] * shares), ma_periods)
+            inputs = self.generate_inputs_fast(columns, i, Agent.rel_change(cost, columns["close"][i] * shares),
+                                               ma_periods)
 
             outputs = net.activate(inputs)
 
@@ -122,14 +125,33 @@ class Validation(Agent):
         total_profit = equity - float(start_cash)
         avg_profit = total_profit / num_windows
         stock_change = columns["close"][-1] - columns["close"][0]
-        print(f"{self.stock['symbol']} simulation finished in {(time.time() - start_time):.2f}s over {consecutive_days} trading days and {num_windows} profit windows"
-              f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / columns['close'][0]), 4)}%"
-              f"\n Total profit: ${round(total_profit, 2)} {round(100 * (total_profit / float(start_cash)), 4)}%"
-              f"\n Average {self.profile.profit_window} day profit: ${round(avg_profit, 2)} {round(avg_profit / float(start_cash), 4)}%"
-              f"\n Min profit: ${round(min_profit[0], 2)} {round(min_profit[1], 4)}% on {min_date}"
-              f"\n Max profit: ${round(max_profit[0], 2)} {round(max_profit[1], 4)}% on {max_date}"
-              f"\n Total long buys: {long_buys}"
-              f"\n Total long sells: {long_sells}"
-              f"\n Average actions/day: {len(log) / consecutive_days}")
-        plot.plot_log(self.profile.alpaca_api, self.stock["symbol"], log, self.profile.interval)
+        print(
+            f"{self.stock['symbol']} simulation finished in {(time.time() - start_time):.2f}s over {consecutive_days} trading days and {num_windows} profit windows"
+            f"\n Stock change: ${round(stock_change, 2)} {round(100 * (stock_change / columns['close'][0]), 4)}%"
+            f"\n Total profit: ${round(total_profit, 2)} {round(100 * (total_profit / float(start_cash)), 4)}%"
+            f"\n Average {self.profile.profit_window} day profit: ${round(avg_profit, 2)} {round(avg_profit / float(start_cash), 4)}%"
+            f"\n Min profit: ${round(min_profit[0], 2)} {round(min_profit[1], 4)}% on {min_date}"
+            f"\n Max profit: ${round(max_profit[0], 2)} {round(max_profit[1], 4)}% on {max_date}"
+            f"\n Total long buys: {long_buys}"
+            f"\n Total long sells: {long_sells}"
+            f"\n Average actions/day: {len(log) / consecutive_days}")
+        plot.plot_bars(bars,
+                       lines=[
+                           "vwap",
+                           "ema_10",
+                           "ema_30",
+                           "ema_60",
+                           "ema_200",
+                           "ema_500",
+                           "sma_10",
+                           "sma_30",
+                           "sma_60",
+                           "sma_200",
+                           "sma_500"
+                       ],
+                       fills=["long_term_regime"],
+                       log=log
+                       )
+        #plot.plot_log(self.profile.alpaca_api, self.stock["symbol"], log, self.profile.interval)
+        saving.SaveSystem.save_data(log, VALIDATION_DIR + f"{self.stock['symbol']}-{self.profile.interval}m-{start_date.isoformat().replace(':', ';')}-{columns['index'][-1].to_pydatetime().isoformat().replace(':', ';')}.gz")
         return log

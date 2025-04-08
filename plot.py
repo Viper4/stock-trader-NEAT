@@ -1,14 +1,13 @@
 import plotly.graph_objects as go
-from alpaca_trade_api.rest import TimeFrame, TimeFrameUnit
 import time
 import datetime as dt
 import saving
 import os
-from constants import LOG_DIR, TRAINING_DIR
+from constants import LOG_DIR, TRAINING_DIR, VALIDATION_DIR
 from tqdm import tqdm
 
 
-def plot_bars(bars, lines=None, fills=None):
+def plot_bars(bars, lines=None, fills=None, log=None):
     fig = go.Figure(
         data=[go.Candlestick(x=bars.index, open=bars["open"], high=bars["high"], low=bars["low"], close=bars["close"])])
 
@@ -45,11 +44,67 @@ def plot_bars(bars, lines=None, fills=None):
                     )
                 )
 
+    if log is not None:
+        shares = 0
+        profit = 0
+        cost = 0
+        annotations = []
+        for i in range(len(log)):
+            if i > 2500:
+                print("Too many actions. Plotting only last 2500 actions.")
+                break
+            action = log[i]
+            if "solid_cash" in action:
+                action["settled_cash"] = action["solid_cash"]
+            if "liquid_cash" in action:
+                action["unsettled_cash"] = action["liquid_cash"]
+            if "type" not in action:
+                action["type"] = "long"
+            text = f"{i} {action['type']} {action['side'][0]} {round(action['quantity'], 2)} ${round(action['price'], 2)}<br> S|U: {round(action['settled_cash'], 1)}|{round(action['unsettled_cash'], 1)}"
+            color = "green"
+            if action["type"] == "long":
+                if action["side"] == "Sell":
+                    shares -= action["quantity"]
+                    profit += action["profit"]
+                    text += f"<br>P/L: {round(action['profit'], 2)}"
+                    cost -= (action["price"] * action["quantity"] - action["profit"])
+                    color = "red"
+                elif action["side"] == "Buy":
+                    shares += action["quantity"]
+                    cost += action["price"] * action["quantity"]
+            elif action["type"] == "short":
+                if action["side"] == "Buy":
+                    shares += action["quantity"]
+                    profit += action["profit"]
+                    text += f"<br>P/L: {round(action['profit'], 2)}"
+                    cost -= (action["price"] * action["quantity"] - action["profit"])
+                    color = "red"
+                elif action["side"] == "Sell":
+                    shares += action["quantity"]
+                    cost += action["price"] * action["quantity"]
+
+            annotations.append(dict(x=action["datetime"].isoformat(),
+                                    y=action["price"],
+                                    xref="x",
+                                    yref="y",
+                                    text=text,
+                                    showarrow=True,
+                                    arrowhead=1,
+                                    arrowcolor=color,
+                                    arrowsize=2,
+                                    ))
+
+        print(f"Realized profit: ${profit}")
+        print(f"Unrealized profit: ${round(shares * bars.iloc[-1].close - cost, 2)}")
+
+        fig.update_layout(
+            annotations=annotations)
+
     fig.update_layout(title=f"Bars", xaxis_rangeslider_visible=False, xaxis_title="Time", yaxis_title="Price ($)")
     fig.show()
 
 
-def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
+def plot_log(symbol, log, bars_df, interval, print_profit=False):
     log_start = log[0]["datetime"]
     log_end = log[-1]["datetime"]
 
@@ -116,14 +171,6 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
         wait_time = 16 - time_since
         print(f"{symbol}: Waiting {wait_time} minutes before logging")
         time.sleep(wait_time * 60)
-    bars_df = alpaca_api.get_bars(
-        symbol=symbol,
-        timeframe=TimeFrame(interval, TimeFrameUnit.Minute),
-        start=start_time.isoformat(),
-        end=end_time.isoformat(),
-        limit=500000,
-        sort="asc",
-        adjustment="all").df.tz_convert("US/Eastern").between_time("9:30", "16:00")
 
     if print_profit:
         last_bar = bars_df.iloc[-1]
@@ -144,9 +191,22 @@ def plot_log(alpaca_api, symbol, log, interval, print_profit=False):
 
 
 if __name__ == "__main__":
+    data_type = input("Enter data type (1 for training, 2 for validation): ")
     filename = input("Enter file name: ")
+    log_filename = input("Enter log file name: ")
+    fill = input("Enter fill: ")
 
-    bars_df = saving.SaveSystem.load_data(os.path.join(TRAINING_DIR, f"{filename}.gz"))
+    if data_type == "1":
+        directory = TRAINING_DIR
+    elif data_type == "2":
+        directory = VALIDATION_DIR
+    else:
+        directory = TRAINING_DIR
+
+    if log_filename != "":
+        log = saving.SaveSystem.load_data(os.path.join(directory, f"{log_filename}.gz"))
+
+    bars_df = saving.SaveSystem.load_data(os.path.join(directory, f"{filename}.gz"))
     plot_bars(bars_df,
               lines=[
                   "vwap",
@@ -154,18 +214,12 @@ if __name__ == "__main__":
                   "ema_30",
                   "ema_60",
                   "ema_200",
+                  "ema_500",
                   "sma_10",
                   "sma_30",
                   "sma_60",
                   "sma_200",
+                  "sma_500"
               ],
-              fills=["long_term_regime"])
-
-    '''log_path = f"{settings['save_path']}\\Logs"
-    logs = saving.SaveSystem.load_data(os.path.join(log_path, f"{filename}.gz"))
-    for symbol in logs:
-        if len(logs[symbol]) > 0:
-            if input(f"Plot {symbol}? (y/n): ") == "y":
-                plot_log(alpaca_api, symbol, logs[symbol], int(input("Enter interval: ")), True)
-        else:
-            print(f" {symbol} log is empty. Skipping")'''
+              fills=[fill],
+              log=None)

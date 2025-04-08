@@ -53,36 +53,20 @@ class Agent:
             *stock_sma_pcs,
 
             # SPY data
-            columns["open_spy_pc"][i],
-            columns["high_spy_pc"][i],
-            columns["low_spy_pc"][i],
             columns["close_spy_pc"][i],
             columns["volume_spy_pc"][i],
-            columns["vwap_spy_pc"][i],
             columns["sentiment_spy"][i],
             columns["long_term_regime_spy"][i],
             columns["short_term_regime_spy"][i],
-            columns["slow_k_spy"][i],
-            columns["slow_d_spy"][i],
-            columns["rsi_spy"][i],
-            columns["atr_spy_pc"][i],
             *spy_sma_pcs,
             *spy_sma_pcs,
 
             # QQQ data
-            columns["open_qqq_pc"][i],
-            columns["high_qqq_pc"][i],
-            columns["low_qqq_pc"][i],
             columns["close_qqq_pc"][i],
             columns["volume_qqq_pc"][i],
-            columns["vwap_qqq_pc"][i],
             columns["sentiment_qqq"][i],
             columns["long_term_regime_qqq"][i],
             columns["short_term_regime_qqq"][i],
-            columns["slow_k_spy"][i],
-            columns["slow_d_spy"][i],
-            columns["rsi_spy"][i],
-            columns["atr_spy_pc"][i],
             *qqq_ema_pcs,
             *qqq_sma_pcs
         ]
@@ -123,36 +107,20 @@ class Agent:
             *stock_sma_pcs,
 
             # SPY data
-            row.open_spy_pc,
-            row.high_spy_pc,
-            row.low_spy_pc,
             row.close_spy_pc,
             row.volume_spy_pc,
-            row.vwap_spy_pc,
             row.sentiment_spy,
             row.long_term_regime_spy,
             row.short_term_regime_spy,
-            row.slow_k_spy,
-            row.slow_d_spy,
-            row.rsi_spy,
-            row.atr_spy_pc,
             *spy_sma_pcs,
             *spy_sma_pcs,
 
             # QQQ data
-            row.open_qqq_pc,
-            row.high_qqq_pc,
-            row.low_qqq_pc,
             row.close_qqq_pc,
             row.volume_qqq_pc,
-            row.vwap_qqq_pc,
             row.sentiment_qqq,
             row.long_term_regime_qqq,
             row.short_term_regime_qqq,
-            row.slow_k_spy,
-            row.slow_d_spy,
-            row.rsi_spy,
-            row.atr_spy_pc,
             *qqq_ema_pcs,
             *qqq_sma_pcs
         ]

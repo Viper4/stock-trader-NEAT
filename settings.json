@@ -1,7 +1,7 @@
 {
   "profiles": [
     {
-      "name": "15m 5pw Profile",
+      "name": "15m 5pw Profile 48 inputs",
       "public_key": "PKIQGRDTI7JBAIHD3C86",
       "secret_key": "AOzVWc6gXeD6YBQTlvGUACGiSsEhgl7SAHvmf341",
       "data_batch_size": 243,
@@ -12,7 +12,7 @@
       "d_period": 3,
       "rsi_period": 14,
       "atr_period": 10,
-      "ma_periods": [10, 30, 60, 200, 500],
+      "ma_periods": [10, 30, 60, 200],
       "start_cash": 100000.0,
       "cash_limit": 999999999.0,
       "fitness_multipliers": {
@@ -24,7 +24,7 @@
         "fit_days": 1825,
         "interval": 1,
         "unit": "day",
-        "spy_long_term_features": ["open_pc", "hammer", "marubozu"],
+        "spy_long_term_features": ["hammer", "long_line"],
         "spy_long_term_seed": 4,
         "spy_long_label_order": {"bull": 0, "bear": 1, "choppy": 2},
         "spy_short_term_features": ["closing_marubozu", "mama"],
