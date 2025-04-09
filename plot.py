@@ -104,92 +104,6 @@ def plot_bars(bars, lines=None, fills=None, log=None):
     fig.show()
 
 
-def plot_log(symbol, log, bars_df, interval, print_profit=False):
-    log_start = log[0]["datetime"]
-    log_end = log[-1]["datetime"]
-
-    if log_start.date() == log_end.date():
-        start_time = dt.datetime(log_start.year, log_start.month, log_start.day, 9, 30, tzinfo=log_start.tzinfo)
-        end_time = dt.datetime(log_end.year, log_end.month, log_end.day, 16, 0, tzinfo=log_end.tzinfo)
-    else:
-        start_time = log_start
-        end_time = log_end
-
-    shares = 0
-    profit = 0
-    cost = 0
-    annotations = []
-    for i in range(len(log)):
-        if i > 2500:
-            print("Too many actions. Plotting only last 2500 actions.")
-            break
-        action = log[i]
-        if "solid_cash" in action:
-            action["settled_cash"] = action["solid_cash"]
-        if "liquid_cash" in action:
-            action["unsettled_cash"] = action["liquid_cash"]
-        if "type" not in action:
-            action["type"] = "long"
-        text = f"{i} {action['type']} {action['side'][0]} {round(action['quantity'], 2)} ${round(action['price'], 2)}<br> S|U: {round(action['settled_cash'], 1)}|{round(action['unsettled_cash'], 1)}"
-        color = "green"
-        if action["type"] == "long":
-            if action["side"] == "Sell":
-                shares -= action["quantity"]
-                profit += action["profit"]
-                text += f"<br>P/L: {round(action['profit'], 2)}"
-                cost -= (action["price"] * action["quantity"] - action["profit"])
-                color = "red"
-            elif action["side"] == "Buy":
-                shares += action["quantity"]
-                cost += action["price"] * action["quantity"]
-        elif action["type"] == "short":
-            if action["side"] == "Buy":
-                shares += action["quantity"]
-                profit += action["profit"]
-                text += f"<br>P/L: {round(action['profit'], 2)}"
-                cost -= (action["price"] * action["quantity"] - action["profit"])
-                color = "red"
-            elif action["side"] == "Sell":
-                shares += action["quantity"]
-                cost += action["price"] * action["quantity"]
-
-        annotations.append(dict(x=action["datetime"].isoformat(),
-                                y=action["price"],
-                                xref="x",
-                                yref="y",
-                                text=text,
-                                showarrow=True,
-                                arrowhead=1,
-                                arrowcolor=color,
-                                arrowsize=2,
-                                ))
-
-    # Alpaca doesn't allow getting recent 15 minute data so wait if needed
-    now_date = dt.datetime.now(tz=log_start.tzinfo)
-    time_since = (now_date - end_time).total_seconds() / 60
-    if time_since < 16:
-        wait_time = 16 - time_since
-        print(f"{symbol}: Waiting {wait_time} minutes before logging")
-        time.sleep(wait_time * 60)
-
-    if print_profit:
-        last_bar = bars_df.iloc[-1]
-        print(f"{symbol} realized profit: ${profit}")
-        print(f"{symbol} unrealized profit: ${round(shares * last_bar['close'] - cost, 2)}")
-
-    candlestick_fig = go.Figure(data=[go.Candlestick(x=bars_df.index,
-                                                     open=bars_df["open"],
-                                                     high=bars_df["high"],
-                                                     low=bars_df["low"],
-                                                     close=bars_df["close"])])
-    candlestick_fig.update_layout(
-        title=f"{symbol} {interval}m bars",
-        xaxis_title="Time",
-        yaxis_title="Price ($)",
-        annotations=annotations)
-    candlestick_fig.show()
-
-
 if __name__ == "__main__":
     data_type = input("Enter data type (1 for training, 2 for validation): ")
     filename = input("Enter file name: ")
@@ -205,21 +119,13 @@ if __name__ == "__main__":
 
     if log_filename != "":
         log = saving.SaveSystem.load_data(os.path.join(directory, f"{log_filename}.gz"))
+    else:
+        log = None
 
     bars_df = saving.SaveSystem.load_data(os.path.join(directory, f"{filename}.gz"))
     plot_bars(bars_df,
               lines=[
-                  "vwap",
-                  "ema_10",
-                  "ema_30",
-                  "ema_60",
-                  "ema_200",
-                  "ema_500",
-                  "sma_10",
-                  "sma_30",
-                  "sma_60",
-                  "sma_200",
-                  "sma_500"
+                  "vwap"
               ],
               fills=[fill],
-              log=None)
+              log=log)

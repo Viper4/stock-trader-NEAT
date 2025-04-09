@@ -18,8 +18,8 @@ from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-TSLS-1d_2019-1-1_2025-4-4.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-TSLS-1d_2019-1-1_2025-4-4.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-DXYZ-1d_2019-1-1_2025-4-9.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested1-DXYZ-1d_2019-1-1_2025-4-9.csv"
 
 
 class CorrelationAnalysis(object):
@@ -80,9 +80,9 @@ def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df)
     print(f"Finished in {time.time() - start_time} seconds")
 
 
-def run_regime_test(train_bars, test_bars, features, seed, plot):
+def run_regime_test(train_bars, test_bars, features, seed, plot, plot_label=""):
     regime_predictor = models.HMMRegimePrediction()
-    regime_predictor.validate(train_bars, test_bars, features, plot, seed)
+    regime_predictor.validate(train_bars, test_bars, features, plot, seed, plot_label)
     start_time = time.time()
     predicted_regimes = regime_predictor.predict_probability(test_bars_df)
     print(f"Last 10 predictions:")
@@ -207,30 +207,31 @@ def get_best(sort_by):
         if row[0] == "Features":
             continue
         # Features, Seed, Accuracy, Profit
-        results.append((row[0], int(row[1]), float(row[2]), float(row[3])))
+        results.append((row[0], int(row[1]), float(row[2]), float(row[3]), row[4]))
 
     if sort_by == 1:
         results.sort(key=lambda x: x[2], reverse=True)
     else:
         results.sort(key=lambda x: x[3], reverse=True)
-    res_features, res_seed, res_accuracy, res_profit = results[0]
+    res_features, res_seed, res_accuracy, res_profit, res_label_order = results[0]
     print("Best features:", res_features)
     print("Best seed:", res_seed)
     print("Best accuracy:", res_accuracy)
     print("Best profit:", res_profit)
+    print("Best label order:", res_label_order)
 
     save_path = TESTED_PATH.replace(".csv", "_sorted.csv")
     saving.SaveSystem.delete_file(save_path)
-    saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit"], save_path)
+    saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit", "Label Order"], save_path)
 
     sorted_keys = []
     sorted_accuracies = []
     sorted_profits = []
-    for feature_settings, seed, accuracy, profit in results:
+    for feature_settings, seed, accuracy, profit, label_order in results:
         sorted_keys.append(feature_settings + " " + str(seed))
         sorted_accuracies.append(accuracy)
         sorted_profits.append(profit)
-        saving.SaveSystem.save_to_csv([feature_settings, seed, accuracy, profit], save_path, "a")
+        saving.SaveSystem.save_to_csv([feature_settings, seed, accuracy, profit, label_order], save_path, "a")
 
     if sort_by == 1:
         plt.figure(figsize=(10, 6))
@@ -254,21 +255,24 @@ def get_best(sort_by):
 
 if __name__ == "__main__":
     user_input = input("Enter command (brute force, price test, reg test, reg best, correlation, stats, random forest): ")
+    with open(SETTINGS_PATH) as file:
+        settings = json.load(file)
+    alpaca_api = REST(settings["profiles"][0]["public_key"], settings["profiles"][0]["secret_key"],
+                      base_url=URL("https://paper-api.alpaca.markets"))
+    now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+    unit_map = {"Minute": TimeFrameUnit.Minute, "Day": TimeFrameUnit.Day, "Week": TimeFrameUnit.Week,
+                "Month": TimeFrameUnit.Month, "Hour": TimeFrameUnit.Hour}
+
     if not os.path.exists(DATA_PATH):
         symbol = input("Enter symbol: ")
         start = input("Enter start date (YYYY-MM-DD): ")
         end = input("Enter end date (YYYY-MM-DD): ")
         interval = int(input("Enter interval (1, 5, 15, 30): "))
         unit_input = input("Enter interval unit (Minute, Day, Week, Month, Hour): ")
-        unit_map = {"Minute": TimeFrameUnit.Minute, "Day": TimeFrameUnit.Day, "Week": TimeFrameUnit.Week, "Month": TimeFrameUnit.Month, "Hour": TimeFrameUnit.Hour}
         start_date = dt.datetime.strptime(start, "%Y-%m-%d").replace(hour=9, minute=30,
                                                                      tzinfo=pytz.timezone("US/Eastern"))
         end_date = dt.datetime.strptime(end, "%Y-%m-%d").replace(hour=16, minute=0, tzinfo=pytz.timezone("US/Eastern"))
-        with open(SETTINGS_PATH) as file:
-            settings = json.load(file)
-        alpaca_api = REST(settings["profiles"][0]["public_key"], settings["profiles"][0]["secret_key"],
-                          base_url=URL("https://paper-api.alpaca.markets"))
-        now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+
         if end_date >= now_date - dt.timedelta(minutes=16):
             end_date = now_date - dt.timedelta(minutes=16)
         bars_df = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval, start_date, end_date, 500000, unit_map[unit_input])
@@ -279,7 +283,7 @@ if __name__ == "__main__":
     else:
         bars_df = saving.SaveSystem.load_data(DATA_PATH)
 
-    train_size = int(bars_df.shape[0] * 0.7)
+    train_size = int(bars_df.shape[0] * 0.75)
     train_bars_df = bars_df[:train_size].copy()
     test_bars_df = bars_df[train_size + 1:].copy()
     print("Train bars:", train_bars_df.shape[0])
@@ -319,7 +323,8 @@ if __name__ == "__main__":
     elif user_input == "reg test":
         test_features = ast.literal_eval(input("Type features, Ex: ['close_pc', 'ema_1']: "))
         test_seed = int(input("Seed: "))
-        run_regime_test(train_bars_df, test_bars_df, test_features, test_seed, True)
+        plot_label = input("Plot label: ")
+        run_regime_test(train_bars_df, test_bars_df, test_features, test_seed, True, plot_label)
     elif user_input == "correlation":
         feature_input = input("Type features or 'all', Ex: ['close_pc', 'ema_1']: ")
         seed = int(input("Seed: "))
@@ -339,7 +344,7 @@ if __name__ == "__main__":
 
         i = 1
         last_feature_settings = None
-        for feature_settings, seed, accuracy, profit in results:
+        for feature_settings, seed, accuracy, profit, label_order in results:
             if feature_settings != last_feature_settings:
                 print(f"#{i}:")
                 run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(feature_settings), seed, True)
@@ -352,3 +357,43 @@ if __name__ == "__main__":
         for i in range(10):
             print(f"Seed {i}")
             run_random_forest(bars_df, all_features, i)
+    elif user_input == "predict now":
+        symbol = input("Enter symbol: ")
+        interval = int(input("Enter interval (1, 5, 15, 30): "))
+        unit_input = input("Enter interval unit (Minute, Day, Week, Month, Hour): ")
+
+        profile = settings["profiles"][0]
+
+        regime_settings = []
+        for stock in profile["stocks"]:
+            if stock["symbol"] == symbol:
+                regime_settings = stock["regime_settings"]
+                break
+
+        now_date = dt.datetime.now(dt.timezone.utc)
+        bars_df = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval,
+                                                         now_date - dt.timedelta(days=profile["general_regime_settings"]["fit_days"]),
+                                                         now_date - dt.timedelta(minutes=16),
+                                                         500000, unit_map[unit_input])
+        models.HMMRegimePrediction.augment_bars(bars_df)
+
+        averaged_predictions = {"Bull": 0, "Bear": 0, "Choppy": 0}
+
+        for i in range(len(regime_settings)):
+            regime_predictor = models.HMMRegimePrediction()
+            regime_predictor.fit(bars_df, regime_settings[i]["features"], regime_settings[i]["seed"])
+            prediction = regime_predictor.predict_probability(bars_df)[-1].tolist()
+
+            label_order = regime_settings[i]["label_order"]
+            ordered_prediction = {"Bull": prediction[label_order["Bull"]] * 100,
+                                  "Bear": prediction[label_order["Bear"]] * 100,
+                                  "Choppy": prediction[label_order["Choppy"]] * 100}
+            print(f"\n{regime_settings[i]['features']} prediction:\n{ordered_prediction}")
+            averaged_predictions["Bull"] += ordered_prediction["Bull"]
+            averaged_predictions["Bear"] += ordered_prediction["Bear"]
+            averaged_predictions["Choppy"] += ordered_prediction["Choppy"]
+
+        averaged_predictions["Bull"] /= len(regime_settings)
+        averaged_predictions["Bear"] /= len(regime_settings)
+        averaged_predictions["Choppy"] /= len(regime_settings)
+        print(f"\nAverage predictions for {symbol}:\n{averaged_predictions}")

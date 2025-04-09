@@ -4,8 +4,6 @@ import datetime as dt
 import saving
 from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit, REST
 import requests
-import talib
-import pandas as pd
 from constants import *
 from HMM.models import HMMRegimePrediction
 from tqdm import tqdm
@@ -20,13 +18,8 @@ class Profile(object):
         self.stocks = {}
         self.interval = -1
         self.profit_window = -1
-        self.k_period = -1
-        self.d_period = -1
-        self.rsi_period = -1
-        self.atr_period = -1
-        self.ma_periods = []
         self.fitness_multipliers = {}
-        self.regime_settings = {}
+        self.general_regime_settings = {}
         self.start_cash = -1
         self.cash_limit = -1
         self.data_batch_size = -1
@@ -46,13 +39,8 @@ class Profile(object):
             self.stocks[stock["symbol"]] = stock
         self.interval = profile["interval"]
         self.profit_window = profile["profit_window"]
-        self.k_period = profile["k_period"]
-        self.d_period = profile["d_period"]
-        self.rsi_period = profile["rsi_period"]
-        self.atr_period = profile["atr_period"]
-        self.ma_periods = profile["ma_periods"]
         self.fitness_multipliers = profile["fitness_multipliers"]
-        self.regime_settings = profile["regime_settings"]
+        self.general_regime_settings = profile["general_regime_settings"]
         self.start_cash = profile["start_cash"]
         self.cash_limit = profile["cash_limit"]
         self.data_batch_size = profile["data_batch_size"]
@@ -123,42 +111,14 @@ class Manager(object):
             return saving.SaveSystem.load_data(file_path)
         return None
 
-    def generate_percent_change(self, bars, ma_periods, gen_spy, gen_qqq):
+    def generate_percent_change(self, bars):
         bars["open_pc"] = bars["open"].pct_change()
         bars["high_pc"] = bars["high"].pct_change()
         bars["low_pc"] = bars["low"].pct_change()
         bars["close_pc"] = bars["close"].pct_change()
         bars["volume_pc"] = bars["volume"].pct_change()
         bars["vwap_pc"] = bars["vwap"].pct_change()
-        bars["atr_pc"] = bars["atr"].pct_change()
-
-        if gen_spy:
-            bars["open_spy_pc"] = bars["open_spy"].pct_change()
-            bars["high_spy_pc"] = bars["high_spy"].pct_change()
-            bars["low_spy_pc"] = bars["low_spy"].pct_change()
-            bars["close_spy_pc"] = bars["close_spy"].pct_change()
-            bars["volume_spy_pc"] = bars["volume_spy"].pct_change()
-            bars["vwap_spy_pc"] = bars["vwap_spy"].pct_change()
-            bars["atr_spy_pc"] = bars["atr_spy"].pct_change()
-
-        if gen_qqq:
-            bars["open_qqq_pc"] = bars["open_qqq"].pct_change()
-            bars["high_qqq_pc"] = bars["high_qqq"].pct_change()
-            bars["low_qqq_pc"] = bars["low_qqq"].pct_change()
-            bars["close_qqq_pc"] = bars["close_qqq"].pct_change()
-            bars["volume_qqq_pc"] = bars["volume_qqq"].pct_change()
-            bars["vwap_qqq_pc"] = bars["vwap_qqq"].pct_change()
-            bars["atr_qqq_pc"] = bars["atr_qqq"].pct_change()
-
-        for ma_period in ma_periods:
-            bars[f"ema_{ma_period}_pc"] = bars[f"ema_{ma_period}"].pct_change()
-            bars[f"sma_{ma_period}_pc"] = bars[f"sma_{ma_period}"].pct_change()
-            if gen_spy:
-                bars[f"ema_{ma_period}_spy_pc"] = bars[f"ema_{ma_period}_spy"].pct_change()
-                bars[f"sma_{ma_period}_spy_pc"] = bars[f"sma_{ma_period}_spy"].pct_change()
-            if gen_qqq:
-                bars[f"ema_{ma_period}_qqq_pc"] = bars[f"ema_{ma_period}_qqq"].pct_change()
-                bars[f"sma_{ma_period}_qqq_pc"] = bars[f"sma_{ma_period}_qqq"].pct_change()
+        bars["trade_count_pc"] = bars["trade_count"].pct_change()
 
     def load_data(self, symbol, i, file_path):
         b_bars = saving.SaveSystem.load_data(file_path)
@@ -166,7 +126,7 @@ class Manager(object):
         return b_bars
 
     def generate_data(self, symbol, i, profile, start_date, end_date,
-                      file_path=None, bars_spy=None, bars_qqq=None, training=False):
+                      file_path=None, training=False):
         if training:
             # Leave most recent 30 days for validation
             now_date = dt.datetime.now(dt.timezone.utc)
@@ -179,148 +139,84 @@ class Manager(object):
             return None
 
         start_time = time.time()
-
-        # Ensure indicator data for training isn't NaN with pre-batch data
-        max_ma_period = max(profile.ma_periods)
-        max_period = max(profile.k_period, profile.d_period, profile.rsi_period, profile.atr_period, max_ma_period)
-        pre_start_date = start_date - dt.timedelta(days=max_period)
-        pre_bars = self.get_bars(symbol, profile.alpaca_api, profile.interval, pre_start_date, start_date, 500000)
-        init_bars_length = bars.shape[0]
-        bars = pd.concat([pre_bars, bars], ignore_index=False).drop_duplicates()
-        print(f"\r {symbol}{i}: Generating {bars.shape[0]} indicator data from {pre_start_date} to {end_date}")
-        if not bars.index.is_monotonic_increasing:
-            print(f" {symbol}{i}: Non-monotonic bars, sorting...")
-            bars = bars.sort_index()
-
-        bars["slow_k"], bars["slow_d"] = talib.STOCH(bars["high"], bars["low"], bars["close"],
-                                                     fastk_period=profile.k_period,
-                                                     slowk_period=profile.d_period,
-                                                     slowd_period=profile.d_period)
-        bars["slow_k"] = (bars["slow_k"] - 50) / 50
-        bars["slow_d"] = (bars["slow_d"] - 50) / 50
-        bars["rsi"] = (talib.RSI(bars["close"], timeperiod=profile.rsi_period) - 50) / 50
-        bars["atr"] = talib.ATR(bars["high"], bars["low"], bars["close"], timeperiod=profile.atr_period)
-        for ma_period in profile.ma_periods:
-            bars[f"ema_{ma_period}"] = talib.EMA(bars["close"], timeperiod=ma_period)
-            bars[f"sma_{ma_period}"] = talib.SMA(bars["close"], timeperiod=ma_period)
-
-        print(f" {symbol}{i}: Finished generating {bars.shape[0]} indicator data in {(time.time() - start_time):.2f}s")
-
-        backtest_bars = bars[max(0, bars.shape[0] - init_bars_length):].copy()
-        backtest_bars = backtest_bars.between_time("9:30", "16:00")
+        bars = bars.between_time("9:30", "16:00")
 
         # Cant vectorize since GPU memory is too small
-        print(f"\r {symbol}{i}: Generating {backtest_bars.shape[0]} sentiments and regime predictions from {start_date} to {end_date}")
-        long_regime_predictor = HMMRegimePrediction()
-        short_regime_predictor = HMMRegimePrediction()
+        #print(f"\r {symbol}{i}: Generating {bars.shape[0]} sentiments and regime predictions from {start_date} to {end_date}")
+        #sentiments = []
+        print(f"\r {symbol}{i}: Generating {bars.shape[0]} regime predictions from {start_date} to {end_date}")
+
         unit_map = {"minute": TimeFrameUnit.Minute, "hour": TimeFrameUnit.Hour, "day": TimeFrameUnit.Day,
                     "week": TimeFrameUnit.Week, "month": TimeFrameUnit.Month}
-        regime_bars = self.get_bars(symbol, profile.alpaca_api, profile.regime_settings["interval"],
-                                    start_date - dt.timedelta(days=profile.regime_settings["fit_days"]), end_date,
-                                    500000, unit=unit_map[profile.regime_settings["unit"]])
+        regime_bars = self.get_bars(symbol, profile.alpaca_api, profile.general_regime_settings["interval"],
+                                    start_date - dt.timedelta(days=profile.general_regime_settings["fit_days"]), end_date,
+                                    500000, unit=unit_map[profile.general_regime_settings["unit"]])
         HMMRegimePrediction.augment_bars(regime_bars)
 
-        sentiments = []
-        short_term_regimes = []
-        long_term_regimes = []
-        prev_regime_slice = None
-        prev_long_term_regime = None
-        prev_short_term_regime = None
-        if symbol == "SPY":
-            long_term_features = profile.regime_settings["spy_long_term_features"]
-            long_term_seed = profile.regime_settings["spy_long_term_seed"]
-            long_label_order = profile.regime_settings["spy_long_label_order"]
+        # Load regime predictor settings
+        regime_predictors = []
+        regime_predictions = []
+        for regime_setting in profile.stocks[symbol]["regime_settings"]:
+            regime_predictors.append({"model": HMMRegimePrediction(),
+                                      "features": regime_setting["features"],
+                                      "seed": regime_setting["seed"],
+                                      "label_order": regime_setting["label_order"]})
+            regime_predictions.append([])
 
-            short_term_features = profile.regime_settings["spy_short_term_features"]
-            short_term_seed = profile.regime_settings["spy_short_term_seed"]
-            short_label_order = profile.regime_settings["spy_short_label_order"]
-        elif symbol == "QQQ":
-            long_term_features = profile.regime_settings["qqq_long_term_features"]
-            long_term_seed = profile.regime_settings["qqq_long_term_seed"]
-            long_label_order = profile.regime_settings["qqq_long_label_order"]
-
-            short_term_features = profile.regime_settings["qqq_short_term_features"]
-            short_term_seed = profile.regime_settings["qqq_short_term_seed"]
-            short_label_order = profile.regime_settings["qqq_short_label_order"]
-
-        else:
-            long_term_features = profile.stocks[symbol]["long_term_features"]
-            long_term_seed = profile.stocks[symbol]["long_term_seed"]
-            long_label_order = profile.stocks[symbol]["long_label_order"]
-
-            short_term_features = profile.stocks[symbol]["short_term_features"]
-            short_term_seed = profile.stocks[symbol]["short_term_seed"]
-            short_label_order = profile.stocks[symbol]["short_label_order"]
-
-        for j in tqdm(range(backtest_bars.shape[0])):
-            backtest_date = backtest_bars.index[j].to_pydatetime()
+        # Regime label order changes every time we fit.
+        prev_regime_slice_size = 0
+        for j in tqdm(range(bars.shape[0])):
+            #backtest_date = bars.index[j].to_pydatetime()
 
             # Sentiment
-            sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
-            sentiments.append(sentiment)
+            #sentiment = self.finbert.get_saved_sentiment(symbol, backtest_date - dt.timedelta(days=3), backtest_date)
+            #sentiments.append(sentiment)
 
-            # Regime
-            regime_slice = regime_bars[:backtest_bars.index[j]]
-            if regime_slice.shape[0] == 0:
-                long_term_regimes.append(0.0)
-            else:
-                if prev_regime_slice is None or prev_regime_slice.shape[0] != regime_slice.shape[0]:
+            # Regime prediction
+            regime_slice = regime_bars[:bars.index[j]]
+
+            for k in range(len(regime_predictors)):
+                if regime_slice.shape[0] == 0:
+                    # No data to predict with
+                    regime_predictions[k].append(0.0)
+                elif prev_regime_slice_size != regime_slice.shape[0]:
+                    # Need to fit and predict with new data
                     sliced_regime_bars = regime_slice.copy()
-
+                    predictions = None
                     try:
-                        long_regime_predictor.fit(sliced_regime_bars, long_term_features, long_term_seed)
-                        long_term_regime = long_regime_predictor.predict_probability(sliced_regime_bars)[-1]
+                        regime_predictors[k]["model"].fit(sliced_regime_bars, regime_predictors[k]["features"], regime_predictors[k]["seed"])
+                        predictions = regime_predictors[k]["model"].predict_probability(sliced_regime_bars)
+                        prediction = predictions[-1]
                     except IndexError as e:
-                        print(f"\rToo little clusters to fit. Skipping validation...")
-                        long_term_regime = [0.0, 0.0, 0.0]
+                        print("Too little clusters to fit. Skipping validation...")
+                        prediction = [0.0, 0.0, 0.0]
                     except ValueError as e:
-                        print("\rProblem with data. Skipping...")
-                        long_term_regime = [0.0, 0.0, 0.0]
+                        print("Problem with data. Skipping...")
+                        prediction = [0.0, 0.0, 0.0]
 
-                    try:
-                        short_regime_predictor.fit(sliced_regime_bars, short_term_features, short_term_seed)
-                        short_term_regime = short_regime_predictor.predict_probability(sliced_regime_bars)[-1]
-                    except IndexError as e:
-                        print(f"\rToo little clusters to fit. Skipping validation...")
-                        short_term_regime = [0.0, 0.0, 0.0]
-                    except ValueError as e:
-                        print("\rProblem with data. Skipping...")
-                        short_term_regime = [0.0, 0.0, 0.0]
-
-                    if len(long_term_regime) < 3:
-                        for i in range(len(long_term_regime) - 1, 3):
-                            long_term_regime.append(0.0)
-                    if len(short_term_regime) < 3:
-                        for i in range(len(short_term_regime) - 1, 3):
-                            short_term_regime.append(0.0)
-
-                    long_term_regimes.append(long_term_regime[long_label_order["bull"]] - long_term_regime[long_label_order["bear"]])
-                    short_term_regimes.append(short_term_regime[short_label_order["bull"]] - short_term_regime[short_label_order["bear"]])
-
-                    prev_regime_slice = sliced_regime_bars
-                    prev_long_term_regime = long_term_regime
-                    prev_short_term_regime = short_term_regime
+                    # Didn't get back enough regime labels, so pad with zeros
+                    if len(prediction) < 3:
+                        print("Padding regimes")
+                        print("RAW RESULT:", predictions)
+                        for _ in range(len(prediction) - 1, 3):
+                            prediction.append(0.0)
+                    bull_index = regime_predictors[k]["label_order"]["Bull"]
+                    bear_index = regime_predictors[k]["label_order"]["Bear"]
+                    regime_predictions[k].append(prediction[bull_index] - prediction[bear_index])
                 else:
-                    long_term_regimes.append(prev_long_term_regime[long_label_order["bull"]] - prev_long_term_regime[long_label_order["bear"]])
-                    short_term_regimes.append(prev_short_term_regime[short_label_order["bull"]] - prev_short_term_regime[short_label_order["bear"]])
+                    # Same data, so use previous prediction to save time and processing effort
+                    regime_predictions[k].append(regime_predictions[k][-1])
+            prev_regime_slice_size = regime_slice.shape[0]
 
-        backtest_bars["sentiment"] = sentiments
-        backtest_bars["long_term_regime"] = long_term_regimes
-        backtest_bars["short_term_regime"] = short_term_regimes
+        #bars["sentiment"] = sentiments
 
-        # Combine SPY df with stock df
-        if bars_spy is not None:
-            bars_spy = bars_spy.reindex(backtest_bars.index, method="ffill")
-            backtest_bars = backtest_bars.join(bars_spy, rsuffix="_spy", how="inner")
-        # Combine QQQ df with stock df
-        if bars_qqq is not None:
-            bars_qqq = bars_qqq.reindex(backtest_bars.index, method="ffill")
-            backtest_bars = backtest_bars.join(bars_qqq, rsuffix="_qqq", how="inner")
+        for j in range(len(regime_predictors)):
+            bars[f"regime_{j}"] = regime_predictions[j]
 
-        self.generate_percent_change(backtest_bars, profile.ma_periods, bars_spy is not None, bars_qqq is not None)
+        self.generate_percent_change(bars)
 
-        print(f" {symbol}{i}: Finished generating {backtest_bars.shape[0]} data in {(time.time() - start_time):.2f}s")
+        print(f" {symbol}{i}: Finished generating {bars.shape[0]} data in {(time.time() - start_time):.2f}s")
         if file_path is not None:
-            saving.SaveSystem.save_data(backtest_bars, file_path)
+            saving.SaveSystem.save_data(bars, file_path)
 
-        return backtest_bars
+        return bars

@@ -64,16 +64,12 @@ class Trading(Agent):
                 # Get historical data on symbol
                 start_date = now_date - dt.timedelta(days=max_period)
                 end_date = now_date - dt.timedelta(days=1)
-                spy_bars = self.trader.generate_data("SPY", "-SA", self.trader.profile, start_date, end_date)
-                qqq_bars = self.trader.generate_data("QQQ", "-SA", self.trader.profile, start_date, end_date)
                 bars = self.trader.generate_data(self.stock["symbol"], "-SA", self.trader.profile, start_date, end_date, spy_bars=spy_bars, qqq_bars=qqq_bars)
 
                 bars = pd.concat([bars, candles], ignore_index=False).drop_duplicates()
 
                 current_bar = bars.iloc[-1]
                 current_bar["sentiment"] = self.trader.finbert.get_api_sentiment(self.stock["symbol"], now_date - dt.timedelta(days=3), now_date)
-                current_bar["sentiment_spy"] = self.trader.finbert.get_api_sentiment("SPY", now_date - dt.timedelta(days=3), now_date)
-                current_bar["sentiment_qqq"] = self.trader.finbert.get_api_sentiment("QQQ", now_date - dt.timedelta(days=3), now_date)
 
                 long_regime_predictor.fit(bars, self.stock["long_term_features"], self.stock["long_term_seed"])
                 current_bar["long_regime"] = long_regime_predictor.predict_probability(bars)[-1]

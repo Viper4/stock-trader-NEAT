@@ -46,27 +46,12 @@ class Validator(Manager):
                         try:
                             best_genome = saving.SaveSystem.load_data(os.path.join(GENOME_DIR, stock["genome_filename"]))
                             start_cash = input(" Enter starting cash: ")
-                            validation_filename = f"{symbol}-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
+                            validation_filename = f"{symbol}-{profile.interval}m-{start_date.date().isoformat()}_{end_date.date().isoformat()}.gz"
                             file_path = VALIDATION_DIR + validation_filename
                             if os.path.exists(file_path):
                                 stock_bars[symbol] = self.load_data(symbol, "-V", file_path)
                             else:
-                                if "SPY" not in stock_bars:
-                                    spy_filename = f"SPY-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
-                                    spy_path = VALIDATION_DIR + spy_filename
-                                    if os.path.exists(spy_path):
-                                        stock_bars["SPY"] = self.load_data("SPY", "-V", spy_path)
-                                    else:
-                                        stock_bars["SPY"] = self.generate_data("SPY", "-V", profile, start_date, end_date, spy_path)
-                                if "QQQ" not in stock_bars:
-                                    qqq_filename = f"QQQ-{profile.interval}m-{start_date.isoformat().replace(':', ';')}-{end_date.isoformat().replace(':', ';')}.gz"
-                                    qqq_path = VALIDATION_DIR + qqq_filename
-                                    if os.path.exists(qqq_path):
-                                        stock_bars["QQQ"] = self.load_data("QQQ", "-V", qqq_path)
-                                    else:
-                                        stock_bars["QQQ"] = self.generate_data("QQQ", "-V", profile, start_date, end_date, qqq_path)
-
-                                stock_bars[symbol] = self.generate_data(symbol, "-V", profile, start_date, end_date, file_path, bars_spy=stock_bars["SPY"], bars_qqq=stock_bars["QQQ"], training=False)
+                                stock_bars[symbol] = self.generate_data(symbol, "-V", profile, start_date, end_date, file_path, training=False)
                             genomes[symbol] = best_genome
                             start_cashes[symbol] = start_cash
                         except FileNotFoundError:
@@ -97,7 +82,7 @@ class Validator(Manager):
 
                 jobs.append((symbol, pool.apply_async(profile.agents[symbol].validate,
                                                       (columns, stock_bars[symbol],
-                                                       profile.ma_periods,
+                                                       len(profile.stocks[symbol]["regime_settings"]),
                                                        genomes[symbol],
                                                        asset.fractionable,
                                                        start_cashes[symbol]))))

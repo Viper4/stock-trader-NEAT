@@ -51,7 +51,8 @@ class Trainer(Manager):
         end_date = now_date - dt.timedelta(minutes=16)  # Cant get recent 15 minute data with free alpaca acc
 
         if save_news:
-            self.finbert.save_news(self.symbols + ["SPY", "QQQ"], earliest_date, end_date)
+            pass
+            #self.finbert.save_news(self.symbols, earliest_date, end_date)
 
         for profile in self.profiles:
             print(profile.name)
@@ -59,51 +60,7 @@ class Trainer(Manager):
 
             profile.agents.clear()
 
-            stock_bars = {"SPY": [], "QQQ": []}
-
-            for i in range(profile.data_batches):
-                time_delta = dt.timedelta(days=i * profile.data_batch_size)
-
-                spy_file_path = os.path.join(TRAINING_DIR, str(profile.interval) + "m-data-SPY" + str(i) + ".gz")
-                if not regenerate and os.path.exists(spy_file_path):
-                    stock_bars["SPY"].append(self.load_data("SPY", i, spy_file_path))
-                else:
-                    test_bars = self.get_bars("SPY", profile.alpaca_api, 1,
-                                              start_date - time_delta, end_date - time_delta,
-                                              100, TimeFrameUnit.Hour, "desc")
-                    if test_bars.empty:
-                        print(f" SPY{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}!")
-                        stock_bars["SPY"].append(None)
-                        continue
-                    if len(self.finbert.saved_news) == 0:
-                        self.finbert.save_news(self.symbols + ["SPY", "QQQ"], earliest_date, end_date)
-                    stock_bars["SPY"].append(self.generate_data("SPY", i, profile,
-                                                                start_date - time_delta,
-                                                                end_date - time_delta,
-                                                                spy_file_path,
-                                                                None, None,
-                                                                training=True))
-
-                qqq_file_path = os.path.join(TRAINING_DIR, str(profile.interval) + "m-data-QQQ" + str(i) + ".gz")
-                if not regenerate and os.path.exists(qqq_file_path):
-                    stock_bars["QQQ"].append(self.load_data("QQQ", i, qqq_file_path))
-                else:
-                    test_bars = self.get_bars("QQQ", profile.alpaca_api, 1,
-                                              start_date - time_delta, end_date - time_delta,
-                                              100, TimeFrameUnit.Hour, "desc")
-                    if test_bars.empty:
-                        print(f" QQQ{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}!")
-                        stock_bars["QQQ"].append(None)
-                        continue
-                    if len(self.finbert.saved_news) == 0:
-                        self.finbert.save_news(self.symbols + ["QQQ"], earliest_date, end_date)
-                    stock_bars["QQQ"].append(self.generate_data("QQQ", i, profile,
-                                                                start_date - time_delta,
-                                                                end_date - time_delta,
-                                                                qqq_file_path,
-                                                                None, None,
-                                                                training=True))
-
+            stock_bars = {}
             used_substitutions = {}
             for symbol, stock in profile.stocks.items():
                 stock_bars[symbol] = []
@@ -143,12 +100,12 @@ class Trainer(Manager):
                                     print(f" {symbol}{i}: No data from {(start_date - time_delta).isoformat()} to {(end_date - time_delta).isoformat()}, using {symbol}{sub_index} data")
                             continue
                         if len(self.finbert.saved_news) == 0:
-                            self.finbert.save_news(self.symbols, earliest_date, end_date)
+                            pass
+                            #self.finbert.save_news(self.symbols, earliest_date, end_date)
                         stock_bars[symbol].append(self.generate_data(symbol, i, profile,
                                                                      start_date - time_delta,
                                                                      end_date - time_delta,
                                                                      file_path,
-                                                                     stock_bars["SPY"][i], stock_bars["QQQ"][i],
                                                                      training=True))
 
             for symbol, stock in profile.stocks.items():

@@ -19,6 +19,7 @@ class HMMRegimePrediction(object):
 
     @staticmethod
     def augment_bars(bars_df):
+        """Generate indicator data and percent change data from bars dataframe and save it to the dataframe."""
         bars_df["open_pc"] = bars_df["open"].pct_change(fill_method=None)
         bars_df["high_pc"] = bars_df["high"].pct_change(fill_method=None)
         bars_df["low_pc"] = bars_df["low"].pct_change(fill_method=None)
@@ -267,6 +268,120 @@ class HMMRegimePrediction(object):
         predicted_regimes = self.model.predict(features_scaled)
         return predicted_regimes
 
+    def predict_array_prob(self, features_scaled):
+        if self.fitted_feature_settings is None:
+            raise ValueError("Model has not been fitted yet.")
+        predicted_regimes = self.model.predict_proba(features_scaled)
+        return predicted_regimes
+
+    def predict_and_label_prob(self, bars):
+        label_orders = [{"Bear": 0, "Bull": 1, "Choppy": 2},
+                        {"Bear": 0, "Choppy": 1, "Bull": 2},
+                        {"Bull": 0, "Bear": 1, "Choppy": 2},
+                        {"Bull": 0, "Choppy": 1, "Bear": 2},
+                        {"Choppy": 0, "Bear": 1, "Bull": 2},
+                        {"Choppy": 0, "Bull": 1, "Bear": 2}]
+
+        start_cash = bars.iloc[0].close * 50
+        cash = [start_cash] * len(label_orders)
+        shares = [0.0] * len(label_orders)
+
+        # Convert to np array for faster processing
+        bars_array = bars.to_numpy()
+        features_scaled = self.get_features_array(bars_array, self.fitted_feature_settings)
+        predicted_regimes = self.predict_array_prob(features_scaled)
+
+        for i in range(len(bars_array)):
+            row = bars_array[i]
+
+            # Extract values
+            row_close = row[self.feature_index_map["close"]]
+
+            if predicted_regimes[i][0] > 0.5:
+                # -Bear, Bull, Choppy
+                if shares[0] > 0:
+                    cash[0] = (shares[0] * row_close) * 0.995  # 0.5% fee
+                    shares[0] = 0.0
+
+                # -Bear, Choppy, Bull
+                if shares[1] > 0:
+                    cash[1] = (shares[1] * row_close) * 0.995  # 0.5% fee
+                    shares[1] = 0.0
+
+                # -Bull, Bear, Choppy
+                if cash[2] > 0:
+                    shares[2] = cash[2] / row_close
+                    cash[2] = 0.0
+
+                # -Bull, Choppy, Bear
+                if cash[3] > 0:
+                    shares[3] = cash[3] / row_close
+                    cash[3] = 0.0
+
+                # -Choppy, Bear, Bull
+
+                # -Choppy, Bull, Bear
+
+            elif predicted_regimes[i][1] > 0.5:
+                # Bear, -Bull, Choppy
+                if cash[0] > 0:
+                    shares[0] = cash[0] / row_close
+                    cash[0] = 0.0
+
+                # Bear, -Choppy, Bull
+
+                # Bull, -Bear, Choppy
+                if shares[2] > 0:
+                    cash[2] = (shares[2] * row_close) * 0.995  # 0.5% fee
+                    shares[2] = 0.0
+
+                # Bull, -Choppy, Bear
+
+                # Choppy, -Bear, Bull
+                if shares[4] > 0:
+                    cash[4] = (shares[4] * row_close) * 0.995  # 0.5% fee
+                    shares[4] = 0.0
+
+                # Choppy, -Bull, Bear
+                if cash[5] > 0:
+                    shares[5] = cash[5] / row_close
+                    cash[5] = 0.0
+            elif predicted_regimes[i][2] > 0.5:
+                # Bear, Bull, -Choppy
+
+                # Bear, Choppy, -Bull
+                if cash[1] > 0:
+                    shares[1] = cash[1] / row_close
+                    cash[1] = 0.0
+
+                # Bull, Bear, -Choppy
+
+                # Bull, Choppy, -Bear
+                if shares[3] > 0:
+                    cash[3] = (shares[3] * row_close) * 0.995  # 0.5% fee
+                    shares[3] = 0.0
+
+                # Choppy, Bear, -Bull
+                if cash[4] > 0:
+                    shares[4] = cash[4] / row_close
+                    cash[4] = 0.0
+
+                # Choppy, Bull, -Bear
+                if shares[5] > 0:
+                    cash[5] = (shares[5] * row_close) * 0.995  # 0.5% fee
+                    shares[5] = 0.0
+
+        best_index = 0
+        last_close = bars.iloc[-1].close
+        best_profit = (cash[0] + shares[0] * last_close) - start_cash
+        for i in range(1, len(label_orders)):
+            profit = (cash[i] + shares[i] * last_close) - start_cash
+            if profit > best_profit:
+                best_index = i
+                best_profit = profit
+
+        return predicted_regimes, label_orders[best_index]
+
     def get_score(self, bars, std_deviation, threshold):
         # NOTE: Sometimes terrible model just guessing one regime for entire period can get 50% accuracy
 
@@ -418,7 +533,7 @@ class HMMRegimePrediction(object):
 
         return correct_predictions[best_index], best_profit, label_orders[best_index]
 
-    def validate(self, train_bars, test_bars, feature_settings, plot, seed=0):
+    def validate(self, train_bars, test_bars, feature_settings, plot, seed=0, plot_label=""):
         """Trains HMM, evaluates accuracy, and visualizes results."""
         print(f"Training HMM on {train_bars.shape[0]} bars at {seed} seed with\nFeatures: {feature_settings}")
 
@@ -480,8 +595,10 @@ class HMMRegimePrediction(object):
                 )'''
 
             plt.legend()
-            plt.title(
-                f"{feature_settings}-{seed} Stock Price with Regimes\n(Accuracy: {accuracy:.2f}%, profit: {total_profit:.2f})")
+            if plot_label != "":
+                plt.title(f"{plot_label}\n{feature_settings}-{seed} Stock Price with Regimes\n(Accuracy: {accuracy:.2f}%, profit: {total_profit:.2f})")
+            else:
+                plt.title(f"{feature_settings}-{seed} Stock Price with Regimes\n(Accuracy: {accuracy:.2f}%, profit: {total_profit:.2f})")
             plt.show()
 
         return accuracy, total_profit, label_order

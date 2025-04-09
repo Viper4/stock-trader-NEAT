@@ -13,7 +13,7 @@ class Validation(Agent):
         super().__init__(settings, profile, stock)
         self.finbert = finbert
 
-    def validate(self, columns, bars, ma_periods,
+    def validate(self, columns, bars, num_predictors,
                  genome, fractionable,
                  start_cash):
         start_time = time.time()
@@ -51,8 +51,7 @@ class Validation(Agent):
                     else:
                         break
 
-            inputs = self.generate_inputs_fast(columns, i, Agent.rel_change(cost, columns["close"][i] * shares),
-                                               ma_periods)
+            inputs = self.generate_inputs_fast(columns, i, Agent.rel_change(cost, columns["close"][i] * shares), num_predictors)
 
             outputs = net.activate(inputs)
 
@@ -137,21 +136,10 @@ class Validation(Agent):
             f"\n Average actions/day: {len(log) / consecutive_days}")
         plot.plot_bars(bars,
                        lines=[
-                           "vwap",
-                           "ema_10",
-                           "ema_30",
-                           "ema_60",
-                           "ema_200",
-                           "ema_500",
-                           "sma_10",
-                           "sma_30",
-                           "sma_60",
-                           "sma_200",
-                           "sma_500"
+                           "vwap"
                        ],
-                       fills=["long_term_regime"],
+                       fills=["regime_0"],
                        log=log
                        )
-        #plot.plot_log(self.profile.alpaca_api, self.stock["symbol"], log, self.profile.interval)
-        saving.SaveSystem.save_data(log, VALIDATION_DIR + f"{self.stock['symbol']}-{self.profile.interval}m-{start_date.isoformat().replace(':', ';')}-{columns['index'][-1].to_pydatetime().isoformat().replace(':', ';')}.gz")
+        saving.SaveSystem.save_data(log, VALIDATION_DIR + f"{self.stock['symbol']}-{self.profile.interval}m-{start_date.date().isoformat()}_{columns['index'][-1].to_pydatetime().date().isoformat()}-log.gz")
         return log

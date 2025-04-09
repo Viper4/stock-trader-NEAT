@@ -18,111 +18,33 @@ class Agent:
         self.config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, CONFIG_PATH)
 
     @staticmethod
-    def generate_inputs_fast(columns, i, plpc, ma_periods):
-        stock_ema_pcs = []
-        spy_ema_pcs = []
-        qqq_ema_pcs = []
-        stock_sma_pcs = []
-        spy_sma_pcs = []
-        qqq_sma_pcs = []
-        for ma_period in ma_periods:
-            stock_ema_pcs.append(columns[f"ema_{ma_period}_pc"][i])
-            spy_ema_pcs.append(columns[f"ema_{ma_period}_spy_pc"][i])
-            qqq_ema_pcs.append(columns[f"ema_{ma_period}_qqq_pc"][i])
-            stock_sma_pcs.append(columns[f"sma_{ma_period}_pc"][i])
-            spy_sma_pcs.append(columns[f"sma_{ma_period}_spy_pc"][i])
-            qqq_sma_pcs.append(columns[f"sma_{ma_period}_qqq_pc"][i])
+    def generate_inputs_fast(columns, i, plpc, num_predictors):
+        # Get regime prediction data
+        stock_regime_predictions = []
+        for j in range(num_predictors):
+            stock_regime_predictions.append(columns[f"regime_{j}"][i])
 
         return [
-            # Stock data
             plpc,
-            columns["open_pc"][i],
-            columns["high_pc"][i],
-            columns["low_pc"][i],
             columns["close_pc"][i],
             columns["volume_pc"][i],
-            columns["vwap_pc"][i],
-            columns["sentiment"][i],  # -1.0 = negative, 0.0 = neutral, 1.0 = positive
-            columns["long_term_regime"][i],  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
-            columns["short_term_regime"][i],  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
-            columns["slow_k"][i],
-            columns["slow_d"][i],
-            columns["rsi"][i],
-            columns["atr_pc"][i],
-            *stock_ema_pcs,
-            *stock_sma_pcs,
-
-            # SPY data
-            columns["close_spy_pc"][i],
-            columns["volume_spy_pc"][i],
-            columns["sentiment_spy"][i],
-            columns["long_term_regime_spy"][i],
-            columns["short_term_regime_spy"][i],
-            *spy_sma_pcs,
-            *spy_sma_pcs,
-
-            # QQQ data
-            columns["close_qqq_pc"][i],
-            columns["volume_qqq_pc"][i],
-            columns["sentiment_qqq"][i],
-            columns["long_term_regime_qqq"][i],
-            columns["short_term_regime_qqq"][i],
-            *qqq_ema_pcs,
-            *qqq_sma_pcs
+            #columns["sentiment"][i],  # -1.0 = negative, 0.0 = neutral, 1.0 = positive
+            *stock_regime_predictions,  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
         ]
 
     @staticmethod
-    def generate_inputs(row, plpc, ma_periods):
-        stock_ema_pcs = []
-        spy_ema_pcs = []
-        qqq_ema_pcs = []
-        stock_sma_pcs = []
-        spy_sma_pcs = []
-        qqq_sma_pcs = []
-        for ma_period in ma_periods:
-            stock_ema_pcs.append(getattr(row, f"ema_{ma_period}_pc"))
-            spy_ema_pcs.append(getattr(row, f"ema_{ma_period}_spy_pc"))
-            qqq_ema_pcs.append(getattr(row, f"ema_{ma_period}_qqq_pc"))
-            stock_sma_pcs.append(getattr(row, f"sma_{ma_period}_pc"))
-            spy_sma_pcs.append(getattr(row, f"sma_{ma_period}_spy_pc"))
-            qqq_sma_pcs.append(getattr(row, f"sma_{ma_period}_qqq_pc"))
+    def generate_inputs(row, plpc, num_predictors):
+        # Get regime prediction data
+        stock_regime_predictions = []
+        for i in range(num_predictors):
+            stock_regime_predictions.append(getattr(row, f"regime_{i}"))
 
         return [
-            # Stock data
             plpc,
-            row.open_pc,
-            row.high_pc,
-            row.low_pc,
             row.close_pc,
             row.volume_pc,
-            row.vwap_pc,
-            row.sentiment,  # -1.0 = negative, 0.0 = neutral, 1.0 = positive
-            row.long_term_regime,  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
-            row.short_term_regime,  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
-            row.slow_k,
-            row.slow_d,
-            row.rsi,
-            row.atr_pc,
-            *stock_ema_pcs,
-            *stock_sma_pcs,
-
-            # SPY data
-            row.close_spy_pc,
-            row.volume_spy_pc,
-            row.sentiment_spy,
-            row.long_term_regime_spy,
-            row.short_term_regime_spy,
-            *spy_sma_pcs,
-            *spy_sma_pcs,
-
-            # QQQ data
-            row.close_qqq_pc,
-            row.volume_qqq_pc,
-            row.sentiment_qqq,
-            row.long_term_regime_qqq,
-            row.short_term_regime_qqq,
-            *qqq_ema_pcs,
-            *qqq_sma_pcs
+            #row.sentiment,  # -1.0 = negative, 0.0 = neutral, 1.0 = positive
+            *stock_regime_predictions,  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
         ]
 
     @staticmethod

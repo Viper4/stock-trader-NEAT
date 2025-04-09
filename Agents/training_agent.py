@@ -8,12 +8,12 @@ import visualize
 import plot
 from Agents.base_agent import Agent
 from data_structures import Queue
-from constants import POPULATION_DIR, GENOME_DIR
+from constants import POPULATION_DIR, GENOME_DIR, LOG_DIR
 from tqdm import tqdm
 
 
 def eval_genome(args):
-    (columns, ma_periods,
+    (columns, num_predictors,
      start_cash, genome, config, cash_at_risk, log_training, profit_window, fitness_multipliers,
      fractionable, transaction_fee) = args
     net = neat.nn.RecurrentNetwork.create(genome, config)
@@ -45,8 +45,9 @@ def eval_genome(args):
                 else:
                     break
 
-        inputs = Agent.generate_inputs_fast(columns, i, Agent.rel_change(cost, columns["close"][i] * shares), ma_periods)
+        inputs = Agent.generate_inputs_fast(columns, i, Agent.rel_change(cost, columns["close"][i] * shares), num_predictors)
 
+        # print(inputs)
         outputs = net.activate(inputs)  # MAJOR SLOWDOWN
 
         qty_percent = (outputs[1] + 1) * 0.5
@@ -146,7 +147,7 @@ class Training(Agent):
             args.append(
                 (
                     columns,
-                    self.profile.ma_periods,
+                    len(self.stock["regime_settings"]),
                     self.profile.start_cash,
                     genome,
                     self.config,
@@ -183,7 +184,11 @@ class Training(Agent):
         if best_genome_id in self.cum_fitness:
             print(f"Best fitness across data batches: {self.cum_fitness[best_genome_id]} - id {best_genome_id}")
         if best_log is not None and self.settings["log_training"]:
-            plot.plot_log(self.profile.alpaca_api, self.stock["symbol"], best_log, 30, True)
+            plot.plot_bars(b_stock_bars,
+                           lines=["vwap"],
+                           fills=["regime_0"],
+                           log=best_log)
+            saving.SaveSystem.save_data(best_log, LOG_DIR + self.stock["symbol"] + "-training-log.gz")
 
         pool.close()
         pool.join()
