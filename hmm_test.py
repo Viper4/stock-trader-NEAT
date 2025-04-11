@@ -18,8 +18,8 @@ from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-DXYZ-1d_2019-1-1_2025-4-9.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested1-DXYZ-1d_2019-1-1_2025-4-9.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-UVXY-1d_2019-1-1_2025-4-10.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested1-UVXY-1d_2019-1-1_2025-4-10.csv"
 
 
 class CorrelationAnalysis(object):
@@ -104,7 +104,7 @@ def run_regime_search(train_bars, test_bars, features, n_iterations=-1, n_seeds=
     best_profit = -999999.0
 
     if not os.path.exists(TESTED_PATH):
-        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit", "Label Order"], TESTED_PATH)
+        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit%", "Label Order"], TESTED_PATH)
     rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
     i = 0
     for row in rows:
@@ -127,19 +127,19 @@ def run_regime_search(train_bars, test_bars, features, n_iterations=-1, n_seeds=
         for j in range(n_seeds):
             key = str(features_list) + str(j)
             if key not in tested:
-                accuracy, profit, label_order = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
+                accuracy, profit_percent, label_order = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
                 tested[key] = accuracy
-                saving.SaveSystem.save_to_csv([features_list, j, accuracy, profit, label_order], TESTED_PATH, "a")
+                saving.SaveSystem.save_to_csv([features_list, j, accuracy, profit_percent, label_order], TESTED_PATH, "a")
             else:
-                accuracy, profit = tested[key]
+                accuracy, profit_percent = tested[key]
                 print(f"Already tested: {key} - {tested[key]}")
 
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
                 print(f"New best accuracy: {best_accuracy}%")
 
-            if profit > best_profit:
-                best_profit = profit
+            if profit_percent > best_profit:
+                best_profit = profit_percent
                 print(f"New best profit: {best_profit}")
         i += 1
         iteration_time = time.time() - start_time
@@ -206,7 +206,7 @@ def get_best(sort_by):
     for row in rows:
         if row[0] == "Features":
             continue
-        # Features, Seed, Accuracy, Profit
+        # Features, Seed, Accuracy, Profit%, Label Order
         results.append((row[0], int(row[1]), float(row[2]), float(row[3]), row[4]))
 
     if sort_by == 1:
@@ -222,16 +222,16 @@ def get_best(sort_by):
 
     save_path = TESTED_PATH.replace(".csv", "_sorted.csv")
     saving.SaveSystem.delete_file(save_path)
-    saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit", "Label Order"], save_path)
+    saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit%", "Label Order"], save_path)
 
     sorted_keys = []
     sorted_accuracies = []
     sorted_profits = []
-    for feature_settings, seed, accuracy, profit, label_order in results:
+    for feature_settings, seed, accuracy, profit_percent, label_order in results:
         sorted_keys.append(feature_settings + " " + str(seed))
         sorted_accuracies.append(accuracy)
-        sorted_profits.append(profit)
-        saving.SaveSystem.save_to_csv([feature_settings, seed, accuracy, profit, label_order], save_path, "a")
+        sorted_profits.append(profit_percent)
+        saving.SaveSystem.save_to_csv([feature_settings, seed, accuracy, profit_percent, label_order], save_path, "a")
 
     if sort_by == 1:
         plt.figure(figsize=(10, 6))
@@ -244,7 +244,7 @@ def get_best(sort_by):
     else:
         plt.figure(figsize=(10, 6))
         plt.barh(sorted_keys[:100], sorted_profits[:100], color="skyblue")
-        plt.xlabel("Profit ($)")
+        plt.xlabel("Profit (%)")
         plt.ylabel("Feature Combinations")
         plt.title("Feature Combination Profit Rankings")
         plt.gca().invert_yaxis()  # Best at top
@@ -283,7 +283,7 @@ if __name__ == "__main__":
     else:
         bars_df = saving.SaveSystem.load_data(DATA_PATH)
 
-    train_size = int(bars_df.shape[0] * 0.75)
+    train_size = int(bars_df.shape[0] * 0.7)
     train_bars_df = bars_df[:train_size].copy()
     test_bars_df = bars_df[train_size + 1:].copy()
     print("Train bars:", train_bars_df.shape[0])
@@ -344,7 +344,7 @@ if __name__ == "__main__":
 
         i = 1
         last_feature_settings = None
-        for feature_settings, seed, accuracy, profit, label_order in results:
+        for feature_settings, seed, accuracy, profit_percent, label_order in results:
             if feature_settings != last_feature_settings:
                 print(f"#{i}:")
                 run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(feature_settings), seed, True)

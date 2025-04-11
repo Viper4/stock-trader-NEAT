@@ -7,7 +7,7 @@ from constants import LOG_DIR, TRAINING_DIR, VALIDATION_DIR
 from tqdm import tqdm
 
 
-def plot_bars(bars, lines=None, fills=None, log=None):
+def plot_bars(bars, lines=None, fills=None, log=None, title="Bars"):
     fig = go.Figure(
         data=[go.Candlestick(x=bars.index, open=bars["open"], high=bars["high"], low=bars["low"], close=bars["close"])])
 
@@ -100,7 +100,7 @@ def plot_bars(bars, lines=None, fills=None, log=None):
         fig.update_layout(
             annotations=annotations)
 
-    fig.update_layout(title=f"Bars", xaxis_rangeslider_visible=False, xaxis_title="Time", yaxis_title="Price ($)")
+    fig.update_layout(title=title, xaxis_rangeslider_visible=False, xaxis_title="Time", yaxis_title="Price ($)")
     fig.show()
 
 
@@ -128,4 +128,5 @@ if __name__ == "__main__":
                   "vwap"
               ],
               fills=[fill],
-              log=log)
+              log=log,
+              title=filename)

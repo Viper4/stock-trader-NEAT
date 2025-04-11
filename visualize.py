@@ -190,25 +190,14 @@ if __name__ == "__main__":
     config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, CONFIG_PATH)
     file_name = input("Enter file name of genome: ")
     genome = saving.SaveSystem.load_data(GENOME_DIR + file_name + ".gz")
-    node_names = {-19: 'Position',
-                  -18: 'PLPC',
-                  -17: 'Open%',
-                  -16: 'High%',
-                  -15: 'Low%',
-                  -14: 'Close%',
-                  -13: 'Vol%',
-                  -12: "VWAP%",
-                  -11: 'Stock Sent',
-                  -10: 'SPY Close%',
-                  -9: 'SPY Vol%',
-                  -8: 'SPY Sent',
-                  -7: 'QQQ Close%',
-                  -6: 'QQQ Vol%',
-                  -5: 'QQQ Sent',
-                  -4: 'K%',
-                  -3: 'EMA D',
-                  -2: 'EMA K',
-                  -1: 'RSI',
+    node_names = {-8: 'PLPC',
+                  -7: 'Close%',
+                  -6: 'Vol%',
+                  -5: 'Regime 1',
+                  -4: 'Regime 2',
+                  -3: 'Regime 3',
+                  -2: 'Regime 4',
+                  -1: 'Regime 5',
                   0: 'Buy/Sell',
                   1: 'Quantity'}
     draw_net(config, genome, view=True, node_names=node_names, show_disabled=False)

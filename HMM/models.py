@@ -531,7 +531,7 @@ class HMMRegimePrediction(object):
             predicted_regimes.append(label_orders[best_index].index("Choppy"))
         bars["regime"] = predicted_regimes
 
-        return correct_predictions[best_index], best_profit, label_orders[best_index]
+        return correct_predictions[best_index], (best_profit / start_cash) * 100, label_orders[best_index]
 
     def validate(self, train_bars, test_bars, feature_settings, plot, seed=0, plot_label=""):
         """Trains HMM, evaluates accuracy, and visualizes results."""
@@ -556,14 +556,13 @@ class HMMRegimePrediction(object):
         # Calculate Accuracy
         total_predictions = len(test_bars) - 1  # Ignore last row due to comparing predicted with future price
 
-        correct_predictions, total_profit, label_order = self.get_score(test_bars, std_deviation, 0.1)
+        correct_predictions, profit_percent, label_order = self.get_score(test_bars, std_deviation, 0.1)
 
         accuracy = (correct_predictions / total_predictions) * 100
-        print(f"Accuracy: {accuracy:.2f}%, profit: {total_profit:.2f}, label order: {label_order}")
+        print(f"Accuracy: {accuracy:.2f}%, profit: {profit_percent:.2f}%, label order: {label_order}")
 
         # Plot stock prices with color-coded regimes
         if plot:
-            profit_percent = (total_profit / (test_bars.iloc[0].close * 50)) * 100
             stock_change = ((test_bars.iloc[-1].close - test_bars.iloc[0].close) / test_bars.iloc[0].close) * 100
             print(f"Profit percentage: {profit_percent:.2f}%")
             print(f"Stock change: {stock_change:.2f}%")
@@ -596,12 +595,12 @@ class HMMRegimePrediction(object):
 
             plt.legend()
             if plot_label != "":
-                plt.title(f"{plot_label}\n{feature_settings}-{seed} Stock Price with Regimes\n(Accuracy: {accuracy:.2f}%, profit: {total_profit:.2f})")
+                plt.title(f"{plot_label}\n{feature_settings}-{seed} Stock Price with Regimes\n(Accuracy: {accuracy:.2f}%, profit: {profit_percent:.2f}%)")
             else:
-                plt.title(f"{feature_settings}-{seed} Stock Price with Regimes\n(Accuracy: {accuracy:.2f}%, profit: {total_profit:.2f})")
+                plt.title(f"{feature_settings}-{seed} Stock Price with Regimes\n(Accuracy: {accuracy:.2f}%, profit: {profit_percent:.2f}%)")
             plt.show()
 
-        return accuracy, total_profit, label_order
+        return accuracy, profit_percent, label_order
 
 
 class HMMPricePrediction(object):

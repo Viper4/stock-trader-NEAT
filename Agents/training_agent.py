@@ -187,7 +187,8 @@ class Training(Agent):
             plot.plot_bars(b_stock_bars,
                            lines=["vwap"],
                            fills=["regime_0"],
-                           log=best_log)
+                           log=best_log,
+                           title=f"{self.stock['symbol']} Training Log")
             saving.SaveSystem.save_data(best_log, LOG_DIR + self.stock["symbol"] + "-training-log.gz")
 
         pool.close()

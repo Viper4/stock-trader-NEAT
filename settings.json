@@ -107,22 +107,22 @@
           "transaction_fee": 0.0095,
           "regime_settings": [
             {
-              "features": ["trade_count_pc", "sma_a", "tr"],
+              "features": ["slow_d", "matching_low", "mama"],
+              "seed": 6,
+              "label_order": {"Bear": 0, "Choppy": 1, "Bull": 2}
+            },
+            {
+              "features": ["volume_pc", "sma_a"],
               "seed": 6,
               "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
             },
             {
-              "features": ["volume_pc", "sma_a", "natr"],
-              "seed": 2,
-              "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
-            },
-            {
-              "features": ["slow_k", "matching_low", "sar"],
+              "features": ["volume_pc", "fracocp", "sma_a"],
               "seed": 3,
-              "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
+              "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
             },
             {
-              "features": ["open_pc", "matching_low", "adosc"],
+              "features": ["sma_a", "matching_low", "adosc"],
               "seed": 0,
               "label_order": {"Bear": 0, "Choppy": 1, "Bull": 2}
             },
@@ -143,29 +143,29 @@
           "transaction_fee": 0.001,
           "regime_settings": [
             {
-                "features": ["ema_a", "harami_cross", "fama"],
-                "seed": 6,
-                "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
-            },
-            {
-                "features": ["low_pc", "sma_a", "harami_cross"],
-                "seed": 3,
-                "label_order": {"Choppy": 0, "Bear": 1, "Bull": 2}
-            },
-            {
-                "features": ["three_black_crows", "harami_cross", "macdsignal"],
-                "seed": 4,
-                "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
-            },
-            {
-                "features": ["ema_a", "harami_cross", "adx"],
-                "seed": 6,
-                "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
-            },
-            {
-                "features": ["three_lines", "harami", "harami_cross"],
+                "features": ["harami", "harami_cross", "macd"],
                 "seed": 0,
                 "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
+            },
+            {
+                "features": ["ema_a", "harami_cross", "mama"],
+                "seed": 6,
+                "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
+            },
+            {
+                "features": ["harami", "harami_cross", "thrusting"],
+                "seed": 2,
+                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+            },
+            {
+                "features": ["three_outside", "harami_cross", "mama"],
+                "seed": 0,
+                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+            },
+            {
+                "features": ["hikkake", "adosc", "macd"],
+                "seed": 1,
+                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
             }
           ]
         },
@@ -179,14 +179,14 @@
           "transaction_fee": 0.001,
           "regime_settings": [
             {
-                "features": ["fraclp", "doji_star", "mama"],
-                "seed": 9,
-                "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
-            },
-            {
-                "features": ["natr", "doji_star", "fama"],
+                "features": ["atr", "doji_star", "fama"],
                 "seed": 5,
                 "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
+            },
+            {
+                "features": ["three_outside", "harami_cross", "short_line"],
+                "seed": 1,
+                "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
             },
             {
                 "features": ["three_outside", "short_line", "thrusting"],
@@ -199,8 +199,8 @@
                 "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
             },
             {
-                "features": ["short_line", "spinning_top"],
-                "seed": 8,
+                "features": ["three_black_crows", "short_line", "spinning_top"],
+                "seed": 7,
                 "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
             }
           ]
@@ -238,6 +238,42 @@
                 "features": ["sma_d", "three_black_crows", "macdsignal"],
                 "seed": 0,
                 "label_order": {"Choppy": 0, "Bear": 1, "Bull": 2}
+            }
+          ]
+        },
+        {
+          "symbol": "DXYZ",
+          "cash_at_risk": 0.15,
+          "population_filename": "5pw-population-DXYZ.gz",
+          "genome_filename": "5pw-genome-DXYZ.gz",
+          "training_filename": "15m-data-DXYZ.gz",
+          "trading": true,
+          "transaction_fee": 0.0095,
+          "regime_settings": [
+            {
+                "features": ["volume_pc", "fraclp", "natr"],
+                "seed": 5,
+                "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
+            },
+            {
+                "features": ["ema_a", "spinning_top", "adosc"],
+                "seed": 4,
+                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+            },
+            {
+                "features": ["close_pc", "ema_a", "spinning_top"],
+                "seed": 8,
+                "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
+            },
+            {
+                "features": ["natr", "slow_k", "sar"],
+                "seed": 2,
+                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+            },
+            {
+                "features": ["high_pc", "slow_k", "slow_d"],
+                "seed": 5,
+                "label_order": {"Bear": 0, "Choppy": 1, "Bull": 2}
             }
           ]
         }

@@ -139,7 +139,8 @@ class Validation(Agent):
                            "vwap"
                        ],
                        fills=["regime_0"],
-                       log=log
+                       log=log,
+                       title=f"{self.stock['symbol']} {self.profile.interval}m Validation"
                        )
-        saving.SaveSystem.save_data(log, VALIDATION_DIR + f"{self.stock['symbol']}-{self.profile.interval}m-{start_date.date().isoformat()}_{columns['index'][-1].to_pydatetime().date().isoformat()}-log.gz")
+        saving.SaveSystem.save_data(log, VALIDATION_DIR + f"{self.stock['symbol']}-{self.profile.interval}m-{columns['index'][0].to_pydatetime().date().isoformat()}_{columns['index'][-1].to_pydatetime().date().isoformat()}-log.gz")
         return log
