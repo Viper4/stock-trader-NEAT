@@ -1,6 +1,5 @@
 from hmmlearn.hmm import GaussianHMM
 import numpy as np
-from multiprocessing import Pool
 from tqdm import tqdm
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -607,12 +606,10 @@ class HMMPricePrediction(object):
     def __init__(self, num_components, num_latent_bars):
         self.model = GaussianHMM(n_components=num_components, init_params="")
         self.model.startprob_ = np.full(num_components, 1 / num_components)  # Uniform probabilities
-        self.model.transmat_ = np.full((num_components, num_components),
-                                       1 / num_components)  # Equal transition probabilities
+        self.model.transmat_ = np.full((num_components, num_components), 1 / num_components)  # Equal transition probabilities
         self.model.means_ = np.random.rand(num_components, 3)  # Random means for each state
         self.model.covars_ = np.full((num_components, 3), 0.1)  # Small diagonal covariance values
         self.num_latent_bars = num_latent_bars
-        self.pool = Pool(processes=4)
 
     def augment_bars(self, bars):
         fracocp = (bars["close"] - bars["open"]) / bars["open"]
@@ -646,12 +643,24 @@ class HMMPricePrediction(object):
         sample_space_fraclp = np.linspace(fraclp.min(), frachp.max(), 10)
         sample_space_frachp = np.linspace(frachp.min(), frachp.max(), 10)
 
-        return pd.DataFrame(
-            data={"outcome": list(itertools.product(sample_space_fracocp, sample_space_fraclp, sample_space_frachp))})
+        return pd.DataFrame(data={"outcome": list(itertools.product(sample_space_fracocp, sample_space_fraclp, sample_space_frachp))})
+
+    def predict_full(self, open_price, possible_outcomes, features):
+        outcomes_copy = possible_outcomes.copy()
+        scores = []
+        predictions = []
+        for row in outcomes_copy.itertuples():
+            scores.append(self.model.score(np.vstack((features, row.outcome))))
+            predictions.append(open_price * (1 + row.outcome[0]))
+        outcomes_copy["score"] = scores
+        outcomes_copy["predicted_price"] = predictions
+
+        # Sort the outcomes based on probability scores
+        outcomes_copy = outcomes_copy.sort_values(by="score", ascending=False)
+        return outcomes_copy["predicted_price"]
 
     def predict(self, open_price, possible_outcomes, features):
-        outcome_scores = possible_outcomes["outcome"].apply(
-            lambda outcome: self.model.score(np.vstack((features, outcome))))
+        outcome_scores = possible_outcomes["outcome"].apply(lambda outcome: self.model.score(np.vstack((features, outcome))))
 
         # Take the most probable outcome as the one with the highest score
         most_probable_outcome = possible_outcomes["outcome"].iloc[np.argmax(outcome_scores)]

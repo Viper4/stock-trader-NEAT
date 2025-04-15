@@ -64,7 +64,7 @@ class Trading(Agent):
                 # Get historical data on symbol
                 start_date = now_date - dt.timedelta(days=max_period)
                 end_date = now_date - dt.timedelta(days=1)
-                bars = self.trader.generate_data(self.stock["symbol"], "-SA", self.trader.profile, start_date, end_date, spy_bars=spy_bars, qqq_bars=qqq_bars)
+                bars = self.trader.generate_data(self.stock["symbol"], "-SA", self.trader.profile, start_date, end_date)
 
                 bars = pd.concat([bars, candles], ignore_index=False).drop_duplicates()
 
@@ -93,13 +93,13 @@ class Trading(Agent):
                     else:
                         market_value = 0
                     used_cash = market_value + unsettled_cash
-                    if used_cash < self.trader.profile["cash_limit"]:
-                        quantity = min(self.trader.profile["cash_limit"], settled_cash) * qty_percent * self.stock[
-                            "cash_at_risk"] / current_bar.close
+                    equity = settled_cash + used_cash
+                    used_cash_percent = used_cash / (used_cash + settled_cash)
+                    if used_cash_percent < self.trader.profile["cash_limit_percent"]:
+                        quantity = min(self.trader.profile["cash_limit_percent"] * equity - used_cash, settled_cash) * qty_percent * self.stock["cash_at_risk"] / current_bar.close
                         quantity = round(quantity)
                         if quantity > 0:
-                            self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity,
-                                                                side="BUY")
+                            self.trader.schwab_api.submit_order(symbol=self.stock["symbol"], quantity=quantity, side="BUY")
 
                             action = {"side": "Buy", "type": "long", "quantity": quantity,
                                       "price": current_bar.close,

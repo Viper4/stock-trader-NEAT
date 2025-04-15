@@ -1,4 +1,3 @@
-import numpy as np
 from alpaca_trade_api.rest import REST, URL, TimeFrameUnit
 import datetime as dt
 import pytz
@@ -11,59 +10,14 @@ import Managers.base_manager
 import time
 import saving
 import ast
-from sklearn.feature_selection import f_classif, mutual_info_classif
-from scipy.stats import chi2_contingency
-import seaborn as sns
 from datetime import timedelta
 import HMM.models as models
 import HMM.feature_selection as feature_selection
+from HMM.correlation import CorrelationAnalysis
+import HMM.trading
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-UVXY-1d_2019-1-1_2025-4-10.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested1-UVXY-1d_2019-1-1_2025-4-10.csv"
-
-
-class CorrelationAnalysis(object):
-    def __init__(self, features):
-        self.features = features
-
-    def cramers_v(self, x, y):
-        """
-        Computes Cramér's V statistic for categorical correlation.
-        """
-        confusion_matrix = pd.crosstab(x, y)
-        chi2 = chi2_contingency(confusion_matrix)[0]
-        n = confusion_matrix.sum().sum()
-        r, k = confusion_matrix.shape
-        return np.sqrt(chi2 / (n * (min(r, k) - 1)))
-
-    def compute_feature_correlation(self, bars):
-        """
-        Computes correlation scores between features and the categorical 'regime'.
-        Uses ANOVA F-test for numerical features, Mutual Information, and Cramér's V.
-        """
-        results = {}
-
-        # Encode categorical regime as integers (Bear = 0, Choppy = 1, Bull = 2)
-        bars["regime_encoded"] = bars["regime"].astype("category").cat.codes
-
-        for feature in self.features:
-            if bars[feature].dtype in [np.float64, np.int64]:  # Numerical Features
-                # ANOVA F-test
-                f_stat, _ = f_classif(bars[[feature]], bars["regime_encoded"])
-                mi = mutual_info_classif(bars[[feature]], bars["regime_encoded"])[0]
-                results[feature] = {"ANOVA F-Score": f_stat[0], "Mutual Info": mi}
-            else:
-                # Categorical Features
-                cramers_v_score = self.cramers_v(bars[feature], bars["regime"])
-                results[feature] = {"Cramér’s V": cramers_v_score}
-
-        return pd.DataFrame(results).T
-
-    def plot_correlation(self, correlation_matrix):
-        plt.figure(figsize=(10, 6))
-        sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm", fmt=".2f", robust=True, yticklabels=True, xticklabels=True)
-        plt.title("Feature Correlation with Market Regime")
-        plt.show()
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-DXYZ-1d_2019-1-1_2025-4-14.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested2-DXYZ-1d_2019-1-1_2025-4-14.csv"
 
 
 def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df):
@@ -106,23 +60,20 @@ def run_regime_search(train_bars, test_bars, features, n_iterations=-1, n_seeds=
     if not os.path.exists(TESTED_PATH):
         saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit%", "Label Order"], TESTED_PATH)
     rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
-    i = 0
     for row in rows:
         if row[0] == "Features":
             continue
         key = row[0] + row[1]
         tested[key] = (float(row[2]), float(row[3]))
-        i += 1
 
     print("Starting search")
     regime_predictor = models.HMMRegimePrediction()
-    i = 0
-    for features in feature_combinations:
+    for i in range(len(feature_combinations)):
         if n_iterations != -1 and i >= n_iterations:
             break
         start_time = time.time()
         print(f"\nTest {i}/{len(feature_combinations)} {100 * i / len(feature_combinations):.4f}%:")
-        features_list = list(features)
+        features_list = list(feature_combinations[i])
 
         for j in range(n_seeds):
             key = str(features_list) + str(j)
@@ -141,7 +92,6 @@ def run_regime_search(train_bars, test_bars, features, n_iterations=-1, n_seeds=
             if profit_percent > best_profit:
                 best_profit = profit_percent
                 print(f"New best profit: {best_profit}")
-        i += 1
         iteration_time = time.time() - start_time
         eta = (len(feature_combinations) - i) * iteration_time
         print(f"Finished in {iteration_time:.2f} seconds. ETA: {str(timedelta(seconds=eta))}")
@@ -260,15 +210,15 @@ if __name__ == "__main__":
     alpaca_api = REST(settings["profiles"][0]["public_key"], settings["profiles"][0]["secret_key"],
                       base_url=URL("https://paper-api.alpaca.markets"))
     now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
-    unit_map = {"Minute": TimeFrameUnit.Minute, "Day": TimeFrameUnit.Day, "Week": TimeFrameUnit.Week,
-                "Month": TimeFrameUnit.Month, "Hour": TimeFrameUnit.Hour}
+    unit_map = {"minute": TimeFrameUnit.Minute, "day": TimeFrameUnit.Day, "week": TimeFrameUnit.Week,
+                "month": TimeFrameUnit.Month, "hour": TimeFrameUnit.Hour}
 
     if not os.path.exists(DATA_PATH):
         symbol = input("Enter symbol: ")
         start = input("Enter start date (YYYY-MM-DD): ")
         end = input("Enter end date (YYYY-MM-DD): ")
         interval = int(input("Enter interval (1, 5, 15, 30): "))
-        unit_input = input("Enter interval unit (Minute, Day, Week, Month, Hour): ")
+        unit_input = input("Enter interval unit (minute, day, week, month, hour): ")
         start_date = dt.datetime.strptime(start, "%Y-%m-%d").replace(hour=9, minute=30,
                                                                      tzinfo=pytz.timezone("US/Eastern"))
         end_date = dt.datetime.strptime(end, "%Y-%m-%d").replace(hour=16, minute=0, tzinfo=pytz.timezone("US/Eastern"))
@@ -357,10 +307,10 @@ if __name__ == "__main__":
         for i in range(10):
             print(f"Seed {i}")
             run_random_forest(bars_df, all_features, i)
-    elif user_input == "predict now":
+    elif user_input == "reg now":
         symbol = input("Enter symbol: ")
         interval = int(input("Enter interval (1, 5, 15, 30): "))
-        unit_input = input("Enter interval unit (Minute, Day, Week, Month, Hour): ")
+        unit_input = input("Enter interval unit (minute, day, week, month, hour): ")
 
         profile = settings["profiles"][0]
 
@@ -397,3 +347,104 @@ if __name__ == "__main__":
         averaged_predictions["Bear"] /= len(regime_settings)
         averaged_predictions["Choppy"] /= len(regime_settings)
         print(f"\nAverage predictions for {symbol}:\n{averaged_predictions}")
+    elif user_input == "price now":
+        symbol = input("Enter symbol: ")
+        interval = int(input("Enter interval (1, 5, 15, 30): "))
+        unit_input = input("Enter interval unit (minute, day, week, month, hour): ")
+        num_components = int(input("Enter number of components: "))
+        num_latent_bars = int(input("Enter number of latent bars: "))
+
+        now_date = dt.datetime.now(dt.timezone.utc)
+        latest_bars = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval,
+                                                         now_date - dt.timedelta(days=num_latent_bars * 24),
+                                                         now_date - dt.timedelta(minutes=16),
+                                                         500000, unit_map[unit_input])
+        price_predictor = models.HMMPricePrediction(num_components, num_latent_bars)
+        price_predictor.fit(latest_bars)
+
+        augmented_bars = price_predictor.augment_bars(latest_bars)
+        possible_outcomes = price_predictor.get_possible_outcomes(augmented_bars)
+        features = price_predictor.get_features(augmented_bars)
+
+        close_price = latest_bars["close"].iloc[-1]
+        price_predictions = price_predictor.predict_full(close_price, possible_outcomes, features).tolist()
+        print(f"Top 5 Price Predictions for {symbol}:")
+        for i in range(0, 5):
+            percent_change = (price_predictions[i] - close_price) / close_price
+            print(f"{i+1}: {price_predictions[i]} {percent_change * 100}%")
+    elif user_input == "reg one":
+        symbol = input("Enter symbol: ")
+        interval = int(input("Enter interval (1, 5, 15, 30): "))
+        unit_input = input("Enter interval unit (minute, day, week, month, hour): ")
+        date = dt.datetime.strptime(input("Enter date (YYYY-MM-DD): "), "%Y-%m-%d").replace(hour=16, minute=0, tzinfo=pytz.timezone("US/Eastern"))
+        now_date = dt.datetime.now(dt.timezone.utc)
+        if date > now_date - dt.timedelta(minutes=16):
+            date = now_date - dt.timedelta(minutes=16)
+
+        profile = settings["profiles"][0]
+
+        regime_settings = []
+        for stock in profile["stocks"]:
+            if stock["symbol"] == symbol:
+                regime_settings = stock["regime_settings"]
+                break
+
+        now_date = dt.datetime.now(dt.timezone.utc)
+        bars_df = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval,
+                                                         date - dt.timedelta(days=profile["general_regime_settings"]["fit_days"]),
+                                                         date,
+                                                         500000, unit_map[unit_input])
+        models.HMMRegimePrediction.augment_bars(bars_df)
+
+        averaged_predictions = {"Bull": 0, "Bear": 0, "Choppy": 0}
+
+        for i in range(len(regime_settings)):
+            regime_predictor = models.HMMRegimePrediction()
+            regime_predictor.fit(bars_df, regime_settings[i]["features"], regime_settings[i]["seed"])
+            prediction = regime_predictor.predict_probability(bars_df)[-1].tolist()
+
+            label_order = regime_settings[i]["label_order"]
+            ordered_prediction = {"Bull": prediction[label_order["Bull"]] * 100,
+                                  "Bear": prediction[label_order["Bear"]] * 100,
+                                  "Choppy": prediction[label_order["Choppy"]] * 100}
+            print(f"\n{regime_settings[i]['features']} prediction:\n{ordered_prediction}")
+            averaged_predictions["Bull"] += ordered_prediction["Bull"]
+            averaged_predictions["Bear"] += ordered_prediction["Bear"]
+            averaged_predictions["Choppy"] += ordered_prediction["Choppy"]
+
+        averaged_predictions["Bull"] /= len(regime_settings)
+        averaged_predictions["Bear"] /= len(regime_settings)
+        averaged_predictions["Choppy"] /= len(regime_settings)
+        print(f"\nAverage predictions on {date.isoformat()} for {symbol}:\n{averaged_predictions}")
+    elif user_input == "price one":
+        symbol = input("Enter symbol: ")
+        interval = int(input("Enter interval (1, 5, 15, 30): "))
+        unit_input = input("Enter interval unit (minute, day, week, month, hour): ")
+        num_components = int(input("Enter number of components: "))
+        num_latent_bars = int(input("Enter number of latent bars: "))
+        date = dt.datetime.strptime(input("Enter date (YYYY-MM-DD): "), "%Y-%m-%d").replace(hour=16, minute=0, tzinfo=pytz.timezone("US/Eastern"))
+        now_date = dt.datetime.now(dt.timezone.utc)
+
+        if date > now_date - dt.timedelta(minutes=16):
+            date = now_date - dt.timedelta(minutes=16)
+        latest_bars = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval,
+                                                             date - dt.timedelta(days=num_latent_bars * 32),
+                                                             date,
+                                                             500000, unit_map[unit_input])
+        price_predictor = models.HMMPricePrediction(num_components, num_latent_bars)
+        price_predictor.fit(latest_bars[:-1])
+
+        augmented_bars = price_predictor.augment_bars(latest_bars[:-1])
+        possible_outcomes = price_predictor.get_possible_outcomes(augmented_bars)
+        features = price_predictor.get_features(augmented_bars)
+
+        close_price = latest_bars["close"].iloc[-2]
+        actual_close = latest_bars["close"].iloc[-1]
+        price_predictions = price_predictor.predict_full(close_price, possible_outcomes, features).tolist()
+        print(f"Top 5 Price Predictions on {date.isoformat()} for {symbol}:")
+        for i in range(0, 5):
+            percent_change = (price_predictions[i] - close_price) / close_price
+            percent_error = abs(price_predictions[i] - actual_close) / price_predictions[i]
+            print(f"{i + 1}: {price_predictions[i]} {percent_change * 100}% | Err: {percent_error * 100}%")
+    elif user_input == "trade":
+        HMM.trading.trade(settings, alpaca_api)

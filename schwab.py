@@ -23,7 +23,6 @@ class Schwab:
         self.tokens = None
         self.authorizing = False
         self.refresh_thread = None
-
         self.authorize()
 
     def authorize(self):
