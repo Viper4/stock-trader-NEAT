@@ -605,10 +605,7 @@ class HMMRegimePrediction(object):
 class HMMPricePrediction(object):
     def __init__(self, num_components, num_latent_bars):
         self.model = GaussianHMM(n_components=num_components, init_params="")
-        self.model.startprob_ = np.full(num_components, 1 / num_components)  # Uniform probabilities
-        self.model.transmat_ = np.full((num_components, num_components), 1 / num_components)  # Equal transition probabilities
-        self.model.means_ = np.random.rand(num_components, 3)  # Random means for each state
-        self.model.covars_ = np.full((num_components, 3), 0.1)  # Small diagonal covariance values
+        self.num_components = num_components
         self.num_latent_bars = num_latent_bars
 
     def augment_bars(self, bars):
@@ -625,11 +622,29 @@ class HMMPricePrediction(object):
     def get_features(self, dataframe):
         return np.column_stack((dataframe["delOpenClose"], dataframe["delHighOpen"], dataframe["delLowOpen"]))
 
-    def fit_augmented(self, augmented_bars):
+    def fit_augmented(self, augmented_bars, seed):
+        np.random.seed(seed)  # For reproducibility
+
+        # Set initial parameters dynamically based on number of features
+        # When switching from n features to n+1 features, error occurs due to mismatch in dimensions
+        self.model.startprob_ = np.full(3, 1.0 / 3)  # Uniform probabilities
+        self.model.transmat_ = np.full((3, 3), 1.0 / 3)  # Equal transition probabilities
+        self.model.means_ = np.random.rand(3, self.num_components)  # Random means with correct shape
+        self.model.covars_ = np.full((3, self.num_components), 0.1)  # Small diagonal covariance values
+
         features = self.get_features(augmented_bars)
         self.model.fit(features)
 
-    def fit(self, bars):
+    def fit(self, bars, seed):
+        np.random.seed(seed)  # For reproducibility
+
+        # Set initial parameters dynamically based on number of features
+        # When switching from n features to n+1 features, error occurs due to mismatch in dimensions
+        self.model.startprob_ = np.full(self.num_components, 1 / self.num_components)  # Uniform probabilities
+        self.model.transmat_ = np.full((self.num_components, self.num_components), 1 / self.num_components)  # Equal transition probabilities
+        self.model.means_ = np.random.rand(self.num_components, 3)  # Random means for each state
+        self.model.covars_ = np.full((self.num_components, 3), 0.1)  # Small diagonal covariance values
+
         augmented_bars = self.augment_bars(bars)
         features = self.get_features(augmented_bars)
         self.model.fit(features)
@@ -678,7 +693,7 @@ class HMMPricePrediction(object):
         features = self.get_features(augmented_bars)
         return self.predict(bars.iloc[-1].open, possible_outcomes, features)
 
-    def validate(self, bars):
+    def validate(self, bars, plot):
         print("Validating HMM Price Prediction...")
 
         possible_outcomes = self.get_possible_outcomes(self.augment_bars(bars))
@@ -692,25 +707,29 @@ class HMMPricePrediction(object):
 
             predicted_close_prices.append(self.predict(bars.iloc[i].open, possible_outcomes, previous_data))
 
-        plt.figure(figsize=(30, 10), dpi=80)
-        plt.rcParams.update({'font.size': 18})
-
         x_axis = np.array(bars.index[self.num_latent_bars:], dtype='datetime64[ms]')
-        plt.plot(x_axis, bars[self.num_latent_bars:]["close"], 'b+-', label="Actual close prices")
-        plt.plot(x_axis, predicted_close_prices, 'ro-', label="Predicted close prices")
-        plt.legend(prop={'size': 20})
-        plt.show()
+        if plot:
+            plt.figure(figsize=(30, 10), dpi=80)
+            plt.rcParams.update({'font.size': 18})
+
+            plt.plot(x_axis, bars[self.num_latent_bars:]["close"], 'b+-', label="Actual close prices")
+            plt.plot(x_axis, predicted_close_prices, 'ro-', label="Predicted close prices")
+            plt.legend(prop={'size': 20})
+            plt.show()
 
         ae = abs(bars[self.num_latent_bars:]["close"] - predicted_close_prices)
         min_ae = min(ae)
         max_ae = max(ae)
         avg_ae = sum(ae) / ae.shape[0]
 
-        plt.figure(figsize=(30, 10), dpi=80)
-
         print("Min Error: ", min_ae)
         print("Max Error: ", max_ae)
         print("Avg Error: ", avg_ae)
-        plt.plot(x_axis, ae, 'go-', label="Error")
-        plt.legend(prop={'size': 20})
-        plt.show()
+
+        if plot:
+            plt.figure(figsize=(30, 10), dpi=80)
+            plt.plot(x_axis, ae, 'go-', label="Error")
+            plt.legend(prop={'size': 20})
+            plt.show()
+
+        return avg_ae

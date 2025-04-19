@@ -16,16 +16,16 @@ import HMM.feature_selection as feature_selection
 from HMM.correlation import CorrelationAnalysis
 import HMM.trading
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-DXYZ-1d_2019-1-1_2025-4-14.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested2-DXYZ-1d_2019-1-1_2025-4-14.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-COIN-1d_2019-1-1_2025-4-17.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-COIN-1d_2019-1-1_2025-4-17.csv"
 
 
-def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df):
+def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df, seed):
     print(f"{num_components} components and {num_latent_bars} latent: ")
 
     hmm_predictor = models.HMMPricePrediction(num_components, num_latent_bars)
-    hmm_predictor.fit(train_bars_df)
-    hmm_predictor.validate(test_bars_df)
+    hmm_predictor.fit(train_bars_df, seed)
+    hmm_predictor.validate(test_bars_df, True)
     start_time = time.time()
     predicted_close = hmm_predictor.predict_latest(bars_df)
     print("Predicted:", predicted_close)
@@ -34,64 +34,70 @@ def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df)
     print(f"Finished in {time.time() - start_time} seconds")
 
 
+def run_price_search(num_components, num_latent_bars, train_bars_df, test_bars_df, n_seeds=20):
+    print(f"{num_components} components and {num_latent_bars} latent: ")
+    hmm_predictor = models.HMMPricePrediction(num_components, num_latent_bars)
+    lowest_error = 999999
+    best_seed = 0
+    print("Starting search")
+
+    for i in range(n_seeds):
+        start_time = time.time()
+        print(f"Seed {i}:")
+        hmm_predictor.fit(train_bars_df, i)
+        avg_error = hmm_predictor.validate(test_bars_df, False)
+        if avg_error < lowest_error:
+            lowest_error = avg_error
+            best_seed = i
+        saving.SaveSystem.save_to_csv([i, avg_error], TESTED_PATH, "a", header=["Seed", "Average Error"])
+        print(f"Finished in {time.time() - start_time} seconds")
+
+    print(f"Best seed: {best_seed} with error: {lowest_error}")
+
+
 def run_regime_test(train_bars, test_bars, features, seed, plot, plot_label=""):
     regime_predictor = models.HMMRegimePrediction()
     regime_predictor.validate(train_bars, test_bars, features, plot, seed, plot_label)
     start_time = time.time()
     predicted_regimes = regime_predictor.predict_probability(test_bars_df)
-    print(f"Last 10 predictions:")
-    for i in range(10):
-        print(str(i+1) + ": " + str(predicted_regimes[-10 + i]))
+    print(f"Last 5 predictions:")
+    for j in range(5):
+        print(str(j + 1) + ": " + str(predicted_regimes[j - 10]))
     print("Finished in", time.time() - start_time, "seconds")
     print()
 
 
-def run_regime_search(train_bars, test_bars, features, n_iterations=-1, n_seeds=20):
-    feature_combinations = []
+def run_regime_search(train_bars, test_bars, features, n_seeds=20, r=1):
     print("Generating combinations")
-    for i in range(3, 5):
-        feature_combinations.extend(itertools.combinations(features, i))
+    feature_combinations = list(itertools.combinations(features, r))
     print(f"Generated {len(feature_combinations)} combinations")
 
-    tested = {}
-    best_accuracy = 0.0
-    best_profit = -999999.0
-
-    if not os.path.exists(TESTED_PATH):
-        saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit%", "Label Order"], TESTED_PATH)
-    rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
-    for row in rows:
-        if row[0] == "Features":
-            continue
-        key = row[0] + row[1]
-        tested[key] = (float(row[2]), float(row[3]))
+    start_i = 0
+    start_j = 0
+    if os.path.exists(TESTED_PATH):
+        rows = saving.SaveSystem.read_from_csv(TESTED_PATH)
+        if len(ast.literal_eval(rows[-1][0])) == r:
+            start_i = int(rows[-1][5])
+            start_j = int(rows[-1][1]) + 1
+            if start_j >= n_seeds:
+                start_i += 1
+                start_j = 0
+        del rows
 
     print("Starting search")
     regime_predictor = models.HMMRegimePrediction()
-    for i in range(len(feature_combinations)):
-        if n_iterations != -1 and i >= n_iterations:
-            break
+    for i in range(start_i, len(feature_combinations)):
         start_time = time.time()
         print(f"\nTest {i}/{len(feature_combinations)} {100 * i / len(feature_combinations):.4f}%:")
         features_list = list(feature_combinations[i])
 
-        for j in range(n_seeds):
-            key = str(features_list) + str(j)
-            if key not in tested:
-                accuracy, profit_percent, label_order = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
-                tested[key] = accuracy
-                saving.SaveSystem.save_to_csv([features_list, j, accuracy, profit_percent, label_order], TESTED_PATH, "a")
-            else:
-                accuracy, profit_percent = tested[key]
-                print(f"Already tested: {key} - {tested[key]}")
+        for j in range(start_j, n_seeds):
+            accuracy, profit_percent, label_order = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
+            saving.SaveSystem.save_to_csv([features_list, j, accuracy, profit_percent, label_order, i], TESTED_PATH, "a", header=["Features", "Seed", "Accuracy", "Profit%", "Label Order", "Index"])
 
-            if accuracy > best_accuracy:
-                best_accuracy = accuracy
-                print(f"New best accuracy: {best_accuracy}%")
+        if i == start_i:
+            start_j = 0
 
-            if profit_percent > best_profit:
-                best_profit = profit_percent
-                print(f"New best profit: {best_profit}")
         iteration_time = time.time() - start_time
         eta = (len(feature_combinations) - i) * iteration_time
         print(f"Finished in {iteration_time:.2f} seconds. ETA: {str(timedelta(seconds=eta))}")
@@ -172,30 +178,31 @@ def get_best(sort_by):
 
     save_path = TESTED_PATH.replace(".csv", "_sorted.csv")
     saving.SaveSystem.delete_file(save_path)
-    saving.SaveSystem.make_csv(["Features", "Seed", "Accuracy", "Profit%", "Label Order"], save_path)
+
+    saving.SaveSystem.save_to_csv(results, save_path, "w", header=["Features", "Seed", "Accuracy", "Profit%", "Label Order"])
 
     sorted_keys = []
-    sorted_accuracies = []
-    sorted_profits = []
-    for feature_settings, seed, accuracy, profit_percent, label_order in results:
-        sorted_keys.append(feature_settings + " " + str(seed))
-        sorted_accuracies.append(accuracy)
-        sorted_profits.append(profit_percent)
-        saving.SaveSystem.save_to_csv([feature_settings, seed, accuracy, profit_percent, label_order], save_path, "a")
-
     if sort_by == 1:
+        sorted_accuracies = []
+        for j in range(100):
+            sorted_keys.append(results[j][0])
+            sorted_accuracies.append(results[j][2])
         plt.figure(figsize=(10, 6))
-        plt.barh(sorted_keys[:100], sorted_accuracies[:100], color="skyblue")
+        plt.barh(sorted_keys, sorted_accuracies, color="skyblue")
         plt.xlabel("Accuracy (%)")
-        plt.ylabel("Feature Combinations")
+        plt.ylabel("Feature combinations")
         plt.title("Feature Combination Accuracy Rankings")
         plt.gca().invert_yaxis()  # Best at top
         plt.show()
     else:
+        sorted_profits = []
+        for j in range(100):
+            sorted_keys.append(results[j][0])
+            sorted_profits.append(results[j][3])
         plt.figure(figsize=(10, 6))
-        plt.barh(sorted_keys[:100], sorted_profits[:100], color="skyblue")
+        plt.barh(sorted_keys, sorted_profits, color="skyblue")
         plt.xlabel("Profit (%)")
-        plt.ylabel("Feature Combinations")
+        plt.ylabel("Feature combinations")
         plt.title("Feature Combination Profit Rankings")
         plt.gca().invert_yaxis()  # Best at top
         plt.show()
@@ -204,7 +211,7 @@ def get_best(sort_by):
 
 
 if __name__ == "__main__":
-    user_input = input("Enter command (brute force, price test, reg test, reg best, correlation, stats, random forest): ")
+    user_input = input("Enter command (price search, regime search, price test, reg test, reg best, correlation, stats, random forest): ")
     with open(SETTINGS_PATH) as file:
         settings = json.load(file)
     alpaca_api = REST(settings["profiles"][0]["public_key"], settings["profiles"][0]["secret_key"],
@@ -265,11 +272,15 @@ if __name__ == "__main__":
         "volatility", "macd", "macdsignal", "macdhist"
     ]
 
-    if user_input == "brute force":
+    if user_input == "price search":
         num_seeds = int(input("Number of seeds to check (10 is good): "))
-        run_regime_search(train_bars_df, test_bars_df, all_features, n_seeds=num_seeds)
+        run_price_search(int(input("Number of components: ")), int(input("Number of latent bars: ")), train_bars_df, test_bars_df, n_seeds=num_seeds)
+    elif user_input == "regime search":
+        num_seeds = int(input("Number of seeds to check (10 is good): "))
+        r = int(input("Combination r: "))
+        run_regime_search(train_bars_df, test_bars_df, all_features, n_seeds=num_seeds, r=r)
     elif user_input == "price test":
-        run_price_test(int(input("Number of components: ")), int(input("Number of latent bars: ")), train_bars_df, test_bars_df)
+        run_price_test(int(input("Number of components: ")), int(input("Number of latent bars: ")), train_bars_df, test_bars_df, int(input("Enter seed: ")))
     elif user_input == "reg test":
         test_features = ast.literal_eval(input("Type features, Ex: ['close_pc', 'ema_1']: "))
         test_seed = int(input("Seed: "))
@@ -353,14 +364,15 @@ if __name__ == "__main__":
         unit_input = input("Enter interval unit (minute, day, week, month, hour): ")
         num_components = int(input("Enter number of components: "))
         num_latent_bars = int(input("Enter number of latent bars: "))
+        seed = int(input("Enter seed: "))
 
         now_date = dt.datetime.now(dt.timezone.utc)
         latest_bars = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval,
-                                                         now_date - dt.timedelta(days=num_latent_bars * 24),
+                                                         now_date - dt.timedelta(days=num_latent_bars * 32),
                                                          now_date - dt.timedelta(minutes=16),
                                                          500000, unit_map[unit_input])
         price_predictor = models.HMMPricePrediction(num_components, num_latent_bars)
-        price_predictor.fit(latest_bars)
+        price_predictor.fit(latest_bars, seed)
 
         augmented_bars = price_predictor.augment_bars(latest_bars)
         possible_outcomes = price_predictor.get_possible_outcomes(augmented_bars)
@@ -423,16 +435,18 @@ if __name__ == "__main__":
         num_components = int(input("Enter number of components: "))
         num_latent_bars = int(input("Enter number of latent bars: "))
         date = dt.datetime.strptime(input("Enter date (YYYY-MM-DD): "), "%Y-%m-%d").replace(hour=16, minute=0, tzinfo=pytz.timezone("US/Eastern"))
+        seed = int(input("Enter seed: "))
         now_date = dt.datetime.now(dt.timezone.utc)
 
         if date > now_date - dt.timedelta(minutes=16):
+            print("Date too far in the future. Defaulting to 16 minutes ago.")
             date = now_date - dt.timedelta(minutes=16)
         latest_bars = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval,
                                                              date - dt.timedelta(days=num_latent_bars * 32),
                                                              date,
                                                              500000, unit_map[unit_input])
         price_predictor = models.HMMPricePrediction(num_components, num_latent_bars)
-        price_predictor.fit(latest_bars[:-1])
+        price_predictor.fit(latest_bars[:-1], seed)
 
         augmented_bars = price_predictor.augment_bars(latest_bars[:-1])
         possible_outcomes = price_predictor.get_possible_outcomes(augmented_bars)
@@ -441,7 +455,7 @@ if __name__ == "__main__":
         close_price = latest_bars["close"].iloc[-2]
         actual_close = latest_bars["close"].iloc[-1]
         price_predictions = price_predictor.predict_full(close_price, possible_outcomes, features).tolist()
-        print(f"Top 5 Price Predictions on {date.isoformat()} for {symbol}:")
+        print(f"Top 5 Price Predictions for {date.isoformat()} for {symbol}:")
         for i in range(0, 5):
             percent_change = (price_predictions[i] - close_price) / close_price
             percent_error = abs(price_predictions[i] - actual_close) / price_predictions[i]

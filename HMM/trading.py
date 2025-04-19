@@ -57,7 +57,7 @@ def trade(settings, alpaca_api):
             now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
             wait_time = (clock.next_open - now_date).total_seconds()
             print("Market is closed")
-            print(f"\nMarket opens in {wait_time / 3600} hours\n-----")
+            print(f"Market opens in {wait_time / 3600} hours\n-----")
             time.sleep(wait_time)
 
         now_date = dt.datetime.now(pytz.timezone("US/Eastern"))

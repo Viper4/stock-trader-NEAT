@@ -50,15 +50,11 @@ class SaveSystem(BaseReporter):
             return f.read()
 
     @staticmethod
-    def make_csv(header, path, mode="w"):
+    def save_to_csv(data, path, mode="w", header=None):
         with open(path, mode, newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(header)
-
-    @staticmethod
-    def save_to_csv(data, path, mode="w"):
-        with open(path, mode, newline="") as f:
-            writer = csv.writer(f)
+            if header and not os.path.exists(path):
+                writer.writerow(header)
             if mode == "a":
                 writer.writerow(data)
             else:

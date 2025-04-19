@@ -6,6 +6,7 @@ import datetime as dt
 from Managers.base_manager import Manager
 
 
+# TODO: Compare Finnhub with alpaca news. Alpaca is delayed, cant get recent news
 class FinBERTNews(object):
     def __init__(self, alpaca_api):
         self.alpaca_api = alpaca_api
