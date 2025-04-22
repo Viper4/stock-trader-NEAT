@@ -5,7 +5,7 @@ import saving
 from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit, REST
 import requests
 from constants import *
-from HMM.models import HMMRegimePrediction
+from HMM.hmm_models import HMMRegimePrediction
 from tqdm import tqdm
 
 

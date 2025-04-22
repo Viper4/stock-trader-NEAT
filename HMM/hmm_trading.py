@@ -4,7 +4,7 @@ import datetime as dt
 import pandas as pd
 import schwab
 import candle_scraper as cs
-import HMM.models as models
+import HMM.hmm_models as models
 from alpaca_trade_api.rest import TimeFrameUnit
 import Managers.base_manager
 

@@ -11,13 +11,13 @@ import time
 import saving
 import ast
 from datetime import timedelta
-import HMM.models as models
+import HMM.hmm_models as models
 import HMM.feature_selection as feature_selection
 from HMM.correlation import CorrelationAnalysis
-import HMM.trading
+import HMM.hmm_trading
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-COIN-1d_2019-1-1_2025-4-17.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-COIN-1d_2019-1-1_2025-4-17.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-QQQ-1d_2019-1-1_2025-4-10.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-QQQ-1d_2019-1-1_2025-4-10.csv"
 
 
 def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df, seed):
@@ -401,7 +401,6 @@ if __name__ == "__main__":
                 regime_settings = stock["regime_settings"]
                 break
 
-        now_date = dt.datetime.now(dt.timezone.utc)
         bars_df = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval,
                                                          date - dt.timedelta(days=profile["general_regime_settings"]["fit_days"]),
                                                          date,

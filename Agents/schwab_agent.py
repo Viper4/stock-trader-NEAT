@@ -4,7 +4,7 @@ import pytz
 import time
 from Agents.base_agent import Agent
 from neat import nn
-from HMM import models
+from HMM import hmm_models
 
 
 class Trading(Agent):

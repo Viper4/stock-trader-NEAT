@@ -13,7 +13,7 @@ class HMMRegimePrediction(object):
         self.model = GaussianHMM(n_components=3, n_iter=10000, covariance_type="diag", init_params="")
         self.regime_mapping = None  # Store regime mapping
         self.fitted_feature_settings = None
-        self.feature_index_map = {}
+        self.feature_index_map = {}  # For array indexing to accomodate fast lookups
         self.scaler = StandardScaler()
 
     @staticmethod

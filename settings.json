@@ -35,9 +35,9 @@
           "transaction_fee": 0.001,
           "regime_settings": [
             {
-              "features": ["evening_doji_star", "obv", "ht_trendline"],
-              "seed": 0,
-              "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
+              "features": ["frachp", "evening_doji_star", "homing_pigeon"],
+              "seed": 7,
+              "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
             },
             {
               "features": ["open_pc", "three_lines", "evening_doji_star", "obv"],
