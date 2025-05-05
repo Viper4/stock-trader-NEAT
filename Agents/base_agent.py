@@ -28,7 +28,7 @@ class Agent:
             plpc,
             columns["close_pc"][i],
             columns["volume_pc"][i],
-            #columns["sentiment"][i],  # -1.0 = negative, 0.0 = neutral, 1.0 = positive
+            columns["sentiment"][i],  # -1.0 = negative, 0.0 = neutral, 1.0 = positive
             *stock_regime_predictions,  # -1.0 = Bear, 0.0 = Choppy, 1.0 = Bull
         ]
 

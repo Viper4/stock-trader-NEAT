@@ -48,12 +48,23 @@ class HMMRegimePrediction(object):
         bars_df["ema_c"] = bars_df["ema_c"].pct_change(fill_method=None)
         bars_df["ema_d"] = bars_df["ema_d"].pct_change(fill_method=None)
 
+        bars_df["bb_upper"], bars_df["bb_middle"], bars_df["bb_lower"] = talib.BBANDS(bars_df["close"], timeperiod=5, nbdevup=2, nbdevdn=2, matype=0)
+        bars_df["bb_width"] = (bars_df["bb_upper"] - bars_df["bb_lower"]) / bars_df["bb_lower"]
+        bars_df["bb_upper"] = bars_df["bb_upper"].pct_change(fill_method=None)
+        bars_df["bb_middle"] = bars_df["bb_middle"].pct_change(fill_method=None)
+        bars_df["bb_lower"] = bars_df["bb_lower"].pct_change(fill_method=None)
+
+        bars_df["linearreg"] = talib.LINEARREG(bars_df["close"], timeperiod=14)
+        bars_df["linearreg_angle"] = talib.LINEARREG_ANGLE(bars_df["close"], timeperiod=14) / 90
+        bars_df["linnearreg"] = bars_df["linearreg"].pct_change(fill_method=None)
+
         bars_df["atr"] = talib.ATR(bars_df["high"], bars_df["low"], bars_df["close"], timeperiod=14)
-        bars_df["atr"] = bars_df["atr"].pct_change(fill_method=None)
         bars_df["natr"] = talib.NATR(bars_df["high"], bars_df["low"], bars_df["close"], timeperiod=14)
-        bars_df["natr"] = bars_df["natr"].pct_change(fill_method=None)
         bars_df["tr"] = talib.TRANGE(bars_df["high"], bars_df["low"], bars_df["close"])
+        bars_df["atr"] = bars_df["atr"].pct_change(fill_method=None)
+        bars_df["natr"] = bars_df["natr"].pct_change(fill_method=None)
         bars_df["tr"] = bars_df["tr"].pct_change(fill_method=None)
+
         bars_df["rsi"] = (talib.RSI(bars_df["close"], timeperiod=14) - 50) / 50
 
         slow_k, slow_d = talib.STOCH(bars_df["high"], bars_df["low"], bars_df["close"], fastk_period=5,
@@ -184,7 +195,7 @@ class HMMRegimePrediction(object):
         bars_df["adx"] = bars_df["adx"].pct_change(fill_method=None)
 
         bars_df["ht_trendline"] = talib.HT_TRENDLINE(bars_df["close"])
-        bars_df["ht_trendline"] = bars_df["ht_trendline"].pct_change()
+        bars_df["ht_trendline"] = bars_df["ht_trendline"].pct_change(fill_method=None)
 
         bars_df["kama"] = talib.KAMA(bars_df["close"], timeperiod=30)
         bars_df["kama"] = bars_df["kama"].pct_change(fill_method=None)
@@ -207,6 +218,8 @@ class HMMRegimePrediction(object):
         bars_df.replace(np.nan, 0.0, inplace=True)
         bars_df.replace(np.inf, 1.0, inplace=True)
         bars_df.replace(-np.inf, -1.0, inplace=True)
+
+        bars_df = pd.DataFrame(bars_df.to_numpy(), columns=bars_df.columns, index=bars_df.index)  # De-frag in memory
 
     def get_features_fit(self, bars, feature_settings):
         """Gets features from bars dataframe, fits scaler, and scales features."""
@@ -581,16 +594,6 @@ class HMMRegimePrediction(object):
                     alpha=0.3,
                     label=label_order[i]
                 )
-            '''for regime, color in colors.items():
-                plt.fill_between(
-                    test_bars.index,
-                    test_bars["close"].min(),
-                    test_bars["close"].max(),
-                    where=test_bars["regime"] == regime,
-                    color=color,
-                    alpha=0.3,
-                    label=regime
-                )'''
 
             plt.legend()
             if plot_label != "":

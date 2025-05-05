@@ -39,8 +39,6 @@ class SaveSystem(BaseReporter):
 
     @staticmethod
     def write_to_file(string, path, mode="w"):
-        print(f"Writing string to {path}")
-
         with open(path, mode) as f:
             f.write(string)
 
@@ -68,8 +66,6 @@ class SaveSystem(BaseReporter):
 
     @staticmethod
     def save_data(data, path, mode="w"):
-        print(f"Saving data to {path}")
-
         with gzip.open(path, mode, compresslevel=5) as f:
             pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
 

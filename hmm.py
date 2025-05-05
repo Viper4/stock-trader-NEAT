@@ -16,8 +16,8 @@ import HMM.feature_selection as feature_selection
 from HMM.correlation import CorrelationAnalysis
 import HMM.hmm_trading
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-QQQ-1d_2019-1-1_2025-4-10.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-QQQ-1d_2019-1-1_2025-4-10.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-UVXY-1d_2021-1-1_2025-4-30_all.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-UVXY-1d_2021-1-1_2025-4-30_all.csv"
 
 
 def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df, seed):
@@ -86,6 +86,7 @@ def run_regime_search(train_bars, test_bars, features, n_seeds=20, r=1):
 
     print("Starting search")
     regime_predictor = models.HMMRegimePrediction()
+
     for i in range(start_i, len(feature_combinations)):
         start_time = time.time()
         print(f"\nTest {i}/{len(feature_combinations)} {100 * i / len(feature_combinations):.4f}%:")
@@ -95,8 +96,7 @@ def run_regime_search(train_bars, test_bars, features, n_seeds=20, r=1):
             accuracy, profit_percent, label_order = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
             saving.SaveSystem.save_to_csv([features_list, j, accuracy, profit_percent, label_order, i], TESTED_PATH, "a", header=["Features", "Seed", "Accuracy", "Profit%", "Label Order", "Index"])
 
-        if i == start_i:
-            start_j = 0
+        start_j = 0
 
         iteration_time = time.time() - start_time
         eta = (len(feature_combinations) - i) * iteration_time
@@ -240,7 +240,7 @@ if __name__ == "__main__":
     else:
         bars_df = saving.SaveSystem.load_data(DATA_PATH)
 
-    train_size = int(bars_df.shape[0] * 0.7)
+    train_size = int(bars_df.shape[0] * 0.8)
     train_bars_df = bars_df[:train_size].copy()
     test_bars_df = bars_df[train_size + 1:].copy()
     print("Train bars:", train_bars_df.shape[0])
@@ -252,6 +252,7 @@ if __name__ == "__main__":
         "fracocp", "frachp", "fraclp",
         "sma_a", "sma_b", "sma_c", "sma_d",
         "ema_a", "ema_b", "ema_c", "ema_d",
+        "bb_upper", "bb_middle", "bb_lower", "bb_width",
         "atr", "natr", "tr", "rsi", "slow_k", "slow_d",
         "three_black_crows", "three_inside", "three_lines", "three_outside",
         "three_stars", "three_whitesoldiers", "abandoned_baby", "advance_block",
@@ -269,7 +270,8 @@ if __name__ == "__main__":
         "takuri", "tasuki_gap", "thrusting", "tristar", "unique_3_river",
         "upside_gap_2_crows", "side_gap_3_methods",
         "ad", "adosc", "obv", "adx", "ht_trendline", "kama", "mama", "fama", "sar",
-        "volatility", "macd", "macdsignal", "macdhist"
+        "volatility", "macd", "macdsignal", "macdhist",
+        "linearreg", "linearreg_angle"
     ]
 
     if user_input == "price search":
@@ -278,14 +280,14 @@ if __name__ == "__main__":
     elif user_input == "regime search":
         num_seeds = int(input("Number of seeds to check (10 is good): "))
         r = int(input("Combination r: "))
-        run_regime_search(train_bars_df, test_bars_df, all_features, n_seeds=num_seeds, r=r)
+        run_regime_search(train_bars_df, bars_df, all_features, n_seeds=num_seeds, r=r)
     elif user_input == "price test":
         run_price_test(int(input("Number of components: ")), int(input("Number of latent bars: ")), train_bars_df, test_bars_df, int(input("Enter seed: ")))
     elif user_input == "reg test":
         test_features = ast.literal_eval(input("Type features, Ex: ['close_pc', 'ema_1']: "))
         test_seed = int(input("Seed: "))
         plot_label = input("Plot label: ")
-        run_regime_test(train_bars_df, test_bars_df, test_features, test_seed, True, plot_label)
+        run_regime_test(train_bars_df, bars_df, test_features, test_seed, True, plot_label)
     elif user_input == "correlation":
         feature_input = input("Type features or 'all', Ex: ['close_pc', 'ema_1']: ")
         seed = int(input("Seed: "))
@@ -308,7 +310,7 @@ if __name__ == "__main__":
         for feature_settings, seed, accuracy, profit_percent, label_order in results:
             if feature_settings != last_feature_settings:
                 print(f"#{i}:")
-                run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(feature_settings), seed, True)
+                run_regime_test(train_bars_df, bars_df, ast.literal_eval(feature_settings), seed, True)
                 last_feature_settings = feature_settings
             i += 1
     elif user_input == "stats":
@@ -460,4 +462,4 @@ if __name__ == "__main__":
             percent_error = abs(price_predictions[i] - actual_close) / price_predictions[i]
             print(f"{i + 1}: {price_predictions[i]} {percent_change * 100}% | Err: {percent_error * 100}%")
     elif user_input == "trade":
-        HMM.trading.trade(settings, alpaca_api)
+        HMM.hmm_trading.trade(settings, alpaca_api)

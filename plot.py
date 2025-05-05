@@ -21,15 +21,15 @@ def plot_bars(bars, lines=None, fills=None, log=None, title="Bars"):
             for row in tqdm(bars.itertuples(), total=bars.shape[0]):
                 value = getattr(row, fill)
                 time_start = row.Index
-                time_end = row.Index + dt.timedelta(minutes=15)
+                time_end = row.Index + dt.timedelta(days=1)
 
                 # Choose color based on value
                 if value > 0.2:
-                    color = "rgba(0, 255, 0, 0.1)"  # Light green
+                    color = "rgba(0, 255, 0, 0.4)"  # Light green
                 elif value < -0.2:
-                    color = "rgba(255, 0, 0, 0.1)"  # Light red
+                    color = "rgba(255, 0, 0, 0.4)"  # Light red
                 else:
-                    color = "rgba(255, 255, 0, 0.1)"  # Yellow (neutral)
+                    color = "rgba(255, 255, 0, 0.4)"  # Yellow (neutral)
 
                 fig.add_trace(
                     go.Scatter(
@@ -118,11 +118,11 @@ if __name__ == "__main__":
         directory = TRAINING_DIR
 
     if log_filename != "":
-        log = saving.SaveSystem.load_data(os.path.join(directory, f"{log_filename}.gz"))
+        log = saving.SaveSystem.load_data(os.path.join(directory, f"{log_filename}"))
     else:
         log = None
 
-    bars_df = saving.SaveSystem.load_data(os.path.join(directory, f"{filename}.gz"))
+    bars_df = saving.SaveSystem.load_data(os.path.join(directory, f"{filename}"))
     plot_bars(bars_df,
               lines=[
                   "vwap"
