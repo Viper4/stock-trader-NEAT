@@ -43,10 +43,11 @@ class TradingLSTM(nn.Module):
 
         action_logits = self.classifier(out)
         probs = F.softmax(action_logits, dim=1)
-        quantity_raw = self.quantity(out)
-        quantity = torch.sigmoid(quantity_raw)  # Force between 0 and 1
+        #quantity_raw = self.quantity(out)
+        #quantity = torch.sigmoid(quantity_raw)  # Force between 0 and 1
 
-        return probs, quantity
+        #return probs, quantity
+        return probs, 1.0
 
     def predict(self, data):
         x = data.unsqueeze(0).unsqueeze(0).to(self.device)  # [batch, seq_len, input_size]
@@ -61,7 +62,7 @@ class TradingLSTM(nn.Module):
         # Build new LSTM
         self.lstm = nn.LSTM(old_lstm.input_size, new_hidden_size, new_num_layers, batch_first=True).to(self.device)
         self.classifier = nn.Linear(new_hidden_size, 3).to(self.device)
-        self.quantity = nn.Linear(new_hidden_size, 1).to(self.device)
+        #self.quantity = nn.Linear(new_hidden_size, 1).to(self.device)
 
         # Copy matching weights
         with torch.no_grad():
@@ -89,7 +90,7 @@ class TradingLSTM(nn.Module):
                     else:
                         param[:min_shape[0]] = old_param[:min_shape[0]]
 
-            # Quantity head
+            '''# Quantity head
             for name, param in self.quantity.named_parameters():
                 if name in old_quantity.state_dict():
                     old_param = old_quantity.state_dict()[name]
@@ -97,7 +98,7 @@ class TradingLSTM(nn.Module):
                     if len(param.shape) == 2:
                         param[:min_shape[0], :min_shape[1]] = old_param[:min_shape[0], :min_shape[1]]
                     else:
-                        param[:min_shape[0]] = old_param[:min_shape[0]]
+                        param[:min_shape[0]] = old_param[:min_shape[0]]'''
 
     def mutate(self, mutation_rate=0.01, network_mutate_rate=0.01, hidden_mutate_strength=1, layers_mutate_strength=1):
         for name, param in self.lstm.named_parameters():
@@ -115,13 +116,13 @@ class TradingLSTM(nn.Module):
                 noise = torch.randn_like(param) * mutation_rate
             param.data += noise
 
-        # Mutate quantity (0-1 sigmoid head)
+        '''# Mutate quantity (0-1 sigmoid head)
         for name, param in self.quantity.named_parameters():
             if name == "bias":
                 noise = torch.randn_like(param) * (mutation_rate * 0.5)
             else:
                 noise = torch.randn_like(param) * mutation_rate
-            param.data += noise
+            param.data += noise'''
 
         hidden_size = self.lstm.hidden_size
         new_hidden_size = hidden_size
@@ -147,7 +148,7 @@ class TradingLSTM(nn.Module):
         cash = 10000
         shares = 0
         portfolio_value = 10000
-        #noisy_data = data + torch.randn_like(data) * 0.001  # Try to prevent overfitting
+        data = data + torch.randn_like(data) * 0.005  # Try to prevent overfitting
 
         with torch.no_grad():
             for t in range(data.size(0)):
@@ -155,7 +156,7 @@ class TradingLSTM(nn.Module):
                 probs, quantity = self.forward(x)
 
                 action = torch.argmax(probs, dim=1).item()  # 0 = buy, 1 = hold, 2 = sell
-                quantity = quantity.item()  # between 0 and 1
+                #quantity = quantity.item()  # between 0 and 1
 
                 price = close_prices[t]
 
@@ -178,6 +179,7 @@ class TradingLSTM(nn.Module):
             self.fitnesses = [0.0] * train_splits
 
         self.fitnesses[index] = profit
+        #self.fitness = profit
 
         return profit
 
@@ -195,7 +197,7 @@ class TradingLSTM(nn.Module):
                 probs, quantity = self.forward(x)
 
                 action = torch.argmax(probs, dim=1).item()  # 0 = buy, 1 = hold, 2 = sell
-                quantity = quantity.item()  # between 0 and 1
+                #quantity = quantity.item()  # between 0 and 1
 
                 actions.append(action)
 
@@ -227,10 +229,10 @@ class Trainer(object):
         self.network_mutate_rate = network_mutate_rate
         self.population = []
 
-        train_size = int(bars_df.shape[0] * 0.7)
+        train_size = int(bars_df.shape[0] * 0.85)
         self.train_bars = bars_df[:train_size].copy()
         self.val_bars = bars_df[train_size+1:].copy()
-        self.train_splits = 4
+        self.train_splits = 3
 
         self.max_generations = max_generations
 
@@ -457,11 +459,10 @@ class Trainer(object):
     def add_regime_features(bars_df, regime_settings, full):
         if full:
             regime_predictions = []
-            for i in tqdm(range(bars_df.shape[0]), desc="Generating Regimes"):
-                if i == 0:
-                    for j in range(len(regime_settings)):
-                        regime_predictions.append([])
+            for j in range(len(regime_settings)):
+                regime_predictions.append([])
 
+            for i in tqdm(range(bars_df.shape[0]), desc="Generating Regimes"):
                 regime_slice = bars_df[bars_df.index[max(0, i - 1000)]:bars_df.index[i]].copy()
 
                 for j in range(len(regime_settings)):
@@ -543,6 +544,13 @@ class Trainer(object):
         survivors = self.population[:self.num_survivors]
 
         for i in range(0, self.population_size):
+            '''if i < self.num_survivors:
+                self.population[i] = survivors[i]  # Keep the survivors
+            else:
+                parent = random.choice(survivors)
+                child = parent.clone_model()
+                child.mutate(self.mutation_rate, self.network_mutate_rate, 4, 1)
+                self.population[i] = child'''
             if i < self.num_survivors:
                 self.population[i] = survivors[i]  # Keep the survivors
             elif self.population[i].age > self.train_splits:
@@ -568,7 +576,7 @@ class Trainer(object):
 
         results = []
 
-        for model in tqdm(self.population, total=self.population_size, desc="Validating"):
+        for model in tqdm(self.population, desc="Validating"):
             results.append(model.validation_simulation(processed_bars, close_prices))
         print("Validation finished.")
 
@@ -616,35 +624,32 @@ class Trainer(object):
             if i == self.train_splits - 1:
                 sliced_bars = self.train_bars[i * bars_per_split:]
             else:
-                sliced_bars = self.train_bars[i * bars_per_split:(i+1) * bars_per_split - 1]
+                sliced_bars = self.train_bars[i * bars_per_split:(i + 1) * bars_per_split - 1]
             processed_bars.append(self.preprocess_bars(sliced_bars))
             close_prices.append(sliced_bars["close"].tolist())
-        #processed_bars = self.preprocess_bars(self.train_bars, self.input_features)
-        #close_prices = self.train_bars["close"].tolist()
 
-        #pool = mp.Pool(processes=int(input("Num workers> ")))
         generation = 0
         while self.max_generations == -1 or generation < self.max_generations:
             start_time = time.time()
 
+            '''# Randomly vary size of training data every generation
+            rand_start = random.randint(0, 100)
+            rand_end = random.randint(self.train_bars.shape[0] - 101, self.train_bars.shape[0] - 1)
+            sliced_bars = self.train_bars[rand_start:rand_end].copy()
+            processed_bars = self.preprocess_bars(sliced_bars)
+            close_prices = sliced_bars["close"].tolist()
+
+            print(f"Training on {sliced_bars.shape[0]} bars from {sliced_bars.index[0]} to {sliced_bars.index[-1]}")
+'''
             total_fitness = 0.0
-            '''async_results = []
-
-            for model in self.population:
-                async_results.append(pool.apply_async(model.training_simulation, (processed_bars, close_prices)))
-
-            for i in tqdm(range(len(async_results)), desc=f"Generation {generation}"):
-                fitness = async_results[i].get()
-                self.population[i].fitness = fitness
-                total_fitness += fitness'''
 
             for model in tqdm(self.population, total=self.population_size, desc=f"Generation {generation}"):
                 split_index = generation % self.train_splits
                 model.training_simulation(processed_bars[split_index], close_prices[split_index], self.train_splits, split_index)
-
                 model.fitness = sum(model.fitnesses)
                 total_fitness += model.fitness
                 model.age += 1
+
             self.population.sort(key=lambda model: model.fitness, reverse=True)
 
             print(f"---Generation {generation} finished in {time.time() - start_time:.2f} seconds---")
@@ -652,6 +657,7 @@ class Trainer(object):
             std_sum = 0.0
             print(f"| \tAge\t | Hidden Size | \t# Layers\t | \tFitness\t |")
             for model in self.population:
+                #print(f"| \t{model.age}\t | \t{model.lstm.hidden_size}\t | \t{model.lstm.num_layers}\t | \t{model.fitness:.4f}\t |")
                 print(f"| \t{model.age}\t | \t{model.lstm.hidden_size}\t | \t{model.lstm.num_layers}\t | \t{model.fitness:.4f}\t | \t{model.fitnesses}\t |")
 
                 std_sum += (model.fitness - mean_fitness) ** 2

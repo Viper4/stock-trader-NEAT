@@ -16,8 +16,8 @@ import HMM.feature_selection as feature_selection
 from HMM.correlation import CorrelationAnalysis
 import HMM.hmm_trading
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-UVXY-1d_2021-1-1_2025-4-30_all.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-UVXY-1d_2021-1-1_2025-4-30_all.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-NVDA-1d_2019-1-1_2025-4-25.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-NVDA-1d_2019-1-1_2025-4-25.csv"
 
 
 def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df, seed):
@@ -240,7 +240,7 @@ if __name__ == "__main__":
     else:
         bars_df = saving.SaveSystem.load_data(DATA_PATH)
 
-    train_size = int(bars_df.shape[0] * 0.8)
+    train_size = int(bars_df.shape[0] * 0.7)
     train_bars_df = bars_df[:train_size].copy()
     test_bars_df = bars_df[train_size + 1:].copy()
     print("Train bars:", train_bars_df.shape[0])
@@ -280,14 +280,20 @@ if __name__ == "__main__":
     elif user_input == "regime search":
         num_seeds = int(input("Number of seeds to check (10 is good): "))
         r = int(input("Combination r: "))
-        run_regime_search(train_bars_df, bars_df, all_features, n_seeds=num_seeds, r=r)
+        if input("Test on full data? (y/n): ") == "y":
+            run_regime_search(train_bars_df, bars_df, all_features, n_seeds=num_seeds, r=r)
+        else:
+            run_regime_search(train_bars_df, test_bars_df, all_features, n_seeds=num_seeds, r=r)
     elif user_input == "price test":
         run_price_test(int(input("Number of components: ")), int(input("Number of latent bars: ")), train_bars_df, test_bars_df, int(input("Enter seed: ")))
     elif user_input == "reg test":
         test_features = ast.literal_eval(input("Type features, Ex: ['close_pc', 'ema_1']: "))
         test_seed = int(input("Seed: "))
         plot_label = input("Plot label: ")
-        run_regime_test(train_bars_df, bars_df, test_features, test_seed, True, plot_label)
+        if input("Test on full data? (y/n): ") == "y":
+            run_regime_test(train_bars_df, bars_df, test_features, test_seed, True, plot_label)
+        else:
+            run_regime_test(train_bars_df, test_bars_df, test_features, test_seed, True, plot_label)
     elif user_input == "correlation":
         feature_input = input("Type features or 'all', Ex: ['close_pc', 'ema_1']: ")
         seed = int(input("Seed: "))
@@ -303,6 +309,7 @@ if __name__ == "__main__":
             print(correlation_matrix)
         correlation.plot_correlation(correlation_matrix)
     elif user_input == "reg best":
+        full = input("Test on full data? (y/n): ")
         results = get_best(int(input("Sort by 1 for accuracy or 2 for profit: ")))
 
         i = 1
@@ -310,7 +317,10 @@ if __name__ == "__main__":
         for feature_settings, seed, accuracy, profit_percent, label_order in results:
             if feature_settings != last_feature_settings:
                 print(f"#{i}:")
-                run_regime_test(train_bars_df, bars_df, ast.literal_eval(feature_settings), seed, True)
+                if full == "y":
+                    run_regime_test(train_bars_df, bars_df, ast.literal_eval(feature_settings), seed, True)
+                else:
+                    run_regime_test(train_bars_df, test_bars_df, ast.literal_eval(feature_settings), seed, True)
                 last_feature_settings = feature_settings
             i += 1
     elif user_input == "stats":

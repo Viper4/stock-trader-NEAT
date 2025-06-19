@@ -4,6 +4,8 @@ import time
 import encryption
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+#from selenium.webdriver.chrome.service import Service
+#from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -56,7 +58,8 @@ class Schwab:
                     user_agents.append(line.strip())
         options.add_argument(f"user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.3")
 
-        service = Service(executable_path=PROJECT_DIR + "edgedriver_win64\\msedgedriver.exe")
+        service = Service(executable_path=PROJECT_DIR + "\\webdriver\\msedgedriver.exe")
+        #driver = webdriver.Chrome(options, service)
         driver = webdriver.Edge(options, service)
         auth_url = f"https://api.schwabapi.com/v1/oauth/authorize?client_id={self.credentials['public_key']}&redirect_uri=https://127.0.0.1"
 

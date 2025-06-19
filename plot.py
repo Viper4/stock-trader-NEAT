@@ -25,16 +25,16 @@ def plot_bars(bars, lines=None, fills=None, log=None, title="Bars"):
 
                 # Choose color based on value
                 if value > 0.2:
-                    color = "rgba(0, 255, 0, 0.4)"  # Light green
+                    color = "rgba(0, 255, 0, 0.7)"  # Light green
                 elif value < -0.2:
-                    color = "rgba(255, 0, 0, 0.4)"  # Light red
+                    color = "rgba(255, 0, 0, 0.7)"  # Light red
                 else:
-                    color = "rgba(255, 255, 0, 0.4)"  # Yellow (neutral)
+                    color = "rgba(255, 255, 0, 0.2)"  # Yellow (neutral)
 
                 fig.add_trace(
                     go.Scatter(
                         x=[time_start, time_start, time_end, time_end, time_start],
-                        y=[row.close - 10, row.close + 10, row.close + 10, row.close - 10, row.close - 10],
+                        y=[row.close - 50, row.close + 50, row.close + 50, row.close - 50, row.close - 50],
                         name=fill,
                         fill="toself",
                         fillcolor=color,

@@ -1,4 +1,4 @@
-import requests
+from curl_cffi import requests
 import random
 import datetime as dt
 import os
@@ -24,7 +24,7 @@ class Scraper(object):
         tries = 1
         while True:
             try:
-                response = requests.get(url, headers=headers)
+                response = requests.get(url, headers=headers, impersonate="chrome")
 
                 if response.status_code == 200 or response.status_code == 201:
                     data = response.json()
@@ -32,7 +32,7 @@ class Scraper(object):
                     df = pd.DataFrame(data=data["chart"]["result"][0]["indicators"]["quote"][0],
                                       index=data["chart"]["result"][0]["timestamp"])
 
-                    prev_close = data["chart"]["result"][0]["meta"]["previousClose"]  # Yesterday's close
+                    prev_close = data["chart"]["result"][0]["meta"]["chartPreviousClose"]  # Yesterday's close
 
                     if df.empty:
                         print(f"Received no candles for {symbol} retrying in 5 seconds... ({tries})")
@@ -46,7 +46,7 @@ class Scraper(object):
 
                         return df, prev_close
                 else:
-                    print(f"{response.status_code} error code fetching candles for {symbol}. Retrying in 5 seconds... ({tries})")
+                    print(f"{response.status_code} error code fetching candles for {symbol}: {response.content}\nRetrying in 5 seconds... ({tries})")
                     time.sleep(5)
                     tries += 1
             except Exception as e:
