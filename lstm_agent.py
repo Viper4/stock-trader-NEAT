@@ -466,9 +466,9 @@ class Trainer(object):
                 regime_slice = bars_df[bars_df.index[max(0, i - 1000)]:bars_df.index[i]].copy()
 
                 for j in range(len(regime_settings)):
-                    if i < 500:
+                    '''if i < 500:
                         regime_predictions[j].append(np.nan)
-                        continue
+                        continue'''
 
                     regime_setting = regime_settings[j]
                     try:
@@ -747,13 +747,21 @@ if __name__ == "__main__":
             regime_settings = saving.SaveSystem.load_data(regime_settings_path)
             print(f"Loaded regime settings from {regime_settings_path}")
         else:
-            regime_features = input("Regime features> ")
             regime_settings = []
-            while regime_features != "quit":
-                seed = int(input("Seed> "))
-                label_order = ast.literal_eval(input("Label order (['Bull', 'Bear', 'Choppy'])> "))
-                regime_settings.append({"features": ast.literal_eval(regime_features), "seed": seed, "label_order": label_order, "model": HMMRegimePrediction()})
-                regime_features = input("Regime features> ")
+            for stock in settings["profiles"][0]["stocks"]:
+                if stock["symbol"] == symbol:
+                    labels = ["", "", ""]
+                    for key in stock["regime_settings"]["label_order"]:
+                        labels[key] = stock["regime_settings"]["label_order"][key]
+                    regime_settings.append({"features": ast.literal_eval(stock["regime_settings"]["features"]), "seed": stock["regime_settings"]["seed"], "label_order": labels, "model": HMMRegimePrediction()})
+                    break
+            #regime_features = input("Regime features> ")
+            #regime_settings = []
+            #while regime_features != "quit":
+            #    seed = int(input("Seed> "))
+            #    label_order = ast.literal_eval(input("Label order (['Bull', 'Bear', 'Choppy'])> "))
+            #    regime_settings.append({"features": ast.literal_eval(regime_features), "seed": seed, "label_order": label_order, "model": HMMRegimePrediction()})
+            #    regime_features = input("Regime features> ")
 
             saving.SaveSystem.save_data(regime_settings, regime_settings_path)
 

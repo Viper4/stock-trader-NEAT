@@ -7,6 +7,8 @@ import candle_scraper as cs
 import HMM.hmm_models as models
 import Managers.base_manager
 from alpaca_trade_api.rest import TimeFrameUnit
+import logging
+from constants import LOG_DIR
 
 
 def try_get_clock(alpaca_api):
@@ -21,6 +23,10 @@ def try_get_clock(alpaca_api):
 
 
 def trade(settings, alpaca_api):
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(filename=f'{LOG_DIR}\\HMM_trading.log', encoding='utf-8', level=logging.INFO)
+    logged_start = False
+
     print("Select profile:")
     for profile in settings["profiles"]:
         if input(f"{profile['name']} (y/n): ") == "y":
@@ -56,16 +62,26 @@ def trade(settings, alpaca_api):
     while True:
         clock = try_get_clock(alpaca_api)
         if not clock.is_open:
-            now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+            now_date = dt.datetime.now(pytz.timezone("US/Central"))
             wait_time = (clock.next_open - now_date).total_seconds()
             print("Market is closed")
             print(f"Market opens in {wait_time / 3600} hours\n-----")
+            if logged_start:
+                logger.info(f"Stopped trading at {now_date}")
             time.sleep(wait_time)
 
-            now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+            now_date = dt.datetime.now(pytz.timezone("US/Central"))
             print("Market is open")
             print(f"Market closes in {(clock.next_close - now_date).total_seconds() / 3600} hours\n-----")
-        now_date = dt.datetime.now(pytz.timezone("US/Eastern"))
+            logger.info(f"Started trading at {now_date}")
+            logged_start = True
+        elif not logged_start:
+            now_date = dt.datetime.now(pytz.timezone("US/Central"))
+            print("Market is open")
+            print(f"Market closes in {(clock.next_close - now_date).total_seconds() / 3600} hours\n-----")
+            logger.info(f"Started trading at {now_date}")
+            logged_start = True
+        now_date = dt.datetime.now(pytz.timezone("US/Central"))
 
         account = schwab_api.get_account()
         for symbol in stock_regime_settings:
@@ -76,43 +92,59 @@ def trade(settings, alpaca_api):
             previous_df = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, regime_interval, start_date, end_date, 500000, unit_tf)
             combined_df = pd.concat([previous_df, latest_df], ignore_index=False)
             combined_df.drop_duplicates(inplace=True)
-            predictors[symbol].augment_bars(combined_df, False)
+            predictors[symbol].augment_bars(combined_df, stock_regime_settings[symbol]["features"])
 
-            predictors[symbol].fit(combined_df, stock_regime_settings[symbol]["features"],
-                                   stock_regime_settings[symbol]["seed"])
+            predictors[symbol].fit(combined_df, stock_regime_settings[symbol]["features"], stock_regime_settings[symbol]["seed"])
             prediction = predictors[symbol].predict_probability(combined_df)[-1]
 
             label_order = stock_regime_settings[symbol]["label_order"]
             close_price = combined_df.iloc[-1].close
+            change = close_price - combined_df.iloc[-2].close
+
+            shares = 0
+            avg_price = 0
+            profit_loss = 0
+            if position["longQuantity"] > 0:
+                avg_price = position["averageLongPrice"]
+                profit_loss = (position['longOpenProfitLoss'] / position['marketValue'])*100
+                shares = position["longQuantity"]
 
             print(f"{symbol} {now_date.isoformat()}")
-            print(f" Shares: {position['longQuantity']}, Avg Price: ${position['averageLongPrice']}, Profit/Loss: {(position['longOpenProfitLoss'] / position['marketValue'])*100:.2f}%")
+            print(f" Shares: {shares}, Avg Price: ${avg_price:.2f}, Profit/Loss: {profit_loss:.2f}%")
+            print(f" Current price: ${close_price:.2f}, Day Change: {change:.2f} ({(change / close_price)*100:.2f}%)")
             print(f" Bull: {prediction[label_order['Bull']]*100:.2f}%, Bear: {prediction[label_order['Bear']]*100:.2f}%, Choppy: {prediction[label_order['Choppy']]*100:.2f}%")
 
             if prediction[label_order["Bull"]] > 0.5:
                 unsettled_cash = account["currentBalances"]["unsettledCash"]
-                settled_cash = account["currentBalances"]["cashAvailableForTrading"] - unsettled_cash
 
-                if "longMarketValue" in account["currentBalances"]:
-                    market_value = account["currentBalances"]["longMarketValue"]
-                else:
+                if "marketValue" not in position:
                     market_value = 0
-                used_cash = market_value + unsettled_cash
-                equity = settled_cash + used_cash
-                max_cash_to_spend = equity * selected_profile["max_cash_percent"]
-                cash_to_spend = max_cash_to_spend - used_cash
-                if cash_to_spend > 0:
-                    quantity = cash_to_spend / close_price
-
-                    print(f" Buy {quantity} shares at ${close_price}")
-                    schwab_api.submit_order(symbol, int(quantity), "BUY")
                 else:
-                    print(f" Not enough cash to buy")
+                    market_value = position["marketValue"]
+                #equity = settled_cash + used_cash
+                #print(account["currentBalances"])
+                equity = account["currentBalances"]["liquidationValue"] - unsettled_cash
+                #exit(0)
+                max_cash_to_spend = (equity * selected_profile["max_cash_percent"]) / len(stock_regime_settings)
+                cash_to_spend = max_cash_to_spend - market_value
+                quantity = int(cash_to_spend / close_price)
+
+                if cash_to_spend > 0 and quantity > 0:
+                    print(f" Buy {quantity} shares at ${close_price}")
+                    schwab_api.submit_order(symbol, quantity, "BUY")
+                    logger.info(f"{symbol} {now_date.isoformat()}: Buy {quantity} shares at ${close_price} (Bull: {prediction[label_order['Bull']]*100:.2f}%, Bear: {prediction[label_order['Bear']]*100:.2f}%, Choppy: {prediction[label_order['Choppy']]*100:.2f}%)")
+                else:
+                    print(f" Reached cash limit of ${max_cash_to_spend}")
+                    logger.info(f"{symbol} {now_date.isoformat()}: Reached cash limit of ${max_cash_to_spend} (Bull: {prediction[label_order['Bull']]*100:.2f}%, Bear: {prediction[label_order['Bear']]*100:.2f}%, Choppy: {prediction[label_order['Choppy']]*100:.2f}%)")
             elif prediction[label_order["Bear"]] > 0.5:
-                quantity = position["longQuantity"]
-                profit = quantity * close_price - (position["averageLongPrice"] * quantity)
-                print(f" Sell {quantity} shares at {close_price} for ${profit} profit")
-                schwab_api.submit_order(symbol, quantity, "SELL")
+                if shares == 0:
+                    print(f" No shares to sell")
+                    logger.info(f"{symbol} {now_date.isoformat()}: No shares to sell (Bull: {prediction[label_order['Bull']]*100:.2f}%, Bear: {prediction[label_order['Bear']]*100:.2f}%, Choppy: {prediction[label_order['Choppy']]*100:.2f}%)")
+                else:
+                    profit = shares * close_price - (avg_price * shares)
+                    print(f" Sell {shares} shares at {close_price} for ${profit} profit")
+                    schwab_api.submit_order(symbol, shares, "SELL")
+                    logger.info(f"{symbol} {now_date.isoformat()}: Sell {shares} shares at {close_price} for ${profit} profit (Bull: {prediction[label_order['Bull']]*100:.2f}%, Bear: {prediction[label_order['Bear']]*100:.2f}%, Choppy: {prediction[label_order['Choppy']]*100:.2f}%)")
             else:
-                print(f" Holding at ${close_price}")
+                print(f" Holding")
         time.sleep(selected_profile["interval"] * 60)

@@ -4,8 +4,8 @@ import time
 import encryption
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-#from selenium.webdriver.chrome.service import Service
-#from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.chrome.service import Service
+# from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -56,10 +56,11 @@ class Schwab:
             for i, line in enumerate(f):
                 if i > 0:
                     user_agents.append(line.strip())
-        options.add_argument(f"user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.3")
+        options.add_argument(
+            f"user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.3")
 
         service = Service(executable_path=PROJECT_DIR + "\\webdriver\\msedgedriver.exe")
-        #driver = webdriver.Chrome(options, service)
+        # driver = webdriver.Chrome(options, service)
         driver = webdriver.Edge(options, service)
         auth_url = f"https://api.schwabapi.com/v1/oauth/authorize?client_id={self.credentials['public_key']}&redirect_uri=https://127.0.0.1"
 
@@ -75,12 +76,16 @@ class Schwab:
         driver.find_element(By.ID, "btnLogin").click()
 
         WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "acceptTerms")))
+        WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.ID, "acceptTerms")))
         driver.find_element(By.ID, "acceptTerms").click()
         driver.find_element(By.ID, "submit-btn").click()
+        WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.ID, "agree-modal-btn-")))
         driver.find_element(By.ID, "agree-modal-btn-").click()
 
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "form-container")))
-        accounts_checkboxes = driver.find_element(By.ID, "form-container").find_element(By.TAG_NAME, "div").find_elements(By.TAG_NAME, "label")
+        accounts_checkboxes = driver.find_element(By.ID, "form-container").find_element(By.TAG_NAME,
+                                                                                        "div").find_elements(
+            By.TAG_NAME, "label")
 
         for checkbox in accounts_checkboxes:
             if checkbox.text[-3:] == self.credentials["account_number"]:
@@ -98,12 +103,18 @@ class Schwab:
         returned_link = driver.current_url
         code = f"{returned_link[returned_link.index('code=') + 5:returned_link.index('%40')]}@"
 
-        headers = {"Authorization": f"Basic {base64.b64encode(bytes(self.credentials['public_key'] + ':' + self.credentials['secret_key'], 'utf-8')).decode('utf-8')}",
-                   "Content-Type": "application/x-www-form-urlencoded"}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.3",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Referer": "https://www.schwab.com",
+            "Authorization": f"Basic {base64.b64encode(bytes(self.credentials['public_key'] + ':' + self.credentials['secret_key'], 'utf-8')).decode('utf-8')}",
+            "Content-Type": "application/x-www-form-urlencoded"}
         payload = {"grant_type": "authorization_code", 'code': code,
                    "redirect_uri": "https://127.0.0.1"}  # gets access and refresh tokens using authorization code
 
-        self.tokens = requests.post('https://api.schwabapi.com/v1/oauth/token', headers=headers, data=payload).json()
+        result = requests.post('https://api.schwabapi.com/v1/oauth/token', headers=headers, data=payload)
+
+        self.tokens = result.json()
 
         response = requests.get(url=f"{self.base_url}/accounts/accountNumbers",
                                 headers={"Authorization": f"Bearer {self.tokens['access_token']}"})
@@ -124,8 +135,9 @@ class Schwab:
         sleep_time = self.tokens["expires_in"] - 5
         while not self.authorizing:
             time.sleep(sleep_time)
-            headers = {"Authorization": f"Basic {base64.b64encode(bytes(self.credentials['public_key'] + ':' + self.credentials['secret_key'], 'utf-8')).decode('utf-8')}",
-                       "Content-Type": "application/x-www-form-urlencoded"}
+            headers = {
+                "Authorization": f"Basic {base64.b64encode(bytes(self.credentials['public_key'] + ':' + self.credentials['secret_key'], 'utf-8')).decode('utf-8')}",
+                "Content-Type": "application/x-www-form-urlencoded"}
             payload = {'grant_type': 'refresh_token',
                        'refresh_token': self.tokens["refresh_token"]}
 
@@ -160,7 +172,8 @@ class Schwab:
                         self.authorize()
                         tries += 1
                     else:
-                        print(f"Error getting account: '{response.status_code}: {response.content}'. Retrying in 5 seconds... ({tries})")
+                        print(
+                            f"Error getting account: '{response.status_code}: {response.content}'. Retrying in 5 seconds... ({tries})")
                         time.sleep(5)
                         tries += 1
                 except RequestsConnectionError as e:
@@ -179,9 +192,9 @@ class Schwab:
             "longQuantity": 0,
             "shortQuantity": 0,
             "instrument":
-            {
-                "symbol": symbol,
-            },
+                {
+                    "symbol": symbol,
+                },
             "longOpenProfitLoss": 0,
             "shortOpenProfitLoss": 0,
             "averagePrice": 0
@@ -222,6 +235,7 @@ class Schwab:
                 self.authorize()
                 tries += 1
             else:
-                print(f"Error submitting order: '{response.status_code}: {response.content}'. Retrying in 5 seconds... ({tries})")
+                print(
+                    f"Error submitting order: '{response.status_code}: {response.content}'. Retrying in 5 seconds... ({tries})")
                 time.sleep(5)
                 tries += 1

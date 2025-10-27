@@ -151,7 +151,7 @@ class Manager(object):
         regime_bars = self.get_bars(symbol, profile.alpaca_api, profile.general_regime_settings["interval"],
                                     start_date - dt.timedelta(days=profile.general_regime_settings["fit_days"]), end_date,
                                     500000, unit=unit_map[profile.general_regime_settings["unit"]])
-        HMMRegimePrediction.augment_bars(regime_bars)
+        HMMRegimePrediction.augment_bars_all(regime_bars)
 
         # Load regime predictor settings
         regime_predictors = []

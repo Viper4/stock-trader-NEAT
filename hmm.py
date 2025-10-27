@@ -10,14 +10,18 @@ import Managers.base_manager
 import time
 import saving
 import ast
-from datetime import timedelta
 import HMM.hmm_models as models
 import HMM.feature_selection as feature_selection
 from HMM.correlation import CorrelationAnalysis
 import HMM.hmm_trading
+from tqdm import tqdm
+import csv
 
-DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-NVDA-1d_2019-1-1_2025-4-25.gz"
-TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-NVDA-1d_2019-1-1_2025-4-25.csv"
+DATA_PATH = PROJECT_DIR + "\\HMM\\bars-data-SOFI-1d_2019-1-1_2025-10-25.gz"
+TESTED_PATH = PROJECT_DIR + "\\HMM\\tested-SOFI-1d_2019-1-1_2025-10-25.csv"
+
+
+# GOOG, UVXY, COIN, AMD, MRBL, SOFI, LABU (DONT TRADE), SOXL (DONT TRADE)
 
 
 def run_price_test(num_components, num_latent_bars, train_bars_df, test_bars_df, seed):
@@ -69,7 +73,10 @@ def run_regime_test(train_bars, test_bars, features, seed, plot, plot_label=""):
 
 def run_regime_search(train_bars, test_bars, features, n_seeds=20, r=1):
     print("Generating combinations")
-    feature_combinations = list(itertools.combinations(features, r))
+    feature_combinations = []
+    combinations = itertools.combinations(features, r)
+    for combination in combinations:
+        feature_combinations.append(list(combination))
     print(f"Generated {len(feature_combinations)} combinations")
 
     start_i = 0
@@ -84,23 +91,24 @@ def run_regime_search(train_bars, test_bars, features, n_seeds=20, r=1):
                 start_j = 0
         del rows
 
-    print("Starting search")
     regime_predictor = models.HMMRegimePrediction()
+    std_deviation = pd.concat([train_bars, test_bars])["close_pc"].std()
 
-    for i in range(start_i, len(feature_combinations)):
-        start_time = time.time()
-        print(f"\nTest {i}/{len(feature_combinations)} {100 * i / len(feature_combinations):.4f}%:")
-        features_list = list(feature_combinations[i])
+    train_bars.dropna(inplace=True)
+    test_bars.dropna(inplace=True)
+    test_bars_array = test_bars.to_numpy()
 
-        for j in range(start_j, n_seeds):
-            accuracy, profit_percent, label_order = regime_predictor.validate(train_bars, test_bars, features_list, False, seed=j)
-            saving.SaveSystem.save_to_csv([features_list, j, accuracy, profit_percent, label_order, i], TESTED_PATH, "a", header=["Features", "Seed", "Accuracy", "Profit%", "Label Order", "Index"])
+    with open(TESTED_PATH, "a", newline="") as f:
+        writer = csv.writer(f)
+        if not os.path.exists(TESTED_PATH):
+            writer.writerow(["Features", "Seed", "Accuracy", "Profit%", "Label Order", "Index"])
 
-        start_j = 0
+        for i in tqdm(range(start_i, len(feature_combinations)), desc="Searching Regimes"):
+            for j in range(start_j, n_seeds):
+                accuracy, profit_percent, label_order = regime_predictor.validate_silent(train_bars, test_bars_array, std_deviation, feature_combinations[i], seed=j)
+                writer.writerow([feature_combinations[i], j, accuracy, profit_percent, label_order, i])
 
-        iteration_time = time.time() - start_time
-        eta = (len(feature_combinations) - i) * iteration_time
-        print(f"Finished in {iteration_time:.2f} seconds. ETA: {str(timedelta(seconds=eta))}")
+            start_j = 0
 
     print(f"Search finished")
 
@@ -234,7 +242,7 @@ if __name__ == "__main__":
             end_date = now_date - dt.timedelta(minutes=16)
         bars_df = Managers.base_manager.Manager.get_bars(symbol, alpaca_api, interval, start_date, end_date, 500000, unit_map[unit_input])
 
-        models.HMMRegimePrediction.augment_bars(bars_df)
+        models.HMMRegimePrediction.augment_bars_all(bars_df)
 
         saving.SaveSystem.save_data(bars_df, DATA_PATH)
     else:
@@ -348,7 +356,7 @@ if __name__ == "__main__":
                                                          now_date - dt.timedelta(days=profile["general_regime_settings"]["fit_days"]),
                                                          now_date - dt.timedelta(minutes=16),
                                                          500000, unit_map[unit_input])
-        models.HMMRegimePrediction.augment_bars(bars_df)
+        models.HMMRegimePrediction.augment_bars_all(bars_df)
 
         averaged_predictions = {"Bull": 0, "Bear": 0, "Choppy": 0}
 
@@ -417,7 +425,7 @@ if __name__ == "__main__":
                                                          date - dt.timedelta(days=profile["general_regime_settings"]["fit_days"]),
                                                          date,
                                                          500000, unit_map[unit_input])
-        models.HMMRegimePrediction.augment_bars(bars_df)
+        models.HMMRegimePrediction.augment_bars_all(bars_df)
 
         averaged_predictions = {"Bull": 0, "Bear": 0, "Choppy": 0}
 

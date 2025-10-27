@@ -13,7 +13,7 @@
       "rsi_period": 14,
       "atr_period": 10,
       "start_cash": 100000.0,
-      "max_cash_percent": 0.75,
+      "max_cash_percent": 1.0,
       "fitness_multipliers": {
         "average": 0.0,
         "total": 1.0,
@@ -175,33 +175,13 @@
           "population_filename": "5pw-population-NVDA.gz",
           "genome_filename": "5pw-genome-NVDA.gz",
           "training_filename": "15m-data-NVDA.gz",
-          "trading": false,
+          "trading": true,
           "transaction_fee": 0.001,
           "regime_settings": [
             {
-                "features": ["open_pc", "advance_block", "harami", "rickshaw_man"],
+                "features": ["open_pc", "evening_star", "harami", "rickshaw_man"],
                 "seed": 7,
                 "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
-            },
-            {
-                "features": ["high_pc", "tr", "slow_d", "hikkake"],
-                "seed": 7,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            },
-            {
-                "features": ["close_pc", "frachp", "harami", "linearreg"],
-                "seed": 1,
-                "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
-            },
-            {
-                "features": ["high_pc", "three_lines", "hammer", "linearreg"],
-                "seed": 0,
-                "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
-            },
-            {
-                "features": ["low_pc", "harami_cross", "thrusting", "mama"],
-                "seed": 2,
-                "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
             }
           ]
         },
@@ -222,44 +202,102 @@
           ]
         },
         {
-          "symbol": "TSLS",
+          "symbol": "AMD",
           "cash_at_risk": 0.15,
-          "population_filename": "5pw-population-TSLS.gz",
-          "genome_filename": "5pw-genome-TSLS.gz",
-          "training_filename": "15m-data-TSLS.gz",
+          "population_filename": "5pw-population-AMD.gz",
+          "genome_filename": "5pw-genome-AMD.gz",
+          "training_filename": "15m-data-AMD.gz",
+          "trading": true,
+          "transaction_fee": 0.001,
+          "regime_settings": [
+            {
+                    "features": ["open_pc", "fraclp", "sma_b", "homing_pigeon"],
+                    "seed": 2,
+                    "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
+            }
+          ]
+        },
+        {
+          "symbol": "U",
+          "cash_at_risk": 0.15,
+          "population_filename": "5pw-population-U.gz",
+          "genome_filename": "5pw-genome-U.gz",
+          "training_filename": "15m-data-U.gz",
           "trading": false,
+          "transaction_fee": 0.001,
+          "regime_settings": [
+{
+        "features": ["high_pc", "close_pc", "frachp", "high_wave"],
+        "seed": 1,
+        "label_order": {"Bear": 0, "Choppy": 1, "Bull": 2}
+},
+            {
+        "features": ["high_pc", "low_pc", "frachp", "high_wave"],
+        "seed": 4,
+        "label_order": {"Bear": 0, "Choppy": 1, "Bull": 2}
+},
+            {
+        "features": ["high_pc", "frachp", "kicking", "linearreg_angle"],
+        "seed": 1,
+        "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+},
+            {
+        "features": ["high_pc", "frachp", "kicking_by_length", "linearreg_angle"],
+        "seed": 1,
+        "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+},
+            {
+        "features": ["high_pc", "frachp", "mat_hold", "linearreg_angle"],
+        "seed": 1,
+        "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+},
+            {
+        "features": ["high_pc", "engulfing", "hikkake", "long_leader"],
+        "seed": 2,
+        "label_order": {"Choppy": 0, "Bear": 1, "Bull": 2}
+},
+            {
+        "features": ["low_pc", "fracocp", "frachp", "homing_pigeon"],
+        "seed": 0,
+        "label_order": {"Choppy": 0, "Bear": 1, "Bull": 2}
+},
+            {
+        "features": ["high_pc", "frachp", "ema_a", "homing_pigeon"],
+        "seed": 1,
+        "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+}
+            ]
+        },
+        {
+          "symbol": "COIN",
+          "cash_at_risk": 0.15,
+          "population_filename": "5pw-population-COIN.gz",
+          "genome_filename": "5pw-genome-COIN.gz",
+          "training_filename": "15m-data-COIN.gz",
+          "trading": true,
           "transaction_fee": 0.0095,
           "regime_settings": [
             {
-                "features": ["trade_count_pc", "tr", "gap_side_by_side"],
-                "seed": 2,
-                "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
-            },
-            {
-                "features": ["trade_count_pc", "tr", "side_gap_3_methods"],
-                "seed": 2,
-                "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
-            },
-            {
-                "features": ["dragonfly_doji", "adosc", "kama"],
-                "seed": 0,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            },
-            {
-                "features": ["sma_d", "three_black_crows", "macdsignal"],
-                "seed": 9,
-                "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
-            },
-            {
-                "features": ["open_pc", "ema_d", "hammer", "mama"],
-                "seed": 1,
-                "label_order": {"Bear": 0, "Choppy": 1, "Bull": 2}
-            },
-            {
-                "features": ["sma_d", "harami", "macdsignal"],
-                "seed": 6,
-                "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
+              "features": ["open_pc", "frachp", "dark_cloud_cover", "homing_pigeon"],
+              "seed": 0,
+              "label_order": {"Choppy": 0, "Bear": 1, "Bull": 2}
             }
+          ]
+        },
+        {
+          "symbol": "UBER",
+          "cash_at_risk": 0.15,
+          "population_filename": "5pw-population-UBER.gz",
+          "genome_filename": "5pw-genome-UBER.gz",
+          "training_filename": "15m-data-UBER.gz",
+          "trading": true,
+          "transaction_fee": 0.0095,
+          "regime_settings": [
+            {
+        "features": ["open_pc", "fraclp", "gravestone_doji", "homing_pigeon"],
+        "seed": 0,
+        "label_order": {"Choppy": 0, "Bear": 1, "Bull": 2}
+}
           ]
         },
         {
@@ -271,139 +309,46 @@
           "trading": false,
           "transaction_fee": 0.0095,
           "regime_settings": [
+{
+        "features": ["high_pc", "slow_k", "slow_d", "ht_trendline"],
+        "seed": 2,
+        "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
+},
+{
+        "features": ["high_pc", "atr", "long_line", "spinning_top"],
+        "seed": 3,
+        "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+},
+{
+        "features": ["high_pc", "sma_b", "slow_d", "sar"],
+        "seed": 2,
+        "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+},
+{
+        "features": ["high_pc", "volume_pc", "belthold", "high_wave"],
+        "seed": 3,
+        "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
+},
             {
-                "features": ["open_pc", "slow_k", "adx", "sar"],
-                "seed": 2,
-                "label_order": {"Choppy": 0, "Bear": 1, "Bull": 2}
-            },
+        "features": ["high_pc", "frachp", "belthold", "rickshaw_man"],
+        "seed": 2,
+        "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
+},
             {
-                "features": ["open_pc", "frachp", "mama", "fama"],
-                "seed": 5,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            },
+        "features": ["high_pc", "frachp", "belthold", "doji"],
+        "seed": 2,
+        "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
+},
             {
-                "features": ["ema_a", "hikkake", "adosc"],
-                "seed": 4,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            },
+        "features": ["high_pc", "frachp", "belthold", "long_leader"],
+        "seed": 2,
+        "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
+},
             {
-                "features": ["high_pc", "sma_c", "short_line", "volatility"],
-                "seed": 0,
-                "label_order": {"Bear": 0, "Choppy": 1, "Bull": 2}
-            },
-            {
-                "features": ["high_pc", "sma_b", "slow_d", "sar"],
-                "seed": 2,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            }
-          ]
-        },
-        {
-          "symbol": "SOXL",
-          "cash_at_risk": 0.15,
-          "population_filename": "5pw-population-SOXL.gz",
-          "genome_filename": "5pw-genome-SOXL.gz",
-          "training_filename": "15m-data-SOXL.gz",
-          "trading": false,
-          "transaction_fee": 0.0095,
-          "regime_settings": [
-            {
-                "features": ["open_pc", "fracocp", "frachp", "three_lines"],
-                "seed": 3,
-                "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
-            },
-            {
-                "features": ["open_pc", "bb_upper", "bb_width", "volatility"],
-                "seed": 0,
-                "label_order": {"Choppy": 0, "Bear": 1, "Bull": 2}
-            },
-            {
-                "features": ["open_pc", "close_pc", "fracocp", "sma_d"],
-                "seed": 9,
-                "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
-            },
-            {
-                "features": ["open_pc", "volume_pc", "evening_star", "adx"],
-                "seed": 1,
-                "label_order": {"Bear": 0, "Choppy": 1, "Bull": 2}
-            },
-            {
-                "features": ["open_pc", "fraclp", "counterattack", "linearreg"],
-                "seed": 9,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            }
-          ]
-        },
-        {
-          "symbol": "FNGA",
-          "cash_at_risk": 0.15,
-          "population_filename": "5pw-population-FNGA.gz",
-          "genome_filename": "5pw-genome-FNGA.gz",
-          "training_filename": "15m-data-FNGA.gz",
-          "trading": false,
-          "transaction_fee": 0.0095,
-          "regime_settings": [
-            {
-                "features": ["open_pc", "frachp", "atr", "dragonfly_doji"],
-                "seed": 4,
-                "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
-            },
-            {
-                "features": ["open_pc", "frachp", "advance_block", "dragonfly_doji"],
-                "seed": 5,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            },
-            {
-                "features": ["open_pc", "close_pc", "belthold", "marubozu"],
-                "seed": 5,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            },
-            {
-                "features": ["open_pc", "sma_b", "atr", "dragonfly_doji"],
-                "seed": 4,
-                "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
-            },
-            {
-                "features": ["open_pc", "frachp", "long_line", "marubozu"],
-                "seed": 0,
-                "label_order": {"Bear": 0, "Bull": 1, "Choppy": 2}
-            }
-          ]
-        },
-        {
-          "symbol": "COIN",
-          "cash_at_risk": 0.15,
-          "population_filename": "5pw-population-FNGA.gz",
-          "genome_filename": "5pw-genome-FNGA.gz",
-          "training_filename": "15m-data-FNGA.gz",
-          "trading": false,
-          "transaction_fee": 0.0095,
-          "regime_settings": [
-            {
-                "features": ["close_pc", "bb_upper", "bb_width"],
-                "seed": 9,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            },
-            {
-                "features": ["fraclp", "bb_middle", "atr"],
-                "seed": 2,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            },
-            {
-                "features": ["open_pc", "fraclp", "bb_upper", "bb_lower"],
-                "seed": 9,
-                "label_order": {"Bull": 0, "Choppy": 1, "Bear": 2}
-            },
-            {
-                "features": ["open_pc", "high_pc", "marubozu", "obv"],
-                "seed": 5,
-                "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
-            },
-            {
-                "features": ["high_pc", "natr", "marubozu", "obv"],
-                "seed": 5,
-                "label_order": {"Bull": 0, "Bear": 1, "Choppy": 2}
-            }
+        "features": ["high_pc", "trade_count_pc", "belthold", "macd"],
+        "seed": 1,
+        "label_order": {"Choppy": 0, "Bull": 1, "Bear": 2}
+}
           ]
         },
         {
